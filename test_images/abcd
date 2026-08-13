@@ -1,0 +1,112 @@
+public class CalculateInsuranceRaiseDeviation {
+    
+    @AuraEnabled
+    public static String raisedDeviation(List<Opportunity> oppList, Decimal camLoanAmount, Decimal totalPremiumAmount, List<CalculateInsuranceLWCController.CalculateInsurance> calculateInsuranceList, String insuranceJustification){
+        try{
+            testParser();
+        	String errorMsg = '';
+            List<Deviation__c> deviationList = new List<Deviation__c>();
+            List<Deviation__c> rejectedDeviationList = new List<Deviation__c>();
+            if(!oppList.isEmpty()){
+                deviationList = [Select Id, Opportunity__c, Type_of_Waiver__c, Waiver__c, Reason_For_Waiver__c, Approval_Status__c from Deviation__c where 
+                                 Opportunity__c =: oppList[0].Id AND Type_of_Waiver__c = 'Waiver' AND Waiver__c = 'Life Insurance Tenure' AND 
+                                 (Approval_Status__c = 'Pending' OR Approval_Status__c = 'Approved')];
+                
+                if(!Test.isRunningTest() && !deviationList.isEmpty() && deviationList[0].Approval_Status__c == 'Pending'){
+                    errorMsg = 'Error:Please approve/Reject the pending Calculate Insurance deviation.';
+                    return errorMsg;
+                }
+                Id recordTypeId = Schema.getGlobalDescribe().get('Deviation__c').getDescribe().getRecordTypeInfosByName().get('Default Deviation').getRecordTypeId();
+                Deviation__c deviation = new Deviation__c();
+                deviation.RecordTypeId = recordTypeId;
+                deviation.Opportunity__c = oppList[0].Id;
+                deviation.Type_of_Waiver__c = 'Waiver';
+                deviation.Waiver__c = 'Life Insurance Tenure';
+                deviation.Reason_For_Waiver__c = 'BH Others-Auto System Waiver Deviation From Calculate Insurance';
+                deviation.Person_who_can_Approve__c = 'Branch Manager';
+                deviation.Approved_By__c = oppList[0].Branch__r.Business_Head__c;
+                deviation.Branch_Manager__c = oppList[0].Branch__r.Business_Head__r.Name;
+                deviation.Deviation_Percentage__c = (totalPremiumAmount/(camLoanAmount + totalPremiumAmount))*100;
+                deviation.Insurance_Details__c = 'Loan Amount: ' + camLoanAmount + '\r\n';
+                deviation.Insurance_Details__c += 'Loan Tenure: ' + Integer.valueOf(oppList[0].Sanctioned_Tenure__c/12) + '\r\n';
+                for(CalculateInsuranceLWCController.CalculateInsurance calIns : calculateInsuranceList){
+                    System.debug('===>>>'+calIns.FinalLifeInsuranceCompanyName);
+                    deviation.Insurance_Details__c += calIns.applicantDetails + ' : ' + calIns.applicantName + '\r\n';
+                    if(calIns.lifeInsurance == 'Yes' && !calIns.LifeInsuranceList.isEmpty()){
+                        String lifeInsuranceDisplay = '';
+                        for(CalculateInsuranceLWCController.LifeInsuranceDetails lifeWrap : calIns.LifeInsuranceList){
+                        	if(lifeWrap.isSelected){
+                                lifeInsuranceDisplay = lifeWrap.lifeInsuranceTenure + ' yrs';
+                            }
+                        }
+                        deviation.Insurance_Details__c += 'Life Insurance: ' + calIns.FinalLifeInsuranceCompanyName + ' || ' + calIns.LifeInsurancePremium2 + ' || ' + lifeInsuranceDisplay + '\r\n';
+                    }
+                    if(calIns.PropertyInsurance == 'Yes' && !calIns.PropertyInsuranceList.isEmpty()){
+                        String propertyInsuranceDisplay = '';
+                        for(CalculateInsuranceLWCController.PropertyInsuranceDetails propertyWrap : calIns.PropertyInsuranceList){
+                        	if(propertyWrap.isSelected){
+                                propertyInsuranceDisplay = String.valueOf(propertyWrap.propertyTenure);
+                            }
+                        }
+                        deviation.Insurance_Details__c += 'Property Insurance: ' + calIns.FinalPropertyInsuranceCompanyName + ' || ' + calIns.FinalPropertyInsurancePremium + ' || ' + propertyInsuranceDisplay + ' yrs' + '\r\n';
+                    }
+                    if(calIns.HealthInsuranceRequired == 'Yes' && !calIns.HealthInsuranceList.isEmpty()){
+                        String healthInsuranceDisplay = '';
+                        for(CalculateInsuranceLWCController.HealthInsuranceDetails healthWrap : calIns.HealthInsuranceList){
+                        	if(healthWrap.isSelected){
+                                healthInsuranceDisplay = String.valueOf(healthWrap.HealthInsuranceTenure);
+                            }
+                        }
+                        deviation.Insurance_Details__c += 'Health Insurance: ' + calIns.FinalHealthInsuranceCompanyName + ' || ' + calIns.FinalHealthInsurancePremium + ' || ' + healthInsuranceDisplay + ' yrs' + '\r\n';
+                    }
+                }
+                deviation.Justification_for_the_Insurance_DV__c = insuranceJustification;
+                Database.SaveResult[] results = Database.insert(
+                    new List<Deviation__c>{deviation},
+                    false
+                );
+                
+                for (Database.SaveResult sr : results) {
+                    if (sr.isSuccess()) {
+                        System.debug('Inserted: ' + sr.getId());
+                    } else {
+                        for (Database.Error err : sr.getErrors()) {
+                            System.debug('Status Code: ' + err.getStatusCode());
+                            System.debug('Message: ' + err.getMessage());
+                            System.debug('Fields: ' + err.getFields());
+                        }
+                    }
+                }
+                if(!Test.isRunningTest() && deviation.Id !=  NULL){
+                    if(!deviationList.isEmpty()){
+                        for(Deviation__c dev : deviationList){
+                            dev.Approval_Status__c = 'Rejected';
+                            rejectedDeviationList.add(dev);
+                        }
+                        if(!rejectedDeviationList.isEmpty()){
+                            update rejectedDeviationList;
+                        }
+                    }
+                    Approval.ProcessSubmitRequest req1 = new Approval.ProcessSubmitRequest();
+                    req1.setComments('Submitting request for approval.');
+                    req1.setObjectId(deviation.Id);
+                    
+                    // Submit on behalf of a specific submitter
+                    req1.setSubmitterId(UserInfo.getUserId()); 
+                    
+                    // Submit the record to specific process and skip the criteria evaluation
+                    req1.setProcessDefinitionNameOrId('Deviation_Approval');
+                    
+                    // Submit the approval request for the account
+                    Approval.ProcessResult result = Approval.process(req1);
+                }
+            }
+        	return errorMsg;
+        }
+        catch(Exception e){
+            System.debug(e.getMessage()+'==='+e.getLineNumber());
+    System.debug(LoggingLevel.ERROR, e.getStackTraceString());
+            throw new AuraHandledException(e.getMessage());
+        }
+    }    
+}
