@@ -1,0 +1,861 @@
+this is an apex class
+/*
+@Author: Shivam Agarwal
+@Description: This class is used to manager all the operation related to the creation of ManualBureau Highmark.
+ModifiedDate : 04/04/2024
+*/
+public class ManualBureauCRIFHighmark {
+    public String responseValue {get;set;}
+    public  Boolean boolResponse {get;set;}
+    public List<Manual_Bureau__c> manualBureauList{get;set;}
+    public String manualBureauId;
+    public  Boolean allFieldMap {get;set;}
+    public List<ManualBureauFieldWrapper> wrapperListManualBureauFields {get;set;}
+    public HighMark_API__c objApiCredentials;
+    public string inqId =''; 
+    public string repId = ''; 
+    public String str {get;set;}
+    public String idTypeAndNum = '';  
+    public String stateCode;
+    public List<State_with_Abbrv__mdt> stateWithAbbrv;
+    public String exceptionmsg = '';
+    
+    public ManualBureauCRIFHighmark(ApexPages.StandardController stdController){
+        //testParser();
+        manualBureauId = stdController.getId();
+        responseValue ='';
+        boolResponse = false;
+        allFieldMap = false;
+        wrapperListManualBureauFields = new List<ManualBureauFieldWrapper>();
+        Map<String, Schema.SObjectField> fieldMap = Schema.getGlobalDescribe().get('Manual_Bureau__c').getDescribe().fields.getMap();
+        
+        manualBureauList = [SELECT Id, Application__c, Application__r.Loan_Number__c, Loan_Amount_Applied__c, Name__c, First_Name__c, 
+                            Last_Name__c, Date_Of_Birth__c, Gender__c, Passport__c, PAN__c, Driving_License__c, Voter_ID__c, Aadhar__c, Ration_Card__c, 
+                            Mobile_No__c, Address__c, PIN_Code__c, City__c, State__c FROM Manual_Bureau__c WHERE Id =: manualBureauId LIMIT 1];
+        
+        if(manualBureauList.size()>0){
+        
+        	List<Disbursement__c> disList = [Select Id, Name, Application__c, Disb_Status__c from Disbursement__c where Application__c =: manualBureauList[0].Application__c];
+            if(disList.size() > 0 && disList[0].Disb_Status__c == 'Handed over customer'){
+                ApexPages.addMessage(new ApexPages.message(ApexPages.severity.Error,'Highmark cannot be generated at DM Status-Handed over customer.'));
+                return;
+            }
+            
+            stateWithAbbrv = new List<State_with_Abbrv__mdt>();
+            stateWithAbbrv = [SELECT Id, DeveloperName FROM State_with_Abbrv__mdt WHERE Label =: manualBureauList[0].State__c];
+            if(stateWithAbbrv.size() == 0){
+                allFieldMap = true;
+                ApexPages.addMessage(new ApexPages.message(ApexPages.severity.Error,'Please check and select the correct spelling for the state Picklist.'));               
+            }
+            else{
+                stateCode = stateWithAbbrv[0].DeveloperName;  
+            }
+        
+        	wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('First_Name__c').getDescribe().getLabel(),manualBureauList[0].First_Name__c));
+            if(manualBureauList[0].First_Name__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('Last_Name__c').getDescribe().getLabel(),manualBureauList[0].Last_Name__c));
+            if(manualBureauList[0].Last_Name__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('Date_Of_Birth__c').getDescribe().getLabel(),String.valueOf(manualBureauList[0].Date_Of_Birth__c)));
+            if(manualBureauList[0].Date_Of_Birth__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('Gender__c').getDescribe().getLabel(),manualBureauList[0].Gender__c));
+            if(manualBureauList[0].Gender__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('Mobile_No__c').getDescribe().getLabel(),manualBureauList[0].Mobile_No__c));
+            if(manualBureauList[0].Mobile_No__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('PIN_Code__c').getDescribe().getLabel(),String.valueOf(manualBureauList[0].PIN_Code__c)));
+            if(manualBureauList[0].PIN_Code__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';     
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('State__c').getDescribe().getLabel(),manualBureauList[0].State__c));
+            if(manualBureauList[0].State__c != Null){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('PAN__c').getDescribe().getLabel() +
+                                                                           '/'+fieldMap.get('Passport__c').getDescribe().getLabel() +
+                                                                           '/'+fieldMap.get('Aadhar__c').getDescribe().getLabel() +
+                                                                           '/'+fieldMap.get('Voter_ID__c').getDescribe().getLabel() +
+                                                                           '/'+fieldMap.get('Ration_Card__c').getDescribe().getLabel() +
+                                                                           '/'+fieldMap.get('Driving_License__c').getDescribe().getLabel() 
+                                                                           ,''));
+            
+            // to remove (No.) from field Name  
+            wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldName = wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldName.remove('No').remove('.');
+            
+            //Attaching the id which ever is found from account
+            if(manualBureauList[0].PAN__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldValue = manualBureauList[0].PAN__c;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK [ PAN ]';
+                idTypeAndNum = 'ID01:'+ manualBureauList[0].PAN__c ;
+            }else if(manualBureauList[0].Passport__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldValue = manualBureauList[0].Passport__c;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK [ Passport ]';
+                idTypeAndNum = 'ID02:'+ manualBureauList[0].Passport__c ;
+            }else if(manualBureauList[0].Aadhar__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldValue = manualBureauList[0].Aadhar__c;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK [ Aadhar ]';
+                idTypeAndNum = 'ID03:'+ manualBureauList[0].Aadhar__c ;
+            }else if(manualBureauList[0].Voter_ID__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldValue = manualBureauList[0].Voter_ID__c;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK [ Voter ID ]';
+                idTypeAndNum = 'ID04:'+ manualBureauList[0].Voter_ID__c ;
+            }else if(manualBureauList[0].Ration_Card__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldValue = manualBureauList[0].Ration_Card__c;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK [ Ration Card ]';
+                idTypeAndNum = 'ID05:'+ manualBureauList[0].Ration_Card__c ;
+            }else if(manualBureauList[0].Driving_License__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldValue = manualBureauList[0].Driving_License__c;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK [ Driving License ]';
+                idTypeAndNum = 'ID06:'+ manualBureauList[0].Driving_License__c ;
+            }
+            else
+                allFieldMap = true;
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('Address__c').getDescribe().getLabel(),manualBureauList[0].Address__c));
+            String addressLine1 = manualBureauList[0].Address__c;
+            if(manualBureauList[0].Address__c != Null && addressLine1.length() > 7){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else{
+                allFieldMap = true;
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'Not OK [Address Line 1 should contains more than 7 characters.]';
+            }
+            
+            wrapperListManualBureauFields.add(new ManualBureauFieldWrapper(fieldMap.get('City__c').getDescribe().getLabel(),String.valueOf(manualBureauList[0].City__c)));
+            if(manualBureauList[0].City__c != Null ){
+                wrapperListManualBureauFields[wrapperListManualBureauFields.size()-1].fieldStatus = 'OK';
+            }
+            else
+                allFieldMap = true;
+        }
+    }
+                                          
+    public  void callApi(){
+        String requestString;
+        HttpResponse response;
+        try{
+            wrapperListManualBureauFields.clear();
+            objApiCredentials = HighMark_API__c.getValues('CRIF API');
+            String dateNewFormat =   String.valueOf(manualBureauList[0].Date_Of_Birth__c).split('-')[2]+'/'+ String.valueOf(manualBureauList[0].Date_Of_Birth__c).split('-')[1]+'/' + String.valueOf(manualBureauList[0].Date_Of_Birth__c).split('-')[0];
+            allFieldMap = true; //to disable api call button to hit multiple time
+            
+            requestString = '<?xml version="1.0"?>';
+            requestString += '<REQUEST-REQUEST-FILE>';
+            requestString += '<HEADER-SEGMENT>';
+            requestString += '<SUB-MBR-ID>INDIA SHELTER</SUB-MBR-ID>';
+            requestString += '<INQ-DT-TM>18-12-2017 12:13:51</INQ-DT-TM>';
+            requestString += '<REQ-ACTN-TYP>SUBMIT</REQ-ACTN-TYP>';
+            requestString += '<TEST-FLG>N</TEST-FLG>';
+            requestString += '<AUTH-FLG>Y</AUTH-FLG>';
+            requestString += '<AUTH-TITLE>USER</AUTH-TITLE>';
+            requestString += '<RES-FRMT>XML/HTML</RES-FRMT>';
+            requestString += '<MEMBER-PRE-OVERRIDE>N</MEMBER-PRE-OVERRIDE>';
+            requestString += '<RES-FRMT-EMBD>Y</RES-FRMT-EMBD>';
+            requestString += '<MFI>';
+            requestString += '<INDV>true</INDV>';
+            requestString += '<SCORE>true</SCORE>';
+            requestString += '<GROUP>true</GROUP>';
+            requestString += '</MFI>';
+            requestString += '<CONSUMER>';
+            requestString += '<INDV>true</INDV>';
+            requestString += '<SCORE>true</SCORE>';
+            requestString += '</CONSUMER>';
+            requestString += '<IOI>true</IOI>';
+            requestString += '</HEADER-SEGMENT>';
+            requestString += '<INQUIRY>';
+            requestString += '<APPLICANT-SEGMENT>';
+            requestString += '<APPLICANT-NAME>';
+            requestString += '<NAME1>'+ manualBureauList[0].Name__c +'</NAME1>';
+            requestString += '<NAME2/>';
+            requestString += '<NAME3/>';
+            requestString += '<NAME4/>';
+            requestString += '<NAME5/>';
+            requestString += '</APPLICANT-NAME>';
+            requestString += '<DOB>';
+            requestString += '<DOB-DATE>'+ dateNewFormat +'</DOB-DATE>'; 
+            requestString += '</DOB>';
+            requestString += '<IDS>';
+            requestString += '<ID>';
+            requestString += '<TYPE>'+ idTypeAndNum.split(':')[0] +'</TYPE>';
+            requestString += '<VALUE>'+ idTypeAndNum.split(':')[1] +'</VALUE>';    
+            requestString += '</ID>';
+            requestString += '</IDS>';
+            
+            requestString += '<KEY-PERSON>';
+            requestString += '<NAME>Vasu K</NAME>';
+            requestString += '<TYPE>K01</TYPE>';
+            requestString += '</KEY-PERSON>';
+            requestString += '<NOMINEE>';
+            requestString += '<NAME>Vasu </NAME>';
+            requestString += '<TYPE>K01</TYPE>';
+            requestString += '</NOMINEE>';
+            requestString += '<PHONES>';
+            requestString += '<PHONE>';
+            requestString += '<TELE-NO>'+manualBureauList[0].Mobile_No__c+'</TELE-NO>';    //9551542844
+            requestString += '<TELE-NO-TYPE>P03</TELE-NO-TYPE>';
+            requestString += '</PHONE>';
+            requestString += '</PHONES>';
+            if(manualBureauList[0].Gender__c == 'Male')
+                requestString += '<GENDER>G01</GENDER>';
+            else if(manualBureauList[0].Gender__c == 'Female')
+                requestString += '<GENDER>G02</GENDER>';
+            else if(manualBureauList[0].Gender__c == 'Transgender')
+                requestString += '<GENDER>G03</GENDER>';
+            
+            requestString += '</APPLICANT-SEGMENT>';
+            requestString += '<ADDRESS-SEGMENT>';
+            requestString += '<ADDRESS>';
+            requestString += '<TYPE>D01</TYPE>';
+            requestString += '<ADDRESS-1>'+manualBureauList[0].Address__c+' </ADDRESS-1>';   
+            requestString += '<CITY>'+manualBureauList[0].City__c+'</CITY>';   
+            requestString += '<STATE>'+ stateCode +'</STATE>';   
+            requestString += '<PIN>'+manualBureauList[0].PIN_Code__c+'</PIN>';  
+            requestString += '</ADDRESS>';
+            requestString += '</ADDRESS-SEGMENT>';
+            requestString += '<APPLICATION-SEGMENT>';
+            requestString += '<INQUIRY-UNIQUE-REF-NO>'+ System.now() + manualBureauList[0].Application__r.Loan_Number__c +'</INQUIRY-UNIQUE-REF-NO>';  
+            requestString += '<CREDT-INQ-PURPS-TYP>ACCT-ORIG</CREDT-INQ-PURPS-TYP>';
+            requestString += '<CREDIT-INQUIRY-STAGE>PRE-DISB</CREDIT-INQUIRY-STAGE>';
+            requestString += '<CREDT-REQ-TYP>INDV</CREDT-REQ-TYP>';
+            requestString += '<BRANCH-ID>'+ manualBureauList[0].Application__r.Loan_Number__c +'</BRANCH-ID>'; 
+            requestString += '<LOS-APP-ID>18122017INDVTEST121351</LOS-APP-ID>';
+            requestString += '<LOAN-AMOUNT>200000</LOAN-AMOUNT>';
+            requestString += '</APPLICATION-SEGMENT>';
+            requestString += '</INQUIRY>';
+            requestString += '</REQUEST-REQUEST-FILE>';
+            System.debug('reqXML:::'+requestString); 
+            
+            Http http = new Http();
+            HttpRequest request = new HttpRequest();
+            request.setEndpoint(objApiCredentials.setEndpointPrimary__c);
+            request.setMethod('POST');
+            request.setHeader('Content-Type', 'text/xml');
+            request.setHeader('userid', objApiCredentials.userid__c);
+            request.setHeader('password', objApiCredentials.password__c);
+            request.setHeader('mbrid', objApiCredentials.mbrid__c);
+            request.setHeader('productType', objApiCredentials.productType__c);
+            request.setHeader('productVersion', objApiCredentials.productVersion__c);
+            request.setHeader('reqVolType', objApiCredentials.reqVolType__c);
+            request.setHeader('requestXML',requestString);
+            request.setTimeout(120000);
+            response = http.send(request);
+            
+            fetchIpAddressOfInstance.fetchIpAddress('ManualBureauCRIFHighmark');
+            if(response.getStatusCode()==200){
+                system.debug('first response size' + response.getBody().length());
+                if(response.getBody().contains('<INQUIRY-UNIQUE-REF-NO>'))
+                    inqId = response.getBody().split('<INQUIRY-UNIQUE-REF-NO>')[1].split('</INQUIRY-UNIQUE-REF-NO>')[0];
+                if(response.getBody().contains('<REPORT-ID>'))
+                    repId = response.getBody().split('<REPORT-ID>')[1].split('</REPORT-ID>')[0];
+            }
+            str = 'Please wait while report is generating'; 
+            requestString = null;    
+        }
+        catch(Exception e){
+            exceptionmsg += e.getMessage()+',Line-'+e.getLineNumber();
+        }
+    }                                  
+    
+    public void secondApi(){
+        String responseString;
+        string responseValueTemp;
+        String responseBody;
+        String highmarkScore;
+        HttpResponse response;
+        try{
+            if(inqId != '' && repId!= ''){
+                responseString = ' <?xml version="1.0"?> ';
+                responseString += '<REQUEST-REQUEST-FILE>';
+                responseString += '  <HEADER-SEGMENT>';
+                responseString += '<SUB-MBR-ID>INDIA SHELTER</SUB-MBR-ID>';
+                responseString += '<INQ-DT-TM>18-12-2017</INQ-DT-TM>';
+                responseString += '<REQ-VOL-TYP>C01</REQ-VOL-TYP>';
+                responseString += '<REQ-ACTN-TYP>AT02</REQ-ACTN-TYP>';
+                responseString += '<TEST-FLG>Y</TEST-FLG>';
+                responseString += '<AUTH-FLG>Y</AUTH-FLG>';
+                responseString += '<AUTH-TITLE>USER</AUTH-TITLE>';
+                responseString += '<RES-FRMT>XML/HTML</RES-FRMT>';
+                responseString += '<MEMBER-PRE-OVERRIDE>N</MEMBER-PRE-OVERRIDE>';
+                responseString += '<RES-FRMT-EMBD>Y</RES-FRMT-EMBD>';
+                responseString += '</HEADER-SEGMENT>';
+                responseString += '<INQUIRY>';
+                responseString += '<INQUIRY-UNIQUE-REF-NO>'+ inqId +'</INQUIRY-UNIQUE-REF-NO>';
+                responseString += '<REQUEST-DT-TM>'+ System.today() +'</REQUEST-DT-TM>';
+                responseString += '<REPORT-ID>'+ repId +'</REPORT-ID>';
+                responseString += '</INQUIRY>';
+                responseString += '</REQUEST-REQUEST-FILE>';
+                
+                Http http = new Http();
+                HttpRequest request = new HttpRequest();
+                request.setEndpoint(objApiCredentials.setEndpointSecondary__c);
+                request.setMethod('POST');
+                request.setHeader('Content-Type', 'text/xml');
+                request.setHeader('userid', objApiCredentials.userid__c);
+                request.setHeader('password', objApiCredentials.password__c);
+                request.setHeader('mbrid', objApiCredentials.mbrid__c);
+                request.setHeader('productType', objApiCredentials.productType__c);
+                request.setHeader('productVersion', objApiCredentials.productVersion__c);
+                request.setHeader('reqVolType', objApiCredentials.reqVolType__c);
+                request.setHeader('requestXML', responseString);
+                response = http.send(request);
+                boolResponse = true;
+                responseBody = response.getbody();
+                
+                if(responseBody.contains('&lt')){
+                    responseValueTemp = response.getbody().replaceAll('&lt;','<');
+                    system.debug('second response size' + responseValueTemp);
+                    system.debug('second response size' + responseValueTemp.length());
+                }
+                if(responseBody.contains('&gt')){
+                    responseValueTemp = response.getbody().replaceAll('&gt;', '>');
+                    system.debug('second response size' + responseValueTemp);
+                    system.debug('second response size' + responseValueTemp.length());
+                }
+                if(!responseBody.contains('&lt') && !responseBody.contains('&gt')){
+                    responseValueTemp = responseBody;  
+                }
+                system.debug('heap size --> '+ Limits.getHeapSize());
+                
+                responseValue = (responseValueTemp.substring(responseValueTemp.indexOf('<html>'), responseValueTemp.length())).remove(']]>');
+                system.debug('heap size --> '+ Limits.getHeapSize());
+                
+                String responseValue1 =  responseValueTemp.remove(responseValueTemp.substring(responseValueTemp.indexOf('<html>'), responseValueTemp.indexOf('</html>')));
+                
+                system.debug('heap size --> '+ Limits.getHeapSize());
+                system.debug('responseValue1 ===>>> '+ responseValue1);
+                responseValue1+= '>';
+                
+                //-----------------------------------------------  <SCORES> ----------------------------------------------------------------------                    
+                if(responseValue1.contains('<SCORES>') && responseValue1.contains('</SCORES>')){
+                    if(responseValue1.split('<SCORES>')[1].split('</SCORES>')[0].length() > 0){
+                        String scoreTagInfo = responseValue1.split('<SCORES>')[1].split('</SCORES>')[0];
+                        if(scoreTagInfo.contains('<SCORE-VALUE>') && scoreTagInfo.contains('</SCORE-VALUE>')){
+                            if(scoreTagInfo.split('<SCORE-VALUE>')[1].split('</SCORE-VALUE>')[0].length() > 0){
+                                highmarkScore = scoreTagInfo.split('<SCORE-VALUE>')[1].split('</SCORE-VALUE>')[0];
+                            }
+                        }
+                    }
+                }
+                System.debug('highmarkScore===>>>'+highmarkScore);
+                Manual_Bureau__c manualBureau = [SELECT Id, Name, Name__c, Reason_for_Manual_Highmark_CRIF__c, Application__c, Status__c, Generate_Highmark__c, 
+                                                 Bureau_Flag__c, Bureau_Type__c, Highmark_Score__c, Report_Generation_Date_Time__c from Manual_Bureau__c where Id =: manualBureauId];
+                if(manualBureau != null){
+                    manualBureau.Status__c = 'Request Generated';
+                    manualBureau.Generate_Highmark__c = TRUE;
+                    manualBureau.Bureau_Flag__c = TRUE;
+                    manualBureau.Bureau_Type__c = 'Highmark';
+                    manualBureau.Highmark_Score__c = highmarkScore;
+                    manualBureau.Report_Generation_Date_Time__c = String.valueOf(System.now());
+                    update manualBureau;
+                }
+                
+                Attachment att = new Attachment();
+                if(!test.isRunningTest()){  
+                    att.Body = Blob.valueOf(responseValue);
+                    att.ParentId = manualBureau.Id;
+                    att.Name = manualBureau.Name + '-' + manualBureau.Name__c + ' Highmark.html';
+                    att.Description = manualBureau.Reason_for_Manual_Highmark_CRIF__c + '_' + manualBureau.Name__c;
+                    att.ContentType = '.HTML';
+                    insert att;
+                }
+                
+                Attachment att1 = new Attachment();
+                if(!test.isRunningTest()){  
+                    att1.Body = Blob.valueOf(responseValue);
+                    att1.ParentId = manualBureau.Application__c;
+                    att1.Name = manualBureau.Name + '-' + manualBureau.Name__c + ' Highmark.html';
+                    att1.Description = manualBureau.Reason_for_Manual_Highmark_CRIF__c + '_' + manualBureau.Name__c;
+                    att1.ContentType = '.HTML';
+                    insert att1;
+                }
+        	}   
+        }
+        catch(Exception e){
+            exceptionmsg += e.getMessage()+',Line-'+e.getLineNumber();
+        }
+    }
+    
+    public PageReference back(){
+        PageReference backPage = new PageReference('/'+manualBureauId);
+        backPage.setRedirect(true);
+        return backPage;
+    }
+    
+    public class ManualBureauFieldWrapper{
+        public String fieldName {get;set;}
+        public String fieldValue {get;set;}
+        public String fieldStatus {get;set;}
+        ManualBureauFieldWrapper(string name, string value){
+            fieldName = name;
+            fieldValue = value;
+            fieldStatus = 'Not OK';
+        }
+    }    
+}
+
+and below is its test class
+
+@isTest
+public class ManualBureauCRIFHighmarkTest {
+    
+    @TestSetup
+    static void setupTestData(){
+        // Create Custom Settings
+        Trigger_BYPass__c tbObj = new Trigger_BYPass__c();
+        tbObj.Name = 'WhatsappApplication';
+        tbObj.isActive__c = true;
+        insert tbObj;
+        
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c();
+        tbObj1.Name = 'Deactivate';
+        tbObj1.isActive__c = false;
+        insert tbObj1;
+        
+        Config__c cf = new Config__c();
+        cf.Name__c = 'Test Config';
+        cf.Value__c = '99009870';
+        insert cf;
+        
+        // Create HighMark API Custom Setting
+        HighMark_API__c apiConfig = new HighMark_API__c();
+        apiConfig.Name = 'CRIF API';
+        apiConfig.setEndpointPrimary__c = 'https://test.endpoint.primary.com';
+        apiConfig.setEndpointSecondary__c = 'https://test.endpoint.secondary.com';
+        apiConfig.userid__c = 'testuser';
+        apiConfig.password__c = 'testpass';
+        apiConfig.mbrid__c = 'testmbr';
+        apiConfig.productType__c = 'testproduct';
+        apiConfig.productVersion__c = '1.0';
+        apiConfig.reqVolType__c = 'C01';
+        insert apiConfig;
+    }
+    
+    @isTest
+    static void testSuccessfulBureauGeneration(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        // Create test data
+        Account acc = createTestAccount();
+        Contact[] cr = [SELECT Id, AccountId FROM Contact WHERE AccountId = :acc.Id];
+        
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        
+        OpportunityContactRole ocr = new OpportunityContactRole();
+        ocr.ContactId = cr[0].Id;
+        ocr.IsPrimary = false;
+        ocr.Role = 'Co-Applicant 4';
+        ocr.OpportunityId = opp.Id;
+        insert ocr;
+        
+        /*Disbursement__c disb = new Disbursement__c(Application__c=opp.Id,
+                                                   Disb_Status__c = 'Handed over customer',
+                                                   Disbursement_Mode__c='Cheque');
+        insert disb;*/
+        Manual_Bureau__c manualBureau = createManualBureau(cus.Id, opp.Id, true);
+        
+        Test.startTest();
+        PageReference pageRef = Page.ManualBureauCIBIL;
+        pageRef.getParameters().put('Id', manualBureau.Id);
+        Test.setCurrentPage(pageRef);
+        
+        ApexPages.StandardController sc = new ApexPages.StandardController(manualBureau);
+        ManualBureauCRIFHighmark controller = new ManualBureauCRIFHighmark(sc);
+        
+        // Test API calls
+        controller.callApi();
+        controller.secondApi();
+        
+        // Test back method
+        PageReference backPage = controller.back();
+        System.assertNotEquals(null, backPage);
+        
+        Test.stopTest();
+        
+        // Verify Manual Bureau was updated
+        Manual_Bureau__c updatedBureau = [SELECT Id, Status__c, Generate_Highmark__c, Bureau_Flag__c, 
+                                          Bureau_Type__c, Highmark_Score__c 
+                                          FROM Manual_Bureau__c WHERE Id = :manualBureau.Id];
+        System.assertEquals('Request Generated', updatedBureau.Status__c);
+        System.assertEquals(true, updatedBureau.Generate_Highmark__c);
+    }
+    
+    @isTest
+    static void testDifferentGenderCodes(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        
+        // Test with Female gender
+        Manual_Bureau__c manualBureauFemale = createManualBureau(cus.Id, opp.Id, true);
+        manualBureauFemale.Gender__c = 'Female';
+        update manualBureauFemale;
+        
+        Test.startTest();
+        ApexPages.StandardController sc1 = new ApexPages.StandardController(manualBureauFemale);
+        ManualBureauCRIFHighmark controller1 = new ManualBureauCRIFHighmark(sc1);
+        controller1.callApi();
+        
+        // Test with Transgender gender
+        Manual_Bureau__c manualBureauTrans = createManualBureau(cus.Id, opp.Id, true);
+        manualBureauTrans.Gender__c = 'Transgender';
+        update manualBureauTrans;
+        
+        ApexPages.StandardController sc2 = new ApexPages.StandardController(manualBureauTrans);
+        ManualBureauCRIFHighmark controller2 = new ManualBureauCRIFHighmark(sc2);
+        controller2.callApi();
+        
+        // Test with Male gender
+        Manual_Bureau__c manualBureauMale = createManualBureau(cus.Id, opp.Id, true);
+        manualBureauMale.Gender__c = 'Male';
+        update manualBureauMale;
+        
+        ApexPages.StandardController sc3 = new ApexPages.StandardController(manualBureauMale);
+        ManualBureauCRIFHighmark controller3 = new ManualBureauCRIFHighmark(sc3);
+        controller3.callApi();
+        
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testDifferentIDTypes(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        
+        // Test with Passport
+        Manual_Bureau__c bureauPassport = createManualBureau(cus.Id, opp.Id, false);
+        bureauPassport.PAN__c = null;
+        bureauPassport.Passport__c = 'A1234567';
+        update bureauPassport;
+        
+        ApexPages.StandardController sc1 = new ApexPages.StandardController(bureauPassport);
+        ManualBureauCRIFHighmark controller1 = new ManualBureauCRIFHighmark(sc1);
+        
+        // Test with Voter ID
+        Manual_Bureau__c bureauVoter = createManualBureau(cus.Id, opp.Id, false);
+        bureauVoter.PAN__c = null;
+        bureauVoter.Passport__c = null;
+        bureauVoter.Aadhar__c = null;
+        bureauVoter.Voter_ID__c = 'VOTER123';
+        update bureauVoter;
+        
+        ApexPages.StandardController sc2 = new ApexPages.StandardController(bureauVoter);
+        ManualBureauCRIFHighmark controller2 = new ManualBureauCRIFHighmark(sc2);
+        
+        // Test with Ration Card
+        Manual_Bureau__c bureauRation = createManualBureau(cus.Id, opp.Id, false);
+        bureauRation.PAN__c = null;
+        bureauRation.Passport__c = null;
+        bureauRation.Aadhar__c = null;
+        bureauRation.Voter_ID__c = null;
+        bureauRation.Ration_Card__c = 'RATION123';
+        update bureauRation;
+        
+        ApexPages.StandardController sc3 = new ApexPages.StandardController(bureauRation);
+        ManualBureauCRIFHighmark controller3 = new ManualBureauCRIFHighmark(sc3);
+        
+        // Test with Driving License
+        Manual_Bureau__c bureauDL = createManualBureau(cus.Id, opp.Id, false);
+        bureauDL.PAN__c = null;
+        bureauDL.Passport__c = null;
+        bureauDL.Aadhar__c = null;
+        bureauDL.Voter_ID__c = null;
+        bureauDL.Ration_Card__c = null;
+        bureauDL.Driving_License__c = 'DL123456';
+        update bureauDL;
+        
+        ApexPages.StandardController sc4 = new ApexPages.StandardController(bureauDL);
+        ManualBureauCRIFHighmark controller4 = new ManualBureauCRIFHighmark(sc4);
+        
+        // Test with Aadhar
+        Manual_Bureau__c bureauAadhar = createManualBureau(cus.Id, opp.Id, false);
+        bureauAadhar.PAN__c = null;
+        bureauAadhar.Passport__c = null;
+        bureauAadhar.Aadhar__c = '161616818181';
+        bureauAadhar.Voter_ID__c = null;
+        bureauAadhar.Ration_Card__c = null;
+        update bureauAadhar;
+
+        ApexPages.StandardController sc5 = new ApexPages.StandardController(bureauAadhar);
+        ManualBureauCRIFHighmark controller5 = new ManualBureauCRIFHighmark(sc5);
+    }
+    
+    @isTest
+    static void testMissingFields(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        
+        // Create Manual Bureau with missing required fields
+        Manual_Bureau__c manualBureau = new Manual_Bureau__c();
+        manualBureau.RecordTypeId = Schema.getGlobalDescribe().get('Manual_Bureau__c').getDescribe()
+            .getRecordTypeInfosByName().get('Manual Highmark - CRIF Request').getRecordTypeId();
+        manualBureau.Customer__c = cus.Id;
+        manualBureau.Application__c = opp.Id;
+        manualBureau.Status__c = 'Request Initiated';
+        manualBureau.Report_Required_for__c = 'Seller';
+        // Missing Name, DOB, PAN, Address, etc.
+        manualBureau.Address__c = 'Short'; // Less than 7 characters
+        insert manualBureau;
+        
+        Test.startTest();
+        ApexPages.StandardController sc = new ApexPages.StandardController(manualBureau);
+        ManualBureauCRIFHighmark controller = new ManualBureauCRIFHighmark(sc);
+        
+        // Verify allFieldMap is true due to missing fields
+        System.assertEquals(true, controller.allFieldMap);
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testInvalidStateCode(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        
+        Manual_Bureau__c manualBureau = createManualBureau(cus.Id, opp.Id, true);
+        manualBureau.State__c = 'InvalidState'; // Invalid state
+        update manualBureau;
+        
+        Test.startTest();
+        ApexPages.StandardController sc = new ApexPages.StandardController(manualBureau);
+        ManualBureauCRIFHighmark controller = new ManualBureauCRIFHighmark(sc);
+        
+        // Verify error message for invalid state
+        System.assertEquals(true, controller.allFieldMap);
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testWithDisbursementHandedOver(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        
+        // Create Disbursement with Handed over status
+        Disbursement__c disb = new Disbursement__c();
+       // disb.Name = 'Test Disbursement';
+        disb.Application__c = opp.Id;
+        disb.Disb_Status__c = 'Handed over customer';
+        disb.Disbursement_Mode__c='Cheque';
+        insert disb;
+        
+        Manual_Bureau__c manualBureau = createManualBureau(cus.Id, opp.Id, true);
+        
+        Test.startTest();
+        ApexPages.StandardController sc = new ApexPages.StandardController(manualBureau);
+        ManualBureauCRIFHighmark controller = new ManualBureauCRIFHighmark(sc);
+        
+        // Verify error message is displayed
+        List<ApexPages.Message> messages = ApexPages.getMessages();
+        Boolean hasErrorMessage = false;
+        for(ApexPages.Message msg : messages){
+            if(msg.getSummary().contains('Handed over customer')){
+                hasErrorMessage = true;
+            }
+        }
+        System.assertEquals(true, hasErrorMessage);
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testSecondApiWithDifferentResponseFormats(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegrationWithScores());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        Manual_Bureau__c manualBureau = createManualBureau(cus.Id, opp.Id, true);
+        
+        Test.startTest();
+        ApexPages.StandardController sc = new ApexPages.StandardController(manualBureau);
+        ManualBureauCRIFHighmark controller = new ManualBureauCRIFHighmark(sc);
+        
+        // Simulate first API call success
+        controller.inqId = 'TEST_INQ_123';
+        controller.repId = 'TEST_REP_456';
+        controller.secondApi();
+        
+        Test.stopTest();
+        
+        // Verify attachment was created
+        List<Attachment> attachments = [SELECT Id FROM Attachment WHERE ParentId = :manualBureau.Id];
+        System.assertEquals(1, attachments.size());
+    }
+    
+    @isTest
+    static void testWrapperListPopulation(){
+        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        
+        Account acc = createTestAccount();
+        Customer__c cus = createTestCustomer();
+        Opportunity opp = createTestOpportunity();
+        Manual_Bureau__c manualBureau = createManualBureau(cus.Id, opp.Id, true);
+        
+        Test.startTest();
+        ApexPages.StandardController sc = new ApexPages.StandardController(manualBureau);
+        ManualBureauCRIFHighmark controller = new ManualBureauCRIFHighmark(sc);
+        
+        // Verify wrapper list is populated
+        System.assertNotEquals(null, controller.wrapperListManualBureauFields);
+        System.assert(controller.wrapperListManualBureauFields.size() > 0);
+        Test.stopTest();
+    }
+    
+    // Helper methods
+    private static Account createTestAccount(){
+        Account acc = new Account();
+        acc.RecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByName()
+            .get('Loan - Main Applicant').getRecordTypeId();
+        acc.LastName = 'TestLastName';
+        acc.FirstName = 'TestFirstName';
+        acc.PAN_No__c = 'WROL7989K';
+        acc.Sex__pc = 'Male';
+        acc.Date_of_Birth__c = System.today() - 9000;
+        acc.Date_Of_Birth__pc = System.today() - 9000;
+        acc.D_O_B__c = System.today() - 9000;
+        acc.State__pc = 'Rajasthan';
+        acc.City__pc = 'Ajmer';
+        acc.Passport_No__pc = 'A2096457';
+        acc.Aadhar_Card__pc = 'XXXXXXXX9988';
+        acc.Loan_amt__pc = 200000;
+        acc.Address_Line_1__pc = 'Test Address Line 1 with more than 7 characters';
+        acc.Address_Line_2__pc = 'colony';
+        acc.Address_Line_3__pc = 'delhi';
+        acc.Address__pc = 'india';
+        acc.Pin_Code__pc = 110045;
+        acc.Pan_Card_No__pc = 'ABRPY7496E';
+        acc.Voter_Card__pc = '23423';
+        acc.Ration_Card__pc = '1423';
+        acc.Drv_Licn__pc = '234';
+        acc.Mobile__pc = '9123456789';
+        acc.Verify_Mail_Time__c = System.now();
+        insert acc;
+        return acc;
+    }
+    
+    private static Customer__c createTestCustomer(){
+        Customer__c cus = new Customer__c();
+        cus.Branch__c = 'Ajmer-1';
+        cus.Name = 'Rajeev';
+        cus.First_name__c = 'test';
+        cus.Last_Name__c = 'lasttest';
+        cus.Customer_Address__c = 'test address';
+        cus.Mobile__c = '5678987653';
+        cus.Loan_Amount_Applied__c = 456789;
+        cus.Comfortable_EMI__c = 5000;
+        insert cus;
+        return cus;
+    }
+    
+    private static Opportunity createTestOpportunity(){
+        Opportunity opp = new Opportunity();
+        opp.Name = 'New Record';
+        opp.StageName = 'Posted';
+        opp.CloseDate = Date.today();
+        opp.Description = 'Test Record';
+        opp.Loan_Amount_Applied__c = 200000;
+        opp.Loan_Number__c = 'LOAN123456';
+        opp.HLA_Sign_Date__c = System.today().addDays(-2);
+        insert opp;
+        return opp;
+    }
+    
+    private static Manual_Bureau__c createManualBureau(Id customerId, Id oppId, Boolean withAllFields){
+        Manual_Bureau__c manualBureau = new Manual_Bureau__c();
+        manualBureau.RecordTypeId = Schema.getGlobalDescribe().get('Manual_Bureau__c').getDescribe()
+            .getRecordTypeInfosByName().get('Manual Highmark - CRIF Request').getRecordTypeId();
+        manualBureau.Customer__c = customerId;
+        manualBureau.Application__c = oppId;
+        manualBureau.Status__c = 'Request Initiated';
+        manualBureau.Report_Required_for__c = 'Seller';
+        
+        if(withAllFields){
+            manualBureau.Name__c = 'Test Name';
+            manualBureau.First_Name__c = 'TestFirst';
+            manualBureau.Last_Name__c = 'TestLast';
+            manualBureau.Date_of_Birth__c = '13-04-2000';
+            manualBureau.Gender__c = 'Male';
+            manualBureau.PAN__c = 'ASDFG8899K';
+            manualBureau.Passport__c = 'A1234567';
+            manualBureau.Aadhar__c = '939929383922';
+            manualBureau.Mobile_No__c = '9876543210';
+            manualBureau.Address__c = 'Test Address with more than seven characters';
+            manualBureau.City__c = 'Ajmer';
+            manualBureau.State__c = 'Rajasthan';
+            manualBureau.PIN_Code__c = '110045';
+            //manualBureau.Loan_Amount_Applied__c = 200000;
+        }
+        
+        insert manualBureau;
+        return manualBureau;
+    }
+    
+    // Enhanced Mock class with scores
+    public class MockForCibilIntegrationWithScores implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'text/xml');
+            res.setStatusCode(200);
+            
+            String responseBody = '<?xml version="1.0"?>';
+            responseBody += '<RESPONSE>';
+            responseBody += '<INQUIRY-UNIQUE-REF-NO>TEST_INQ_123</INQUIRY-UNIQUE-REF-NO>';
+            responseBody += '<REPORT-ID>TEST_REP_456</REPORT-ID>';
+            responseBody += '<SCORES>';
+            responseBody += '<SCORE-VALUE>750</SCORE-VALUE>';
+            responseBody += '</SCORES>';
+            responseBody += '<html><body>Test HTML Report Content</body></html>';
+            responseBody += '</RESPONSE>';
+            
+            res.setBody(responseBody);
+            return res;
+        }
+    }
+}
+
+
+but checking the code coverage, the lines after line 318
+                request.setEndpoint(objApiCredentials.setEndpointSecondary__c);
+are not running 
+so there might be an issue in this assignment solve it and only give me the code changes or additions
