@@ -1,87 +1,509 @@
-    // Covers Line 74 (updateLoanStatus) and Line 545 (calculateReKYC_DueDate)
-    @isTest
-    public static void testUpdateLoanStatusAndReKYC() {
-        Opportunity op = [SELECT Id, Sanctioned_Amont__c FROM Opportunity LIMIT 1];
+/**
+ * @description Controller for the uwDmChecklist LWC (Change Request: "Implementation of UW DM
+ *              Checklist for Disbursement Approvals", 25-12-2024, + follow-up change requests).
+ *              - getChecklistData: builds the auto-populated header + dynamic checklist grid.
+ *              - saveChecklist: validates and persists the submission, updating the single
+ *                UW_DM_Checklist_Record__c for this Disbursement in place, then sets
+ *                UW_DM_Checklist_Generated__c. 
+ *
+ *              Persistence model: exactly ONE UW_DM_Checklist_Record__c per Disbursement.
+ *              All per-checkpoint answers/remarks are stored together as a JSON array in
+ *              Checklist_Answers_JSON__c.
+ *
+ *              Access model (in order of evaluation):
+ *              1. Manage_UW_DM_Checklist custom permission - base gate on the whole feature.
+ *              2. Status gate - for Disbursements created on/after the configured rollout date
+ *                 (UW_DM_Checklist_Setting__mdt.Default.Status_Restriction_Rollout_Date__c),
+ *                 the checklist is only accessible when disb_Status__c is "Send to UW" or
+ *                 "Cancelled by Branch", UNLESS the user holds
+ *                 UW_DM_Checklist_Status_Override (assigned to specific named users for
+ *                 edge-case handling). Disbursements created before the rollout date are
+ *                 exempt from this gate entirely (old cases keep the old always-available
+ *                 behavior).
+ *              3. Freeze-after-approval - blocked once disb_Status__c = DM_APPROVED_STATUS
+ *                 unless the user holds Bypass_UW_DM_Checklist_Freeze (HO Bypass).
+ *              - Security.stripInaccessible enforces field/object level security on every
+ *                SOQL read and DML write so the component never exposes or writes fields the
+ *                running user isn't permissioned for.
+ */
+public with sharing class UWDMChecklistController {
 
-        Disbursement__c disbRec = new Disbursement__c(
-            Application__c = op.Id,
-            Disbursement_Amount__c = op.Sanctioned_Amont__c, // Match sanction amount to trigger Fully Disbursed
-            Tranch_Details__c = 'First',
-            Levels_Of_Tranch__c = 'First Tranche',
-            Disb_Status__c = 'Send to PRE-CPU',
-            Date_of_Disbursement__c = System.today()
-        );
-        insert disbRec;
+    private static final String PERM_MANAGE = 'Manage_UW_DM_Checklist';
+    private static final String PERM_BYPASS_FREEZE = 'Bypass_UW_DM_Checklist_Freeze';
+    private static final String PERM_STATUS_OVERRIDE = 'UW_DM_Checklist_Status_Override';
 
-        Test.startTest();
-        // Setup OldMap for status comparison
-        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>();
-        Disbursement__c oldDisb = disbRec.clone(true, true, false, false);
-        oldMap.put(disbRec.Id, oldDisb);
+    private static final String RT_EMI = 'Register ACH EMI';
+    // "ACH" removed per follow-up change request - confirm this exact string matches the
+    // Record Type Name in your org (Setup > Object Manager > Nupay_Response__c > Record Types).
+    private static final String RT_SPDC = 'Register SPDC';
 
-        // Change Status to hit Line 74 and 545
-        disbRec.Disb_Status__c = 'Handed over customer';
-        update disbRec; 
+    // TODO: confirm the actual API name of the Disbursement status field and the exact value
+    // used for "DM approved" in your org (the change request only gives the label
+    // "Subjectivity Cleared"). Update this constant and the validation rule to match. The
+    // freeze applies after DM APPROVAL, not merely after the checklist is first saved - a
+    // Credit user must be able to keep re-saving the checklist right up until the DM is
+    // actually approved.
+    private static final String DM_APPROVED_STATUS = 'Handed over customer'; //'Subjectivity Cleared';
 
-        // Explicitly calling methods to guarantee coverage even if bypass is active
-        DisbursementTriggerHelper.updateLoanStatus(new List<Disbursement__c>{disbRec}, oldMap);
-        DisbursementTriggerHelper.calculateReKYC_DueDate(new List<Disbursement__c>{disbRec}, oldMap);
-        Test.stopTest();
+    // Statuses at which the checklist button/action is enabled, for Disbursements created on
+    // or after the rollout date. TODO: confirm these exact picklist values match your org.
+    private static final Set<String> ENABLED_STATUSES = new Set<String>{
+        'Send to UW',
+        'Cancelled by Branch',
+        'Pending'
+    };
+
+    // ---------------------------------------------------------------------
+    // DTOs
+    // ---------------------------------------------------------------------
+
+    public class ChecklistWrapper {
+        @AuraEnabled public Id disbursementId;
+        @AuraEnabled public String loanNumber;
+        @AuraEnabled public String trancheDetail;
+        @AuraEnabled public String processedByName;
+        @AuraEnabled public Boolean isReadOnly;
+        @AuraEnabled public Boolean alreadyGenerated;
+
+        @AuraEnabled public String emiRecordType;
+        @AuraEnabled public String emiMandateStatus;
+        @AuraEnabled public String emiAccountHolderName;
+        @AuraEnabled public String emiBankAccountNo;
+
+        // Can be more than one SPDC mandate per Application - all of them are returned here.
+        @AuraEnabled public List<MandateWrapper> spdcMandates;
+
+        @AuraEnabled public List<ChecklistItemWrapper> items;
     }
 
-    // Covers Line 132 (showErrorMessage for Subsequent Tranche)
-    @isTest
-    public static void testShowErrorMessage() {
-        Opportunity op = [SELECT Id FROM Opportunity LIMIT 1];
-
-        Disbursement__c disbRec = new Disbursement__c(
-            Application__c = op.Id,
-            Tranch_Details__c = 'Subsequent', // This exactly hits line 132
-            Disb_Status__c = 'Handed over customer',
-            Disbursement_Amount__c = 10000
-        );
-        insert disbRec;
-
-        Test.startTest();
-        DisbursementTriggerHelper.showErrorMessage(new List<Disbursement__c>{disbRec});
-        Test.stopTest();
+    public class MandateWrapper {
+        @AuraEnabled public String recordType;
+        @AuraEnabled public String mandateStatus;
+        @AuraEnabled public String accountHolderName;
+        @AuraEnabled public String bankAccountNo;
     }
 
-    // Covers Line 193 and Line 219 (creationOfPDD using Custom Labels and isUpdate context)
-    @isTest
-    public static void testCreationOfPDD() {
-        Opportunity op = [SELECT Id FROM Opportunity LIMIT 1];
-
-        Disbursement__c disbRec = new Disbursement__c(
-            Application__c = op.Id,
-            // Automatically fetch labels so the condition at 193 evaluates to True
-            Tranch_Details__c = Label.Disbursement_TranchDetails,
-            Disb_Status__c = Label.Disbursement_DisbursementStatus,
-            Date_Send_to_Finance__c = System.today()
-        );
-        
-        Test.startTest();
-        insert disbRec; // Hits Trigger.isInsert part
-
-        // Update the status so Trigger.isUpdate (Line 219) logic is covered
-        disbRec.Disb_Status__c = 'Cancelled';
-        update disbRec;
-        Test.stopTest();
+    public class ChecklistItemWrapper {
+        @AuraEnabled public String developerName;
+        @AuraEnabled public String label;
+        @AuraEnabled public Integer order;
+        @AuraEnabled public List<String> answerOptions;
+        @AuraEnabled public List<String> remarksRequiredValues;
+        @AuraEnabled public String selectedAnswer;
+        @AuraEnabled public String remarks;
     }
 
-    // Covers Line 34+ (beforeInsertDMValidation logic mappings)
-    @isTest
-    public static void testBeforeInsertDMValidation() {
-        Opportunity op = [SELECT Id FROM Opportunity LIMIT 1];
-        
-        Disbursement__c disbRec = new Disbursement__c(
-            Application__c = op.Id,
-            Tranch_Details__c = 'First',
-            Disb_Status__c = 'Send to PRE-CPU'
-        );
-
-        Test.startTest();
-        // The maps & logic for Post Sanction Changes vs HLA Date will process here
-        DisbursementTriggerHelper.beforeInsertDMValidation(new List<Disbursement__c>{disbRec});
-        Test.stopTest();
+    // Shape persisted inside Checklist_Answers_JSON__c - intentionally minimal (no options
+    // lists etc.) since those come from metadata, not from the saved answer record.
+    private class AnswerEntry {
+        String developerName;
+        String label;
+        String answer;
+        String remarks;
     }
+
+    public class SaveResult {
+        @AuraEnabled public Boolean success;
+        @AuraEnabled public String message;
+    }
+
+    // ---------------------------------------------------------------------
+    // READ
+    // ---------------------------------------------------------------------
+
+    @AuraEnabled(cacheable=true)
+    public static ChecklistWrapper getChecklistData(Id disbursementId) {
+        assertAccess();
+
+        List<Disbursement__c> disb = [
+            SELECT Id, Name, Tranch_Details__c, UW_DM_Checklist_Generated__c, CreatedDate,
+                   Application__c, Application__r.Loan_Number__c, disb_Status__c
+            FROM Disbursement__c
+            WHERE Id = :disbursementId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        if (disb.isEmpty()) {
+            throw new AuraHandledException('Disbursement record not found or not accessible.');
+        }
+        Disbursement__c d = disb[0];
+
+        assertStatusEligible(d);
+
+        ChecklistWrapper wrapper = new ChecklistWrapper();
+        wrapper.disbursementId = d.Id;
+        wrapper.loanNumber = d.Application__r != null ? d.Application__r.Loan_Number__c : null;
+        wrapper.trancheDetail = d.Tranch_Details__c;
+        wrapper.processedByName = UserInfo.getName();
+        wrapper.alreadyGenerated = d.UW_DM_Checklist_Generated__c;
+        wrapper.isReadOnly = isDmApproved(d) && !FeatureManagement.checkPermission(PERM_BYPASS_FREEZE);
+
+        // eNACH / eSPDC mandate details, keyed off Record Type name, scoped to this Application.
+        // EMI is treated as a single mandate (as before); SPDC can have more than one, so all
+        // matching records are collected.
+        wrapper.spdcMandates = new List<MandateWrapper>();
+        for (Nupay_Response__c mandate : [
+            SELECT Id, RecordType.Name, Mandate_Status__c, Account_Holder_Name__c, Bank_Account_No__c
+            FROM Nupay_Response__c
+            WHERE Opportunity__c = :d.Application__c
+            WITH USER_MODE
+        ]) {
+            if (mandate.RecordType.Name == RT_EMI) {
+                wrapper.emiRecordType = mandate.RecordType.Name;
+                wrapper.emiMandateStatus = mandate.Mandate_Status__c;
+                wrapper.emiAccountHolderName = mandate.Account_Holder_Name__c;
+                wrapper.emiBankAccountNo = mandate.Bank_Account_No__c;
+            } else if (mandate.RecordType.Name == RT_SPDC) {
+                MandateWrapper spdc = new MandateWrapper();
+                spdc.recordType = mandate.RecordType.Name;
+                spdc.mandateStatus = mandate.Mandate_Status__c;
+                spdc.accountHolderName = mandate.Account_Holder_Name__c;
+                spdc.bankAccountNo = mandate.Bank_Account_No__c;
+                wrapper.spdcMandates.add(spdc);
+            }
+        }
+
+        // Exactly one UW_DM_Checklist_Record__c per Disbursement. Existing answers (if any)
+        // are parsed out of the JSON blob so the form pre-fills on re-edit.
+        Map<String, AnswerEntry> existingByDevName = new Map<String, AnswerEntry>();
+        UW_DM_Checklist_Record__c existingRecord = getExistingRecord(disbursementId);
+        if (existingRecord != null && String.isNotBlank(existingRecord.Checklist_Answers_JSON__c)) {
+            for (AnswerEntry entry : parseAnswers(existingRecord.Checklist_Answers_JSON__c)) {
+                if (String.isNotBlank(entry.developerName)) {
+                    existingByDevName.put(entry.developerName, entry);
+                }
+            }
+        }
+
+        // Admin-configurable checklist config (scalable without a deployment).
+        wrapper.items = new List<ChecklistItemWrapper>();
+        for (UW_DM_Checklist_Item__mdt cfg : [
+            SELECT MasterLabel, DeveloperName, Order__c, Answer_Options__c, Remarks_Required_Values__c
+            FROM UW_DM_Checklist_Item__mdt
+            WHERE Is_Active__c = true
+            ORDER BY Order__c ASC
+        ]) {
+            ChecklistItemWrapper itemWrap = new ChecklistItemWrapper();
+            itemWrap.developerName = cfg.DeveloperName;
+            itemWrap.label = cfg.MasterLabel;
+            itemWrap.order = cfg.Order__c != null ? Integer.valueOf(cfg.Order__c) : 0;
+            itemWrap.answerOptions = splitValues(cfg.Answer_Options__c);
+            itemWrap.remarksRequiredValues = splitValues(cfg.Remarks_Required_Values__c);
+
+            AnswerEntry existing = existingByDevName.get(cfg.DeveloperName);
+            if (existing != null) {
+                itemWrap.selectedAnswer = existing.answer;
+                itemWrap.remarks = existing.remarks;
+            }
+            wrapper.items.add(itemWrap);
+        }
+
+        return wrapper;
+    }
+
+    // ---------------------------------------------------------------------
+    // SAVE
+    // ---------------------------------------------------------------------
+
+    @AuraEnabled
+    public static SaveResult saveChecklist(Id disbursementId, String itemsJson) {
+        assertAccess();
+
+        // Items are sent as a JSON string (rather than a typed List<ChecklistItemWrapper>
+        // parameter) and parsed manually here. Complex object parameters can get stripped to
+        // all-null when this component is invoked through certain embedding boundaries
+        // (Visualforce/Aura wrappers, lightning-out, etc.) - plain strings survive any such
+        // boundary intact, so this is both a bug fix and the more robust long-term contract.
+        List<ChecklistItemWrapper> items;
+        try {
+            items = (List<ChecklistItemWrapper>) JSON.deserialize(itemsJson, List<ChecklistItemWrapper>.class);
+        } catch (Exception parseEx) {
+            throw new AuraHandledException('Could not read the checklist data sent from the page: ' + parseEx.getMessage());
+        }
+
+        SaveResult result = new SaveResult();
+        try {
+            List<Disbursement__c> disb = [
+                SELECT Id, Tranch_Details__c, Application__c, Application__r.Loan_Number__c,
+                       UW_DM_Checklist_Generated__c, disb_Status__c, CreatedDate
+                FROM Disbursement__c
+                WHERE Id = :disbursementId
+                WITH USER_MODE
+                LIMIT 1
+            ];
+            if (disb.isEmpty()) {
+                throw new AuraHandledException('Disbursement record not found or not accessible.');
+            }
+            Disbursement__c d = disb[0];
+
+            assertStatusEligible(d);
+
+            if (isDmApproved(d) && !FeatureManagement.checkPermission(PERM_BYPASS_FREEZE)) {
+                throw new AuraHandledException('This UW DM Checklist is frozen after DM approval and can no longer be edited.');
+            }
+
+            // Server-side mirror of the UI validation - never trust the client. Matched by
+            // DeveloperName (stable, non-editable) rather than Label (a display string that
+            // can be blank/undefined in transit).
+            Map<String, UW_DM_Checklist_Item__mdt> configByDevName = new Map<String, UW_DM_Checklist_Item__mdt>();
+            for (UW_DM_Checklist_Item__mdt cfg : [
+                SELECT DeveloperName, MasterLabel, Order__c, Answer_Options__c, Remarks_Required_Values__c
+                FROM UW_DM_Checklist_Item__mdt
+                WHERE Is_Active__c = true
+            ]) {
+                configByDevName.put(cfg.DeveloperName, cfg);
+            }
+
+            if (items == null || items.size() != configByDevName.size()) {
+                throw new AuraHandledException('Fill the checklist / Answer field');
+            }
+
+            // Mandate details, snapshotted for audit history. EMI stays single; SPDC collects
+            // every matching mandate since there can be more than one.
+            String emiRT, emiStatus, emiHolder, emiAcct;
+            List<MandateWrapper> spdcMandates = new List<MandateWrapper>();
+            for (Nupay_Response__c mandate : [
+                SELECT RecordType.Name, Mandate_Status__c, Account_Holder_Name__c, Bank_Account_No__c
+                FROM Nupay_Response__c
+                WHERE Opportunity__c = :d.Application__c
+                WITH USER_MODE
+            ]) {
+                if (mandate.RecordType.Name == RT_EMI) {
+                    emiRT = mandate.RecordType.Name; emiStatus = mandate.Mandate_Status__c;
+                    emiHolder = mandate.Account_Holder_Name__c; emiAcct = mandate.Bank_Account_No__c;
+                } else if (mandate.RecordType.Name == RT_SPDC) {
+                    MandateWrapper spdc = new MandateWrapper();
+                    spdc.recordType = mandate.RecordType.Name;
+                    spdc.mandateStatus = mandate.Mandate_Status__c;
+                    spdc.accountHolderName = mandate.Account_Holder_Name__c;
+                    spdc.bankAccountNo = mandate.Bank_Account_No__c;
+                    spdcMandates.add(spdc);
+                }
+            }
+            String spdcRT = !spdcMandates.isEmpty() ? spdcMandates[0].recordType : null;
+            String spdcStatus = !spdcMandates.isEmpty() ? spdcMandates[0].mandateStatus : null;
+            String spdcHolder = !spdcMandates.isEmpty() ? spdcMandates[0].accountHolderName : null;
+            String spdcAcct = !spdcMandates.isEmpty() ? spdcMandates[0].bankAccountNo : null;
+
+            List<AnswerEntry> answersToSave = new List<AnswerEntry>();
+            Integer rowIndex = 0;
+            for (ChecklistItemWrapper item : items) {
+                rowIndex++;
+                if (String.isBlank(item.developerName)) {
+                    throw new AuraHandledException(
+                        'Checklist row #' + rowIndex + ' is missing its item reference (developerName). ' +
+                        'Diagnostic - label="' + item.label + '", selectedAnswer="' + item.selectedAnswer +
+                        '", remarks="' + item.remarks + '". Please refresh the page and try again.'
+                    );
+                }
+                UW_DM_Checklist_Item__mdt cfg = configByDevName.get(item.developerName);
+                if (cfg == null) {
+                    throw new AuraHandledException(
+                        'Unknown checklist item (developerName="' + item.developerName + '"). Active items: ' +
+                        String.join(new List<String>(configByDevName.keySet()), ', ') +
+                        '. This usually means the browser is holding a stale/cached checklist ' +
+                        '(refresh the page) or this UW_DM_Checklist_Item__mdt record was deactivated after load.'
+                    );
+                }
+                if (String.isBlank(item.selectedAnswer)) {
+                    throw new AuraHandledException('Fill the checklist / Answer field');
+                }
+                List<String> validOptions = splitValues(cfg.Answer_Options__c);
+                if (!validOptions.contains(item.selectedAnswer)) {
+                    throw new AuraHandledException('Fill the checklist / Answer field');
+                }
+                List<String> remarksRequired = splitValues(cfg.Remarks_Required_Values__c);
+                if (remarksRequired.contains(item.selectedAnswer) && String.isBlank(item.remarks)) {
+                    throw new AuraHandledException('Credit remarks is Mandatory');
+                }
+
+                AnswerEntry entry = new AnswerEntry();
+                entry.developerName = cfg.DeveloperName;
+                // Label always taken from the matched metadata record, never from client
+                // input, so a stale/blank client-side label can never get persisted.
+                entry.label = cfg.MasterLabel;
+                entry.answer = item.selectedAnswer;
+                entry.remarks = item.remarks;
+                answersToSave.add(entry);
+            }
+
+            // Exactly one record per Disbursement - update it in place if it already exists
+            // (preserves Id/CreatedDate/field history), otherwise create it.
+            UW_DM_Checklist_Record__c rec = getExistingRecord(disbursementId);
+            Boolean isNew = (rec == null);
+            if (isNew) {
+                rec = new UW_DM_Checklist_Record__c();
+                rec.Disbursement__c = disbursementId;
+            }
+            rec.Loan_Number__c = d.Application__r != null ? d.Application__r.Loan_Number__c : null;
+            rec.Tranche_Detail__c = d.Tranch_Details__c;
+            rec.Checklist_Answers_JSON__c = JSON.serialize(answersToSave);
+            rec.Checklist_Processed_By__c = UserInfo.getUserId();
+            rec.Record_Type_Register_ACH_EMI__c = emiRT;
+            rec.Mandate_Status_EMI__c = emiStatus;
+            rec.Record_Type_Register_ACH_SPDC__c = spdcRT;
+            rec.Mandate_Status_SPDC__c = spdcStatus;
+            rec.SPDC_Mandates_JSON__c = JSON.serialize(spdcMandates);
+            // Prefer SPDC holder/account for the header, fall back to EMI - both are shown
+            // separately in the UI; these two columns hold the FIRST SPDC mandate only, for
+            // quick reference - SPDC_Mandates_JSON__c above has the full list.
+            rec.Account_Holder_Name__c = spdcHolder != null ? spdcHolder : emiHolder;
+            rec.Bank_Account_No__c = spdcAcct != null ? spdcAcct : emiAcct;
+
+            // Optional per-checkpoint reporting fields: if a field named exactly
+            // "<DeveloperName>__c" exists, the answer is written there too; if a field named
+            // "<DeveloperName>_REMARK__c" exists, the remarks are written there too - both in
+            // addition to the JSON blob, which remains the source of truth for reads/pre-fill.
+            populateDynamicAnswerFields(rec, answersToSave);
+
+            Savepoint sp = Database.setSavepoint();
+            try {
+                if (isNew) {
+                    SObjectAccessDecision insertDecision = Security.stripInaccessible(
+                        AccessType.CREATABLE, new List<UW_DM_Checklist_Record__c>{ rec }
+                    );
+                    insert insertDecision.getRecords();
+                } else {
+                    SObjectAccessDecision updateDecision = Security.stripInaccessible(
+                        AccessType.UPDATABLE, new List<UW_DM_Checklist_Record__c>{ rec }
+                    );
+                    update updateDecision.getRecords();
+                }
+
+                d.UW_DM_Checklist_Generated__c = true;
+                SObjectAccessDecision disbUpdateDecision = Security.stripInaccessible(
+                    AccessType.UPDATABLE, new List<Disbursement__c>{ d }
+                );
+                update disbUpdateDecision.getRecords();
+            } catch (Exception dmlEx) {
+                Database.rollback(sp);
+                throw dmlEx;
+            }
+
+            result.success = true;
+            result.message = 'UW Checklist saved successfully';
+            return result;
+
+        } catch (AuraHandledException ahe) {
+            throw ahe;
+        } catch (Exception e) {
+            throw new AuraHandledException('Unable to save the UW DM Checklist: ' + e.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    // Cached once per transaction - describe calls are relatively expensive and this object's
+    // field map doesn't change mid-request.
+    private static Map<String, Schema.SObjectField> checklistRecordFieldMap;
+    private static Date rolloutDateCache;
+    private static Boolean rolloutDateLoaded = false;
+
+    private static void populateDynamicAnswerFields(UW_DM_Checklist_Record__c rec, List<AnswerEntry> answersToSave) {
+        if (checklistRecordFieldMap == null) {
+            checklistRecordFieldMap = Schema.SObjectType.UW_DM_Checklist_Record__c.fields.getMap();
+        }
+        for (AnswerEntry entry : answersToSave) {
+            if (String.isBlank(entry.developerName)) {
+                continue;
+            }
+            // Answer -> "<DeveloperName>__c" (e.g. RCU_Check -> RCU_Check__c)
+            trySetDynamicField(rec, entry.developerName + '__c', entry.answer);
+            // Remarks -> "<DeveloperName>_REMARK__c" (e.g. RCU_Check -> RCU_Check_REMARK__c)
+            trySetDynamicField(rec, entry.developerName + '_REMARK__c', entry.remarks);
+        }
+    }
+
+    private static void trySetDynamicField(UW_DM_Checklist_Record__c rec, String candidateApiName, String value) {
+        Schema.SObjectField field = checklistRecordFieldMap.get(candidateApiName.toLowerCase());
+        if (field == null) {
+            return; // No matching field for this checkpoint - fine, JSON blob still has it.
+        }
+        Schema.DescribeFieldResult fieldDescribe = field.getDescribe();
+        // Only write to fields that are actually settable - avoids errors on formula,
+        // read-only, or otherwise non-updateable fields that happen to share the name.
+        if (fieldDescribe.isCreateable() || fieldDescribe.isUpdateable()) {
+            rec.put(fieldDescribe.getName(), value);
+        }
+    }
+
+    private static UW_DM_Checklist_Record__c getExistingRecord(Id disbursementId) {
+        List<UW_DM_Checklist_Record__c> existing = [
+            SELECT Id, Checklist_Answers_JSON__c
+            FROM UW_DM_Checklist_Record__c
+            WHERE Disbursement__c = :disbursementId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        return existing.isEmpty() ? null : existing[0];
+    }
+
+    private static List<AnswerEntry> parseAnswers(String answersJson) {
+        try {
+            return (List<AnswerEntry>) JSON.deserialize(answersJson, List<AnswerEntry>.class);
+        } catch (Exception ex) {
+            return new List<AnswerEntry>();
+        }
+    }
+
+    private static Boolean isDmApproved(Disbursement__c d) {
+        return d.disb_Status__c == DM_APPROVED_STATUS;
+    }
+
+    // Enforces: for Disbursements created on/after the configured rollout date, the checklist
+    // is only accessible when disb_Status__c is one of ENABLED_STATUSES, unless the user holds
+    // the status-override custom permission. Disbursements created before the rollout date are
+    // exempt entirely (old/in-flight cases keep the old always-available behavior).
+    private static void assertStatusEligible(Disbursement__c d) {
+        Date rolloutDate = getRolloutDate();
+        if (rolloutDate == null) {
+            return; // No rollout date configured - fail open to the old behavior rather than
+                     // locking everyone out due to a missing config record.
+        }
+        if (d.CreatedDate == null || d.CreatedDate.date() < rolloutDate) {
+            return; // Created before go-live - exempt from the new status restriction.
+        }
+        if (FeatureManagement.checkPermission(PERM_STATUS_OVERRIDE)) {
+            return; // Named-user override for edge cases.
+        }
+        if (!ENABLED_STATUSES.contains(d.disb_Status__c)) {
+            throw new AuraHandledException(
+                'The UW DM Checklist is only available while the Disbursement status is Send to UW or Cancelled by Branch.'
+            );
+        }
+    }
+
+    private static Date getRolloutDate() {
+        if (!rolloutDateLoaded) {
+            rolloutDateLoaded = true;
+            List<UW_DM_Checklist_Setting__mdt> settings = [
+                SELECT Status_Restriction_Rollout_Date__c
+                FROM UW_DM_Checklist_Setting__mdt
+                WHERE DeveloperName = 'Default'
+                LIMIT 1
+            ];
+            rolloutDateCache = settings.isEmpty() ? null : settings[0].Status_Restriction_Rollout_Date__c;
+        }
+        return rolloutDateCache;
+    }
+
+    private static void assertAccess() {
+        if (!FeatureManagement.checkPermission(PERM_MANAGE)) {
+            throw new AuraHandledException('You do not have access to the UW DM Checklist.');
+        }
+    }
+
+    private static List<String> splitValues(String raw) {
+        List<String> result = new List<String>();
+        if (String.isNotBlank(raw)) {
+            for (String v : raw.split(';')) {
+                if (String.isNotBlank(v)) {
+                    result.add(v.trim());
+                }
+            }
+        } 
+        return result;
+    }
+}
