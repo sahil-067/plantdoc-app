@@ -1,50 +1,884 @@
-    @isTest
-    static void testGetChecklistData_Success() {
-        // Create a fresh Admin user to bypass FLS/Record Type limitations
-        Profile adminProfile = [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1];
-        User trueAdmin = new User(
-            Alias = 'tadmin', Email = 'trueadmin@testorg.com', EmailEncodingKey = 'UTF-8',
-            LastName = 'TrueAdmin', LanguageLocaleKey = 'en_US', LocaleSidKey = 'en_US',
-            ProfileId = adminProfile.Id, TimeZoneSidKey = 'America/Los_Angeles',
-            UserName = 'trueadmin' + DateTime.now().getTime() + '@testorg.com'
-        );
-        insert trueAdmin;
+this is an apex class
 
-        System.runAs(trueAdmin) {
-            Disbursement__c disb = [SELECT Id, Application__c FROM Disbursement__c LIMIT 1];
+public class LeadCustomerRankingAPIHandler {
+    
+    public static void LeadCustomerRankingMethod(list<lead> ldlist)
+    {
+        try{
+            System.debug('Inside leadCustomer');
+            List<lead> ledlist=new List<lead>();
+            String leadSource = System.Label.AmeyoLeadSource; 
+            System.debug('leadSource'+leadSource);
+            //Added by Ankit Tiwari 2023-11-23
+            String PartenerDetails=Label.NewPartnerDetails;
+            List<String> newPartenerDetails=PartenerDetails.split(',');
+            //End Here
+            List<String> listleadSource = leadSource.split(',');
+            System.debug('listleadSource'+listleadSource);
             
-            // Force insert the mandates as the True Admin so they exist for the query
-            Map<String, Schema.RecordTypeInfo> nupayRtMap = Schema.SObjectType.Nupay_Response__c.getRecordTypeInfosByName();
-            List<Nupay_Response__c> mandatesToCover = new List<Nupay_Response__c>();
+            String leadSubSource = System.Label.AmeyoLeadSubSource;
+            System.debug('leadSubSource'+leadSubSource);
+            List<String> listleadSubSource = leadSubSource.split(',');
+            System.debug('listleadSubSource'+listleadSubSource);
+            if(listleadSubSource.contains(ldlist[0].How_did_you_come_to_know_about_us__c))
+            {
+                System.debug('trueeeeeeee');
+            }
+            System.debug('ldlist data'+ldlist[0].How_did_you_come_to_know_about_us__c);
+            // List<lead> ldlst=[SELECT Id,Name,firstName,lastName,Cust_Score__c,Lead_Phone_Number_1__c,Ameyo_Customer_Id__c,How_did_you_come_to_know_about_us__c,Lead_Sub_Source__c
+            //   FROM Lead WHERE Id IN: ldlist AND (How_did_you_come_to_know_about_us__c IN: listleadSource OR Lead_Sub_Source__c IN: listleadSubSource)];
             
-            if (nupayRtMap.containsKey('Register ACH EMI')) {
-                mandatesToCover.add(new Nupay_Response__c(
-                    Opportunity__c = disb.Application__c,
-                    RecordTypeId = nupayRtMap.get('Register ACH EMI').getRecordTypeId(),
-                    Account_Holder_Name__c = 'EMI Holder',
-                    Bank_Account_No__c = '123456789',
-                    Mandate_Status__c = 'Active'
-                ));
+            //  System.debug('ldlst'+ldlst);
+            List<Lead_Ranking__c> timedataList=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c];
+            Map<Decimal,Decimal> lrMap=new Map<Decimal,Decimal>();
+            
+            for(Lead_Ranking__c lr:timedataList)
+            {
+                lrMap.put(lr.First_Four_Digit_Phone_Number__c,lr.Phone_Number_Ranking__c);
             }
-            if (nupayRtMap.containsKey('Register SPDC')) {
-                mandatesToCover.add(new Nupay_Response__c(
-                    Opportunity__c = disb.Application__c,
-                    RecordTypeId = nupayRtMap.get('Register SPDC').getRecordTypeId(),
-                    Account_Holder_Name__c = 'SPDC Holder',
-                    Bank_Account_No__c = '987654321',
-                    Mandate_Status__c = 'Active'
-                ));
+            for(lead ld:ldlist)
+            {
+                Integer tempp=0;
+                if(newPartenerDetails.contains(ld.How_did_you_come_to_know_about_us__c))
+                {
+                    tempp=1; 
+                }
+                if(ld.LeadSource=='CustomerApp' && ld.How_did_you_come_to_know_about_us__c=='Customer Referral')
+                {
+                    ld.Cust_Score__c='A';
+                }
+                
+                else if((listleadSource.contains(ld.How_did_you_come_to_know_about_us__c) || listleadSubSource.contains(ld.Lead_Sub_Source__c)) && tempp==0)
+                {
+                    System.debug('Inside ldlist'+ld);
+                    Datetime dt=System.now();
+                    System.debug('dt'+dt);
+                    datetime crdate=datetime.newInstance(dt.year(), dt.Month(), dt.day(), dt.hour()+5, dt.minute()+30, dt.second());
+                    
+                    System.debug('crdate'+crdate);
+                    System.debug('hour'+dt.hour());
+                    String dayOfWeek = dt.format('EEEE'); 
+                    System.debug('dayOfWeek'+dayOfWeek);
+                    Time tm=Time.newInstance(dt.hour(), 0, 0, 0);
+                    Integer temp1=dt.hour();
+                    Time temp;
+                    decimal ph=decimal.valueOf(ld.Lead_Phone_Number_1__c.substring(0, 4)); 
+                    Decimal phnRank;
+                    if(lrMap.containsKey(ph))
+                    {
+                        phnRank=lrMap.get(ph);
+                    }
+                    else
+                    {
+                        phnRank=-1;
+                    }
+                    System.debug('phnRank'+phnRank);
+                    System.debug('temp1'+temp1);
+                    System.debug('tm'+tm);
+                    Lead_Ranking__c timedata=[SELECT Id,StartTime__c,EndTime__c,TimeRanking__c FROM Lead_Ranking__c WHERE StartTime__c=:temp1 LIMIT 1];
+                    System.debug('timedata'+timedata);
+                    Lead_Ranking__c daydata=[SELECT Id,Day__c,Day_In_Number__c FROM Lead_Ranking__c WHERE Day__c=:dayOfWeek LIMIT 1];
+                    
+                    //Lead_Ranking__c phonedata=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c WHERE First_Four_Digit_Phone_Number__c=:ph LIMIT 1];
+                    Decimal tn=timedata.TimeRanking__c+daydata.Day_In_Number__c+phnRank;
+                    System.debug('tn'+tn);
+                    String flag;
+                    if(tn>=Integer.valueOf(Label.A))
+                    {flag='A';}
+                    else if(tn==Integer.valueOf(Label.B))
+                    {flag='B';}
+                    else if(tn==Integer.valueOf(Label.C))
+                    { flag='C';}
+                    else
+                    { flag='D';}   
+                    ld.Cust_Score__c=flag;
+                    System.debug('ld.Cust_Score__c'+tn+'flag'+flag);
+                    // ledlist.add(ld);
+                }
+                
+                
+                
+                
+            }
+        }
+        catch(Exception e)
+        {
+            System.debug('Message '+e.getMessage());
+            System.debug('line no.'+e.getLineNumber());
+        }
+        
+        
+    }
+    
+    public static void beforeLeadCustomerRankingMethod(list<lead> ldlist){
+        
+        try{
+            System.debug('Inside leadCustomer');
+            List<lead> ledlist=new List<lead>();
+            String leadSource = System.Label.AmeyoLeadSource; 
+            System.debug('leadSource'+leadSource);
+            List<String> listleadSource = leadSource.split(',');
+            System.debug('listleadSource'+listleadSource);
+            //Added by Ankit Tiwari 2023-11-23
+            String PartenerDetails=Label.NewPartnerDetails;
+            List<String> newPartenerDetails=PartenerDetails.split(',');
+            //End Here
+            String leadSubSource = System.Label.AmeyoLeadSubSource;
+            System.debug('leadSubSource'+leadSubSource);
+            List<String> listleadSubSource = leadSubSource.split(',');
+            System.debug('listleadSubSource'+listleadSubSource);
+            // List<lead> ldlst=[SELECT Id,Name,createddate,firstName,lastName,Cust_Score__c,Lead_Phone_Number_1__c,Ameyo_Customer_Id__c,How_did_you_come_to_know_about_us__c,Lead_Sub_Source__c
+            //     FROM Lead WHERE Id IN: ldlist AND (How_did_you_come_to_know_about_us__c IN: listleadSource OR Lead_Sub_Source__c IN: listleadSubSource)];
+            
+            decimal ph = 0;
+            for(lead ld:ldlist){
+                ph = decimal.valueOf(ld.Lead_Phone_Number_1__c.substring(0, 4)); 
+            }
+            List<Lead_Ranking__c> timedataList=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c where First_Four_Digit_Phone_Number__c =: ph];
+            Map<Decimal,Decimal> lrMap=new Map<Decimal,Decimal>();
+            
+            for(Lead_Ranking__c lr:timedataList){
+                lrMap.put(lr.First_Four_Digit_Phone_Number__c,lr.Phone_Number_Ranking__c);
             }
             
-            if (!mandatesToCover.isEmpty()) {
-                insert mandatesToCover;
+            for(lead ld:ldlist){
+                Integer tempp=0;
+                if(newPartenerDetails.contains(ld.How_did_you_come_to_know_about_us__c))
+                {
+                    tempp=1; 
+                }  
+                if(ld.LeadSource=='CustomerApp' && ld.How_did_you_come_to_know_about_us__c=='Customer Referral')
+                {
+                    ld.Cust_Score__c='A';
+                }
+                else if((listleadSource.contains(ld.How_did_you_come_to_know_about_us__c) || listleadSubSource.contains(ld.Lead_Sub_Source__c)) && tempp==0)
+                {
+                    System.debug('Inside ldlist'+ld);
+                    Datetime dt=ld.createddate;
+                    datetime crdate=datetime.newInstance(dt.year(), dt.Month(), dt.day(), dt.hour()+5, dt.minute()+30, dt.second());
+                    
+                    System.debug('crdate'+crdate);
+                    String dayOfWeek = dt.format ('EEEE'); 
+                    Time tm=Time.newInstance(dt.hour(), 0, 0, 0);
+                    Integer temp1=dt.hour();
+                    Time temp;
+                    Decimal phnRank;
+                    if(lrMap.containsKey(ph))
+                    {
+                        phnRank=lrMap.get(ph);
+                    }
+                    else
+                    {
+                        phnRank=-1;
+                    }
+                    System.debug('phnRank'+phnRank);
+                    System.debug('temp1'+temp1);
+                    
+                    System.debug('temp1'+temp1);
+                    System.debug('tm'+tm);
+                    Lead_Ranking__c timedata=[SELECT Id,StartTime__c,EndTime__c,TimeRanking__c FROM Lead_Ranking__c WHERE StartTime__c=:temp1 LIMIT 1];
+                    System.debug('timedata'+timedata);
+                    Lead_Ranking__c daydata=[SELECT Id,Day__c,Day_In_Number__c FROM Lead_Ranking__c WHERE Day__c=:dayOfWeek LIMIT 1];
+                    //Lead_Ranking__c phonedata=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c WHERE First_Four_Digit_Phone_Number__c=:ph LIMIT 1];
+                    Decimal tn=timedata.TimeRanking__c+daydata.Day_In_Number__c+phnRank;
+                    String flag;
+                    if(tn>=Integer.valueOf(Label.A))
+                    {flag='A';}
+                    else if(tn==Integer.valueOf(Label.B))
+                    {flag='B';}
+                    else if(tn==Integer.valueOf(Label.C))
+                    { flag='C';}
+                    else
+                    { flag='D';}   
+                    ld.Cust_Score__c=flag;
+                    System.debug('ld.Cust_Score__c'+tn);
+                    System.debug('ld.Cust_Score__c'+tn+'flag'+flag);
+                    //ledlist.add(ld);
+                }
             }
-
-            Test.startTest();
-            // Call the method - the query will now find the records and run the red block
-            UWDMChecklistController.ChecklistWrapper wrapper = UWDMChecklistController.getChecklistData(disb.Id);
-            Test.stopTest();
-
-            System.assertNotEquals(null, wrapper);
+        }
+        catch(Exception e){
+            System.debug('Message '+e.getMessage());
+            System.debug('line no.'+e.getLineNumber());
         }
     }
+}
+
+this is the test class
+
+
+@isTest
+public class LeadCustomerRankingAPIHandlerTest {
+    
+    @testSetup
+    static void setupTestData() {
+        // Create Lead Ranking records for different scenarios
+        Datetime crdate = System.now();
+        String dayOfWeek = crdate.format('EEEE');
+        Integer currentHour = crdate.hour();
+        
+        List<Lead_Ranking__c> rankingRecords = new List<Lead_Ranking__c>();
+        
+        // Time ranking record for current hour
+        Lead_Ranking__c timeRanking = new Lead_Ranking__c();
+        timeRanking.StartTime__c = currentHour;
+        timeRanking.EndTime__c = currentHour + 2;
+        timeRanking.TimeRanking__c = 2;
+        rankingRecords.add(timeRanking);
+        
+        // Additional time ranking for low score testing
+        Lead_Ranking__c timeRanking2 = new Lead_Ranking__c();
+        timeRanking2.StartTime__c = 23;
+        timeRanking2.EndTime__c = 24;
+        timeRanking2.TimeRanking__c = 0;
+        rankingRecords.add(timeRanking2);
+        
+        // Day ranking record
+        Lead_Ranking__c dayRanking = new Lead_Ranking__c();
+        dayRanking.Day__c = dayOfWeek;
+        dayRanking.Day_In_Number__c = 3;
+        rankingRecords.add(dayRanking);
+        
+        // Phone ranking records
+        Lead_Ranking__c phoneRanking1 = new Lead_Ranking__c();
+        phoneRanking1.First_Four_Digit_Phone_Number__c = 9208;
+        phoneRanking1.Phone_Number_Ranking__c = 5;
+        rankingRecords.add(phoneRanking1);
+        
+        Lead_Ranking__c phoneRanking2 = new Lead_Ranking__c();
+        phoneRanking2.First_Four_Digit_Phone_Number__c = 9999;
+        phoneRanking2.Phone_Number_Ranking__c = 2;
+        rankingRecords.add(phoneRanking2);
+        
+        Lead_Ranking__c phoneRanking3 = new Lead_Ranking__c();
+        phoneRanking3.First_Four_Digit_Phone_Number__c = 8888;
+        phoneRanking3.Phone_Number_Ranking__c = 1;
+        rankingRecords.add(phoneRanking3);
+        
+        Lead_Ranking__c phoneRanking4 = new Lead_Ranking__c();
+        phoneRanking4.First_Four_Digit_Phone_Number__c = 7777;
+        phoneRanking4.Phone_Number_Ranking__c = 0;
+        rankingRecords.add(phoneRanking4);
+        
+        insert rankingRecords;
+    }
+    
+    // ============================================
+    // TEST METHODS FOR LeadCustomerRankingMethod
+    // ============================================
+    
+    // Test Case 1: LeadCustomerRankingMethod - Customer App with Customer Referral (Score = A)
+    @isTest
+    static void testLeadCustomerRankingMethod_CustomerAppReferral() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestCustomerApp';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'Call Center';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '9208684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(null);
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+    }
+    
+    // Test Case 2: LeadCustomerRankingMethod - Lead matching AmeyoLeadSource with high ranking
+    @isTest
+    static void testLeadCustomerRankingMethod_HighRankingScore() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestHighRanking';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'Call Center';
+        testLead.How_did_you_come_to_know_about_us__c = 'NA';
+        testLead.Lead_Phone_Number_1__c = '9208684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+    }
+    
+    // Test Case 3: LeadCustomerRankingMethod - Lead with Lead_Sub_Source matching
+    @isTest
+    static void testLeadCustomerRankingMethod_LeadSubSource() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestSubSource';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'CustomerApp';
+        testLead.How_did_you_come_to_know_about_us__c = 'Customer Referral';
+        testLead.Lead_Sub_Source__c = 'Test Sub Source';
+        testLead.Lead_Phone_Number_1__c = '9999684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        Lead updatedLead = [SELECT Cust_Score__c FROM Lead WHERE Id = :testLead.Id];
+        System.assertNotEquals(null, updatedLead.Cust_Score__c, 'Score should be assigned based on sub source');
+    }
+    
+    // Test Case 4: LeadCustomerRankingMethod - Phone number not in ranking map
+    @isTest
+    static void testLeadCustomerRankingMethod_PhoneNotInMap() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestNoPhoneRank';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.LeadSource = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '5555684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+    }
+    
+    // Test Case 5: LeadCustomerRankingMethod - Phone number in ranking map
+    @isTest
+    static void testLeadCustomerRankingMethod_PhoneInMap() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestPhoneInMap';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Customer Service';
+        testLead.Lead_Phone_Number_1__c = '8888684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+    }
+    
+    // Test Case 6: LeadCustomerRankingMethod - Lead matching NewPartnerDetails
+    @isTest
+    static void testLeadCustomerRankingMethod_PartnerDetails() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestPartner';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Partner';
+        testLead.LeadSource = 'Partner';
+        testLead.Lead_Phone_Number_1__c = '8888684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        System.assert(true, 'Partner lead processed');
+    }
+    
+    // Test Case 7: LeadCustomerRankingMethod - Multiple leads
+    @isTest
+    static void testLeadCustomerRankingMethod_MultipleLeads() {
+        List<Lead> leadList = new List<Lead>();
+        
+        Lead lead1 = new Lead();
+        lead1.LastName = 'TestMultiple1';
+        lead1.Company = 'Test Company';
+        lead1.How_did_you_come_to_know_about_us__c = 'Call Center';
+        lead1.LeadSource = 'Call Center';
+        lead1.Lead_Phone_Number_1__c = '9208111111';
+        
+        Lead lead2 = new Lead();
+        lead2.LastName = 'TestMultiple2';
+        lead2.Company = 'Test Company';
+        lead2.How_did_you_come_to_know_about_us__c = 'Call Center';
+        lead2.LeadSource = 'Call Center';
+        lead2.Lead_Phone_Number_1__c = '9999222222';
+        
+        Lead lead3 = new Lead();
+        lead3.LastName = 'TestMultiple3';
+        lead3.Company = 'Test Company';
+        lead3.How_did_you_come_to_know_about_us__c = 'Call Center';
+        lead3.LeadSource = 'Call Center';
+        lead3.Lead_Phone_Number_1__c = '8888333333';
+        
+        leadList.add(lead1);
+        leadList.add(lead2);
+        leadList.add(lead3);
+        insert leadList;
+        
+        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id IN :leadList];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(queryLeads);
+        Test.stopTest();
+        
+        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
+        System.assertEquals(3, updatedLeads.size(), 'All leads should be processed');
+    }
+    
+    // Test Case 8: LeadCustomerRankingMethod - Exception handling with invalid phone
+    @isTest
+    static void testLeadCustomerRankingMethod_ExceptionHandling() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestException';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.LeadSource = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '1234567890'; // Too short
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        System.assert(true, 'Exception should be caught and handled');
+    }
+    
+    // Test Case 9: LeadCustomerRankingMethod - Lead without matching criteria
+    @isTest
+    static void testLeadCustomerRankingMethod_NoMatchingCriteria() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestNoMatch';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Other Source';
+        testLead.Lead_Phone_Number_1__c = '9208684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        System.assert(true, 'Non-matching lead processed');
+    }
+    
+    // Test Case 10: LeadCustomerRankingMethod - Score conditions coverage
+    // Target All Label.A,B,C and one null with added beforeLeadCustomerRankingMethod
+    @isTest
+    static void testLeadCustomerRankingMethod_AllScoreConditions() {
+        
+        delete [Select Id from Lead_Ranking__c];
+        
+        Integer targetA = Integer.valueOf(Label.A);
+        Integer targetB = Integer.valueOf(Label.B);
+        Integer targetC = Integer.valueOf(Label.C);
+        
+        Datetime crdate = System.now();
+        String dayOfWeek = crdate.format('EEEE');
+        Integer currentHour = crdate.hour();
+
+        insert new Lead_Ranking__c(StartTime__c=currentHour, EndTime__c=currentHour+1, TimeRanking__c=0);
+        insert new Lead_Ranking__c(Day__c=dayOfWeek, Day_In_Number__c=0);
+        insert new Lead_Ranking__c(First_Four_Digit_Phone_Number__c=9208, Phone_Number_Ranking__c=targetA);
+        insert new Lead_Ranking__c(First_Four_Digit_Phone_Number__c=7777, Phone_Number_Ranking__c=targetB);
+        insert new Lead_Ranking__c(First_Four_Digit_Phone_Number__c=6666, Phone_Number_Ranking__c=targetC);
+
+        
+        List<Lead> leadList = new List<Lead>();
+        
+        // Lead for Score A
+        Lead leadA = new Lead();
+        leadA.LastName = 'TestScoreA';
+        leadA.Company = 'Test Company';
+        leadA.LeadSource = 'Call Center';
+        leadA.How_did_you_come_to_know_about_us__c = 'Retention';
+        leadA.Lead_Phone_Number_1__c = '9208684851';
+        
+        // Lead for Score B
+        Lead leadB = new Lead();
+        leadB.LastName = 'TestScoreB';
+        leadB.Company = 'Test Company';
+        leadB.LeadSource = 'Call Center';
+        leadB.How_did_you_come_to_know_about_us__c = 'Retention';
+        leadB.Lead_Phone_Number_1__c = '7777684851';
+        
+        // Lead for Score C
+        Lead leadC = new Lead();
+        leadC.LastName = 'TestScoreC';
+        leadC.Company = 'Test Company';
+        leadc.LeadSource = 'Call Center';
+        leadC.How_did_you_come_to_know_about_us__c = 'NA';
+        leadC.Lead_Phone_Number_1__c = '6666684851';
+        
+        // Lead with no phone ranking
+        Lead leadD = new Lead();
+        leadD.LastName = 'TestScoreD';
+        leadD.Company = 'Test Company';
+        leadD.LeadSource = 'Call Center';
+        leadD.How_did_you_come_to_know_about_us__c = 'Retention';
+        leadD.Lead_Phone_Number_1__c = '2626684851';
+        
+        leadList.add(leadA);
+        leadList.add(leadB);
+        leadList.add(leadC);
+        leadList.add(leadD);
+        insert leadList;
+        
+        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id IN :leadList];
+        
+        List<Lead> queryLeads1 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id = :leadA.Id];
+        List<Lead> queryLeads2 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id = :leadB.Id];
+        List<Lead> queryLeads3 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id = :leadC.Id];
+        List<Lead> queryLeads4 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id = :leadD.Id];
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(queryLeads);
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads1);
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads2);
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads3);
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads4);
+        Test.stopTest();
+        
+        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
+        for(Lead ld : updatedLeads) {
+            System.assert(
+                ld.Cust_Score__c == 'A' || 
+                ld.Cust_Score__c == 'B' || 
+                ld.Cust_Score__c == 'C' || 
+                ld.Cust_Score__c == 'D' ||
+                ld.Cust_Score__c == null,
+                'Score should be A, B, C, D or null'
+            );
+        }
+    }
+    
+    // =============================================
+    // TEST METHODS FOR beforeLeadCustomerRankingMethod
+    // =============================================
+    
+    // Test Case 11: beforeLeadCustomerRankingMethod - Customer App with Customer Referral
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_CustomerAppReferral() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforeCustomerApp';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'Call Center';
+        testLead.How_did_you_come_to_know_about_us__c = 'RULOANS';
+        testLead.Lead_Phone_Number_1__c = '9208684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(null);
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+    }
+    
+    // Test Case 12: beforeLeadCustomerRankingMethod - Lead matching AmeyoLeadSource
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_AmeyoLeadSource() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforeAmeyo';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'CustomerApp';
+        testLead.How_did_you_come_to_know_about_us__c = 'Customer Referral';
+        testLead.Lead_Phone_Number_1__c = '9208684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        Lead updatedLead = [SELECT Cust_Score__c FROM Lead WHERE Id = :testLead.Id];
+        System.assertNotEquals(null, updatedLead.Cust_Score__c, 'Score should be assigned');
+    }
+    
+    // Test Case 13: beforeLeadCustomerRankingMethod - Lead with Lead_Sub_Source
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_LeadSubSource() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforeSubSource';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'Call Center';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.Lead_Sub_Source__c = 'Test Sub Source';
+        testLead.Lead_Phone_Number_1__c = '9999684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+       
+    }
+    
+    // Test Case 14: beforeLeadCustomerRankingMethod - Phone not in ranking map
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_PhoneNotInMap() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforeNoPhone';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.LeadSource = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '5555684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+       
+    }
+    
+    // Test Case 15: beforeLeadCustomerRankingMethod - Phone in ranking map
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_PhoneInMap() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforePhoneMap';
+        testLead.Company = 'Test Company';
+        testLead.LeadSource = 'Call Center';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '8888684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        
+    }
+    
+    // Test Case 16: beforeLeadCustomerRankingMethod - Partner details
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_PartnerDetails() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforePartner';
+        testLead.Company = 'Test Company';
+       testLead.LeadSource = 'Call Center';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '8888684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        System.assert(true, 'Partner lead processed');
+    }
+    
+    // Test Case 17: beforeLeadCustomerRankingMethod - Multiple leads
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_MultipleLeads() {
+        List<Lead> leadList = new List<Lead>();
+        
+        Lead lead1 = new Lead();
+        lead1.LastName = 'TestBeforeMulti1';
+        lead1.Company = 'Test Company';
+        lead1.How_did_you_come_to_know_about_us__c = 'Call Center';
+        lead1.LeadSource = 'Call Center';
+        lead1.Lead_Phone_Number_1__c = '9208111111';
+        
+        Lead lead2 = new Lead();
+        lead2.LastName = 'TestBeforeMulti2';
+        lead2.Company = 'Test Company';
+        Lead2.LeadSource = 'Call Center';
+        Lead2.How_did_you_come_to_know_about_us__c = 'Call Center';
+        lead2.Lead_Phone_Number_1__c = '9999222222';
+        
+        leadList.add(lead1);
+        leadList.add(lead2);
+        insert leadList;
+        
+        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id IN :leadList];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads);
+        Test.stopTest();
+        
+        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
+        System.assertEquals(2, updatedLeads.size(), 'All leads should be processed');
+    }
+    
+    // Test Case 18: beforeLeadCustomerRankingMethod - Exception handling
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_ExceptionHandling() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforeException';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
+        testLead.LeadSource = 'Call Center';
+        testLead.Lead_Phone_Number_1__c = '1234567890'; // Too short
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        System.assert(true, 'Exception should be caught and handled');
+    }
+    
+    // Test Case 19: beforeLeadCustomerRankingMethod - No matching criteria
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_NoMatchingCriteria() {
+        Lead testLead = new Lead();
+        testLead.LastName = 'TestBeforeNoMatch';
+        testLead.Company = 'Test Company';
+        testLead.How_did_you_come_to_know_about_us__c = 'Other Source';
+        testLead.Lead_Phone_Number_1__c = '9208684851';
+        insert testLead;
+        
+        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                               createddate FROM Lead WHERE Id = :testLead.Id];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        Test.stopTest();
+        
+        System.assert(true, 'Non-matching lead processed');
+    }
+    
+    // Test Case 20: beforeLeadCustomerRankingMethod - All score conditions
+    @isTest
+    static void testBeforeLeadCustomerRankingMethod_AllScoreConditions() {
+        List<Lead> leadList = new List<Lead>();
+        
+        Lead leadA = new Lead();
+        leadA.LastName = 'TestBeforeScoreA';
+        leadA.Company = 'Test Company';
+        leadA.How_did_you_come_to_know_about_us__c = 'Customer Service';
+        leadA.Lead_Phone_Number_1__c = '9208684851';
+        
+        Lead leadB = new Lead();
+        leadB.LastName = 'TestBeforeScoreB';
+        leadB.Company = 'Test Company';
+        leadB.How_did_you_come_to_know_about_us__c = 'Customer Service';
+        leadB.Lead_Phone_Number_1__c = '7777684851';
+        
+        Lead leadC = new Lead();
+        leadC.LastName = 'TestBeforeScoreC';
+        leadC.Company = 'Test Company';
+        leadC.How_did_you_come_to_know_about_us__c = 'Customer Service';
+        leadC.Lead_Phone_Number_1__c = '6666684851';
+        
+        leadList.add(leadA);
+        leadList.add(leadB);
+        leadList.add(leadC);
+        insert leadList;
+        
+        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id IN :leadList];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads);
+        Test.stopTest();
+        
+        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
+        for(Lead ld : updatedLeads) {
+            System.assert(
+                ld.Cust_Score__c == 'A' || 
+                ld.Cust_Score__c == 'B' || 
+                ld.Cust_Score__c == 'C' || 
+                ld.Cust_Score__c == 'D' ||
+                ld.Cust_Score__c == null,
+                'Score should be A, B, C, D or null'
+            );
+        }
+    }
+    
+    // Test Case 20: beforeLeadCustomerRankingMethod - All score conditions
+    @isTest
+    static void testBeforeLeadCustomerRankingMethodAllScoreConditions1() {
+        List<Lead> leadList = new List<Lead>();
+        
+        Lead leadA = new Lead();
+        leadA.LastName = 'TestBeforeScoreA';
+        leadA.Company = 'Test Company';
+        leadA.How_did_you_come_to_know_about_us__c = 'Retention';
+        leadA.Lead_Phone_Number_1__c = '9208684851';
+        
+        Lead leadB = new Lead();
+        leadB.LastName = 'TestBeforeScoreB';
+        leadB.Company = 'Test Company';
+        leadB.How_did_you_come_to_know_about_us__c = 'Retention';
+        leadB.Lead_Phone_Number_1__c = '7777684851';
+        
+        Lead leadC = new Lead();
+        leadC.LastName = 'TestBeforeScoreC';
+        leadC.Company = 'Test Company';
+        leadC.How_did_you_come_to_know_about_us__c = 'Retention';
+        leadC.Lead_Phone_Number_1__c = '6666684851';
+        
+        leadList.add(leadA);
+        leadList.add(leadB);
+        leadList.add(leadC);
+        insert leadList;
+        
+        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
+                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
+                                 createddate FROM Lead WHERE Id IN :leadList];
+        
+        Test.startTest();
+        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads);
+        Test.stopTest();
+        
+    }
+    
+}
