@@ -1,884 +1,1187 @@
 this is an apex class
 
-public class LeadCustomerRankingAPIHandler {
+@RestResource(urlMapping='/CreateCibilDataAPIPWA/*')
+global with sharing class CreateCibilDataAPIPWA {
+    @HttpPost
+    global static ModelClass doCreateCibilData() {
+        try {
+            RestRequest req = RestContext.request;
+            RestResponse res = RestContext.response;
+            System.debug('>>>>>>>>>>req.requestBody.tostring()'+req.requestBody.tostring());
+            CibilDataWrapper cibilDataWrap = (CibilDataWrapper)JSON.deserialize(req.requestBody.tostring(), CibilDataWrapper.class);
+            System.debug('cibilDataWrap---------->' +cibilDataWrap);
+            System.debug('PWALO_Applicant Id--->'+cibilDataWrap.PWALO_Applicant_Id);
+            
+            List<PWALO_Cibil_Data__c> pwaloCibilDataList = new List<PWALO_Cibil_Data__c>();
+            string repId;
+            
+            Set<Id> accIdSet = new Set<Id>();
+            for(PWALO_Applicant__c pwaloApplicant : [Select Id, Applicant_Id__c from PWALO_Applicant__c where Id =: cibilDataWrap.PWALO_Applicant_Id]){
+                accIdSet.add(pwaloApplicant.Applicant_Id__c);
+            }
+            System.debug('accIdSet--->'+accIdSet.size());
+            
+            List<Account> accList = new List<Account>();
+            if(accIdSet.size() > 0){
+                accList = [Select Id, Name, FirstName, LastName, Client_ID__pc from Account where Id IN: accIdSet];
+            }
+            System.debug('accList--->'+accList.size());
+            
+            if(cibilDataWrap.APIType.contains('CIBIL_API')){
+                
+                PWALO_Cibil_Data__c rep = new PWALO_Cibil_Data__c();
+                rep.RecordTypeId = Schema.SObjectType.PWALO_Cibil_Data__c.getRecordTypeInfosByName().get('PWALO Cibil Data').getRecordTypeId();
+                rep.Request_XML_for_Cibil__c = cibilDataWrap.RequestXml;
+                rep.Message__c = cibilDataWrap.Message;
+                rep.Status__c = cibilDataWrap.Status;
+                
+                //Code to get the cibil from xmlResponse
+                String xmlResponse = String.valueOf(cibilDataWrap.ResponseXml);
+                
+                System.debug('Before Testing'+xmlResponse);
+                xmlResponse = xmlResponse.replace('&lt;', '<');
+                xmlResponse = xmlResponse.replace('&gt;', '>');
+                xmlResponse = xmlResponse.replace('lt;', '<');
+                xmlResponse = xmlResponse.replace('gt;', '>');
+                xmlResponse = xmlResponse.remove('&amp;');
+                xmlResponse = xmlResponse.remove('amp;');
+                xmlResponse = xmlResponse.remove('&#xD;');
+                xmlResponse = xmlResponse.replace('apos;', '"');
+                xmlResponse = xmlResponse.remove('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+                System.debug('Middle Testing'+xmlResponse);
+                
+                    xmlResponse = xmlResponse.substringBetween('<ExecuteXMLStringResult>', '</ExecuteXMLStringResult>');
+                	System.debug('Testing'+xmlResponse);
+                    if(xmlResponse.contains('ApplicationId')) {
+                        repId = xmlResponse.split('<ApplicationId>')[1].split('</ApplicationId>')[0];
+                        System.debug('repId'+repId);
+                    }
+                    
+                    Dom.Document doc = new DOM.Document(); 
+                    doc.load(xmlResponse);
+                    System.debug(' doc(xmlResponse) '+ xmlResponse);
+                    Dom.XmlNode creditReportNode;
+                    Dom.XmlNode docReportNode;
+                    Dom.XmlNode applicationReportNode;
+                    Dom.XmlNode parentNode = doc.getRootElement();
+                    System.debug('parentNode 523 '+parentNode); 
+                    System.debug('parentNode.getChildren() '+parentNode.getChildren());
+                    
+                    for(Dom.XmlNode child : parentNode.getChildren()) {
+                        if(child.getName() == 'ContextData') {
+                            System.debug('inside childd '+child);
+                            System.debug('inside childd111 '+child.getChildElement('Field', NULL));
+                            System.debug('inside childd111 '+child.getChildElement('Field', 'Pass'));
+                            System.debug('inside childd222 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL));
+                            System.debug('inside childd333 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL));
+                            System.debug('inside childd4444 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL));
+                            System.debug('inside childd555 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL).getChildElement('Response',NULL));
+                            System.debug('inside childd555 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL).getChildElement('Response',NULL).getChildElement('CibilBureauResponse',NULL));
+                            System.debug('inside childd555 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL).getChildElement('Response',NULL).getChildElement('CibilBureauResponse',NULL).getChildElement('BureauResponseXml',NULL));
+                            System.debug('inside childd555 '+child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL).getChildElement('Response',NULL).getChildElement('CibilBureauResponse',NULL).getChildElement('BureauResponseXml',NULL).getChildElement('CreditReport',NULL));
+                            creditReportNode = child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL).getChildElement('Response',NULL).getChildElement('CibilBureauResponse',NULL).getChildElement('BureauResponseXml',NULL).getChildElement('CreditReport',NULL);
+                            System.debug('creditReportNode 528 '+creditReportNode); 
+                            docReportNode = child.getChildElement('Field', NULL).getChildElement('Applicants',NULL).getChildElement('Applicant',NULL).getChildElement('DsCibilBureau',NULL).getChildElement('Document',NULL);          
+                        }
+                    }
+                    
+                    System.debug('creditReportNode '+creditReportNode);
+                    if(creditReportNode != NULL) {
+                        Dom.XmlNode HeaderSection = creditReportNode.getChildElement('Header', NULL);
+                        rep.Col1__c = HeaderSection.getChildElement('SegmentTag', NULL).getText(); 
+                        rep.Col2__c = HeaderSection.getChildElement('Version', NULL).getText(); 
+                        rep.Col3__c = HeaderSection.getChildElement('ReferenceNumber', NULL).getText(); 
+                        rep.Col5__c = HeaderSection.getChildElement('SubjectReturnCode', NULL).getText(); 
+                        rep.Col6__c = HeaderSection.getChildElement('EnquiryControlNumber', NULL).getText();
+                        rep.ApplicationId__c= repId;
+                        
+                        String DateProcessed = '';
+                        DateProcessed = HeaderSection.getChildElement('DateProcessed', NULL).getText();
+                        System.debug('>>>'+DateProcessed);
+                        String first23 = DateProcessed.substring(0, 2);
+                        String second24 = DateProcessed.substring(2, 4);
+                        String Third25 = DateProcessed.substring(4, 8);
+                        rep.Col7__c =  first23 + '-' +second24 +'-'+Third25;  
+                        rep.Col8__c = HeaderSection.getChildElement('TimeProcessed', NULL).getText(); 
+                        String valueOfGender = '';
+                        String DateofBirth = '';
+                        Dom.XmlNode DocumentSection = docReportNode.getChildElement('Document', NULL);
+                        rep.DocumentId__c = docReportNode.getChildElement('Id', NULL).getText();
+                        
+                        Dom.XmlNode nameSection = creditReportNode.getChildElement('NameSegment', NULL);
+                        rep.Col9__c = String.valueOf(nameSection.getChildElement('ConsumerName1', NULL) != NULL ? nameSection.getChildElement('ConsumerName1', NULL).getText() : '');
+                        rep.Col10__c = String.valueOf(nameSection.getChildElement('ConsumerName2', NULL) != NULL ? nameSection.getChildElement('ConsumerName2', NULL).getText() : '');
+                        DateofBirth = String.valueOf(nameSection.getChildElement('DateOfBirth', NULL) != NULL ? nameSection.getChildElement('DateOfBirth', NULL).getText() : '');
+                        String first = DateofBirth.substring(0, 2);
+                        String second = DateofBirth.substring(2, 4);
+                        String Third = DateofBirth.substring(4, 8);
+                        
+                        valueOfGender = String.valueOf(nameSection.getChildElement('Gender', NULL) != NULL ? nameSection.getChildElement('Gender', NULL).getText() : '');
+                        if(valueOfGender == '1')
+                            rep.Col15__c = 'Female';
+                        else if(valueOfGender == '2')
+                            rep.Col15__c = 'Male';
+                        else if(valueOfGender == '3')
+                            rep.Col15__c = 'Transgender';
+                        
+                        CIBIL_Integration_Account_Type_Fld_Value__mdt[] listcibilaccfieldVal = [Select Account_Type__c, Value__c From CIBIL_Integration_Account_Type_Fld_Value__mdt WHERE Account_Type__c != null AND Value__c!=null];
+                        String valueofAccount = '';
+                        String valueofOccupation = '';
+                        String DateAndReportCert = '';
+                        
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'EmploymentSegment') {
+                                for(Dom.XmlNode ch : child.getChildElements()) {
+                                    if(ch.getName() == 'OccupationCode') {
+                                        valueofOccupation = ch.getText();
+                                        if(valueofOccupation == '01')
+                                            rep.Col86__c = 'Salaried';
+                                        else if(valueofOccupation == '02')
+                                            rep.Col86__c = 'Self Employed Professional';
+                                        else if(valueofOccupation == '03')
+                                            rep.Col86__c = 'Self Employed';
+                                        else if(valueofOccupation == '04')
+                                            rep.Col86__c = 'Others';
+                                    }
+                                    
+                                    if(ch.getName() == 'AccountType') {
+                                        valueofAccount = ch.getText();
+                                        for(CIBIL_Integration_Account_Type_Fld_Value__mdt check : listcibilaccfieldVal) {
+                                            if(valueofAccount == check.Value__c)
+                                                rep.Col84__c = check.Account_Type__c;
+                                        }
+                                    }
+                                    
+                                    if(ch.getName() == 'DateReportedCertified') {
+                                        DateAndReportCert = ch.getText();
+                                        String firstdatevalue = DateAndReportCert.substring(0, 2);
+                                        String seconddatevalue = DateAndReportCert.substring(2, 4);
+                                        String thirddatevalue = DateAndReportCert.substring(4, 8);
+                                        rep.Col85__c = firstdatevalue + '-' +seconddatevalue +'-'+thirddatevalue;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        String ScoreDate = '';  
+                        String firstscorevalue = '';
+                        String secondscorevalue = '';
+                        String thirdscorevalue  = '';            
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'ScoreSegment') {
+                                for(Dom.XmlNode ch : child.getChildElements()) {
+                                    if(ch.getName() == 'ScoreCardName') {
+                                        rep.Col101__c = ch.getText();
+                                    }
+                                    if(ch.getName() == 'Score') {
+                                        rep.CIBIL_Score__c = ch.getText();
+                                    }
+                                    if(ch.getName() == 'ScoreCardVersion') {
+                                        rep.Col102__c = ch.getText();
+                                    }
+                                    if(ch.getName() == 'ReasonCode1') {
+                                        rep.Col115__c = ch.getText();
+                                    }
+                                    if(ch.getName() == 'ReasonCode2') {
+                                        rep.Col135__c = ch.getText();
+                                    }
+                                    if(ch.getName() == 'ScoreDate') {
+                                        ScoreDate = ch.getText();
+                                        firstscorevalue = ScoreDate.substring(0, 2);
+                                        secondscorevalue = ScoreDate.substring(2, 4);
+                                        thirdscorevalue = ScoreDate.substring(4, 8);
+                                        rep.Col103__c = firstscorevalue + '-' +secondscorevalue +'-'+thirdscorevalue; 
+                                    }
+                                }
+                            }
+                        }
+                        
+                        List<Dom.XmlNode> childElementList = new List<Dom.XmlNode>();        
+                        Integer count = 0;
+                        String ValueTelType = '';
+                        String ValueTelType2 = '';
+                        String ValueTelType3 = '';
+                        String ValueTelType4 = '';
+                        
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'TelephoneSegment') {
+                                for(Dom.XmlNode ch : child.getChildElements()) {
+                                    if(ch.getName() == 'TelephoneNumber') {
+                                        if(count==0)
+                                            rep.Col64__c = ch.getText();
+                                        if(count==1)
+                                            rep.Col68__c = ch.getText();
+                                        if(count==2)
+                                            rep.Col72__c = ch.getText();  
+                                        if(count==3)
+                                            rep.Col76__c = ch.getText();  
+                                    }
+                                    else if(ch.getName() == 'TelephoneType') {
+                                        if(count == 0) {
+                                            ValueTelType = ch.getText();
+                                            if(ValueTelType == '00')
+                                                rep.Col66__c = 'Not Classified';
+                                            else if(ValueTelType == '01')
+                                                rep.Col66__c = 'Mobile Phone';
+                                            else if(ValueTelType == '02')
+                                                rep.Col66__c = 'Home Phone';
+                                            else if(ValueTelType == '03')
+                                                rep.Col66__c = 'Office Phone';
+                                        }
+                                        if(count == 1) {
+                                            ValueTelType2 = ch.getText();
+                                            if(ValueTelType2 == '00')
+                                                rep.Col70__c = 'Not Classified';
+                                            else if(ValueTelType2 == '01')
+                                                rep.Col70__c = 'Mobile Phone';
+                                            else if(ValueTelType2 == '02')
+                                                rep.Col70__c = 'Home Phone';
+                                            else if(ValueTelType2 == '03')
+                                                rep.Col70__c = 'Office Phone';
+                                        }
+                                        if(count == 2) {
+                                            ValueTelType3 = ch.getText();
+                                            if(ValueTelType3 == '00')
+                                                rep.Col74__c = 'Not Classified';
+                                            else if(ValueTelType3 == '01')
+                                                rep.Col74__c = 'Mobile Phone';
+                                            else if(ValueTelType3 == '02')
+                                                rep.Col74__c = 'Home Phone';
+                                            else if(ValueTelType3 == '03')
+                                                rep.Col74__c = 'Office Phone';
+                                        }
+                                        if(count == 3) {
+                                            ValueTelType4 = ch.getText();
+                                            if(ValueTelType4 == '00')
+                                                rep.Col78__c = 'Not Classified';
+                                            else if(ValueTelType4 == '01')
+                                                rep.Col78__c = 'Mobile Phone';
+                                            else if(ValueTelType4 == '02')
+                                                rep.Col78__c = 'Home Phone';
+                                            else if(ValueTelType4 == '03')
+                                                rep.Col78__c = 'Office Phone';
+                                        }
+                                    }
+                                    else if(ch.getName() == 'EnrichedThroughEnquiry') {
+                                        if(count == 0)
+                                            rep.Col67__c = ch.getText();
+                                        if(count == 1)
+                                            rep.Col71__c = ch.getText();
+                                        if(count == 2)
+                                            rep.Col75__c = ch.getText();  
+                                        if(count == 3)
+                                            rep.Col79__c = ch.getText();  
+                                    }
+                                }
+                                count ++;
+                            }
+                        }
+                        
+                        Integer countemail = 0;
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'EmailContactSegment') {
+                                for(Dom.XmlNode ch : child.getChildElements()) {
+                                    if(ch.getName()=='EmailID') {
+                                        System.debug('>>'+ch.getText());
+                                        if(countemail == 0)
+                                            rep.Col80__c = ch.getText();
+                                        if(countemail == 1)
+                                            rep.Col81__c = ch.getText();
+                                    }
+                                }
+                                countemail++;
+                            }
+                        }
+                        
+                        Integer countID = 0;
+                        String IDType1 = '';
+                        String IDType2 = '';
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'IDSegment') {
+                                for(Dom.XmlNode ch : child.getChildElements()) {
+                                    if(ch.getName() == 'IDType') {
+                                        if(countID == 0) {
+                                            IDType1 = ch.getText();
+                                            if(IDType1 == '01')
+                                                rep.Col24__c = 'Income Tax ID Number (PAN)';
+                                            else if(IDType1 == '02')
+                                                rep.Col24__c = 'Passport Number';
+                                            else if(IDType1 == '03')
+                                                rep.Col24__c = 'Voter ID Number';
+                                            else if(IDType1 == '04')
+                                                rep.Col24__c = 'Driver’s License Number';
+                                            else if(IDType1 == '05')
+                                                rep.Col24__c = 'Ration Card Number';
+                                            else if(IDType1 == '06')
+                                                rep.Col24__c = 'Universal ID Number (UID)';
+                                            else if(IDType1 == '07')
+                                                rep.Col24__c = 'Additional ID #1 (For Future Use)';
+                                            else if(IDType1 == '08')
+                                                rep.Col24__c = 'Additional ID #2 (For Future Use)';
+                                        }
+                                        if(countID == 1) {
+                                            IDType2 = ch.getText();
+                                            if(IDType2 == '01')
+                                                rep.Col29__c = 'Income Tax ID Number (PAN)';
+                                            else if(IDType2 == '02')
+                                                rep.Col29__c = 'Passport Number';
+                                            else if(IDType2 == '03')
+                                                rep.Col29__c = 'Voter ID Number';
+                                            else if(IDType2 == '04')
+                                                rep.Col29__c = 'Driver’s License Number';
+                                            else if(IDType2 == '05')
+                                                rep.Col29__c = 'Ration Card Number';
+                                            else if(IDType2 == '06')
+                                                rep.Col29__c = 'Universal ID Number (UID)';
+                                            else if(IDType2 == '07')
+                                                rep.Col29__c = 'Additional ID #1 (For Future Use)';
+                                            else if(IDType2 == '08')
+                                                rep.Col29__c = 'Additional ID #2 (For Future Use)';
+                                        }
+                                    }
+                                    else if(ch.getName() == 'IDNumber') {
+                                        if(countID==0)
+                                            rep.Col25__c = ch.getText();
+                                        if(countID==1)
+                                            rep.Col30__c = ch.getText();
+                                    }
+                                    else if(ch.getName() == 'EnrichedThroughEnquiry') {
+                                        if(countID==0)
+                                            rep.Col28__c = ch.getText();
+                                        if(countID==1)
+                                            rep.Col33__c = ch.getText();
+                                    }
+                                }
+                                countID++;
+                            }
+                        }
+                        
+                        Integer Addresscount = 0;
+                        String Addresscat1 = '';
+                        String Addresscat2 = '';
+                        String Addresscat3 = '';
+                        String Addresscat4 = '';
+                        String ValueOfAddressStateCode = '';
+                        String ValueOfAddressStateCode2 = '';
+                        String ValueOfAddressStateCode3 = '';
+                        String ValueOfAddressStateCode4 = '';
+                        String DateReportedA1 = '';
+                        String DateReportedA2 = '';
+                        String DateReportedA3 = '';
+                        String DateReportedA4 = '';
+                        List<CIBIL_Integration_Address_Statecod_Value__mdt> listcibilstatecode = [Select Code__c,State_Name__c From CIBIL_Integration_Address_Statecod_Value__mdt Where Code__c != NULL AND State_Name__c != NULL];
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'Address') {
+                                for(Dom.XmlNode ch :child.getChildElements()) {
+                                    if(ch.getName() == 'AddressLine1') {
+                                        if(Addresscount == 0)
+                                            rep.Col141__c = ch.getText();
+                                        if(Addresscount ==1 )
+                                            rep.Col142__c = ch.getText();
+                                        if(Addresscount == 2)
+                                            rep.Col143__c = ch.getText();
+                                        if(Addresscount == 3)
+                                            rep.Col144__c = ch.getText();
+                                        if(Addresscount == 4)
+                                            rep.Col145__c = ch.getText(); 
+                                    }
+                                    else if(ch.getName() == 'AddressLine2') {
+                                        if(Addresscount == 0)
+                                            rep.Col153__c = ch.getText();
+                                        if(Addresscount == 1)
+                                            rep.Col154__c = ch.getText();
+                                        if(Addresscount == 2)
+                                            rep.Col155__c = ch.getText();
+                                        if(Addresscount == 3)
+                                            rep.Col156__c = ch.getText();
+                                        if(Addresscount == 4)
+                                            rep.Col157__c = ch.getText(); 
+                                    }
+                                    else if(ch.getName() == 'AddressLine5') {
+                                        if(Addresscount == 0)
+                                            rep.Col145__c = ch.getText();
+                                        if(Addresscount == 1)
+                                            rep.Col157__c = ch.getText();
+                                        if(Addresscount == 2)
+                                            rep.Col169__c = ch.getText();
+                                        if(Addresscount == 3)
+                                            rep.Col181__c = ch.getText();
+                                    }
+                                    else if(ch.getName() == 'StateCode') {
+                                        if(Addresscount == 0){
+                                            ValueOfAddressStateCode = ch.getText();
+                                            for(CIBIL_Integration_Address_Statecod_Value__mdt check : listcibilstatecode) {
+                                                if(ValueOfAddressStateCode == check.Code__c)
+                                                    rep.Col146__c = check.State_Name__c;
+                                            }
+                                        }
+                                        if(Addresscount == 1) {
+                                            ValueOfAddressStateCode2 = ch.getText();
+                                            for(CIBIL_Integration_Address_Statecod_Value__mdt check : listcibilstatecode) {
+                                                if(ValueOfAddressStateCode2 == check.Code__c)
+                                                    rep.Col158__c = check.State_Name__c;
+                                            }
+                                        }
+                                        if(Addresscount == 2) {
+                                            ValueOfAddressStateCode3 = ch.getText();
+                                            for(CIBIL_Integration_Address_Statecod_Value__mdt check : listcibilstatecode) {
+                                                if(ValueOfAddressStateCode3 == check.Code__c)
+                                                    rep.Col170__c = check.State_Name__c;
+                                            }
+                                        }
+                                        if(Addresscount == 3) {
+                                            ValueOfAddressStateCode4 = ch.getText();
+                                            for(CIBIL_Integration_Address_Statecod_Value__mdt check : listcibilstatecode) {
+                                                if(ValueOfAddressStateCode4 == check.Code__c)
+                                                    rep.Col182__c = check.State_Name__c;
+                                            }
+                                        }
+                                    }
+                                    else if(ch.getName() == 'PinCode') {
+                                        if(Addresscount == 0)
+                                            rep.Col147__c = ch.getText();
+                                        if(Addresscount == 1)
+                                            rep.Col159__c = ch.getText();
+                                        if(Addresscount == 2)
+                                            rep.Col171__c = ch.getText();
+                                        if(Addresscount == 3)
+                                            rep.Col183__c = ch.getText();
+                                    }
+                                    else if(ch.getName() == 'AddressCategory') {
+                                        if(Addresscount == 0) {
+                                            Addresscat1 = ch.getText();
+                                            if(Addresscat1 == '01')
+                                                rep.Col148__c = 'Permanent Address';
+                                            else if(Addresscat1 == '02')
+                                                rep.Col148__c = 'Residence Address';
+                                            else if(Addresscat1 == '03')
+                                                rep.Col148__c = 'Office Address';
+                                            else if(Addresscat1 == '04')
+                                                rep.Col148__c = 'Not Categorized';
+                                        }
+                                        if(Addresscount == 1) {
+                                            Addresscat2 = ch.getText();
+                                            if(Addresscat2 == '01')
+                                                rep.Col160__c = 'Permanent Address';
+                                            else if(Addresscat2 == '02')
+                                                rep.Col160__c = 'Residence Address';
+                                            else if(Addresscat2 == '03')
+                                                rep.Col160__c = 'Office Address';
+                                            else if(Addresscat2 == '04')
+                                                rep.Col160__c = 'Not Categorized';
+                                        }
+                                        if(Addresscount == 2) {
+                                            Addresscat3 = ch.getText();
+                                            if(Addresscat3 == '01')
+                                                rep.Col172__c = 'Permanent Address';
+                                            else if(Addresscat3 == '02')
+                                                rep.Col172__c = 'Residence Address';
+                                            else if(Addresscat3 == '03')
+                                                rep.Col172__c = 'Office Address';
+                                            else if(Addresscat3 == '04')
+                                                rep.Col172__c = 'Not Categorized';
+                                        }
+                                        if(Addresscount == 3) {
+                                            Addresscat4 = ch.getText();
+                                            if(Addresscat4 == '01')
+                                                rep.Col184__c = 'Permanent Address';
+                                            else if(Addresscat4 == '02')
+                                                rep.Col184__c = 'Residence Address';
+                                            else if(Addresscat4 == '03')
+                                                rep.Col184__c = 'Office Address';
+                                            else if(Addresscat4 == '04')
+                                                rep.Col184__c = 'Not Categorized';
+                                        }
+                                    }
+                                    else if(ch.getName() == 'ResidenceCode') {
+                                        if(Addresscount == 0)
+                                            rep.Col149__c = ch.getText();
+                                        if(Addresscount == 1)
+                                            rep.Col161__c = ch.getText();
+                                        if(Addresscount == 2)
+                                            rep.Col173__c = ch.getText();
+                                        if(Addresscount == 3)
+                                            rep.Col185__c = ch.getText();
+                                    }
+                                    else if(ch.getName() == 'DateReported') {
+                                        if(Addresscount == 0) {
+                                            DateReportedA1 = ch.getText();
+                                            rep.Col150__c = DateReportedA1.substring(0, 2) + '-' + DateReportedA1.substring(2, 4) + '-' + DateReportedA1.substring(4, 8);
+                                        }
+                                        if(Addresscount == 1) {
+                                            DateReportedA2 = ch.getText();
+                                            rep.Col162__c = DateReportedA2.substring(0, 2) + '-' + DateReportedA2.substring(2, 4) + '-' + DateReportedA2.substring(4, 8);
+                                        }
+                                        if(Addresscount ==2 ) {
+                                            DateReportedA3 = ch.getText();
+                                            rep.Col174__c = DateReportedA3.substring(0, 2) + '-' + DateReportedA3.substring(2, 4) + '-' + DateReportedA3.substring(4, 8);
+                                            
+                                        }
+                                        if(Addresscount == 3) {
+                                            DateReportedA4 = ch.getText();
+                                            rep.Col186__c = DateReportedA4.substring(0, 2) + '-' + DateReportedA4.substring(2, 4) + '-' + DateReportedA4.substring(4, 8);
+                                            
+                                        }
+                                    }
+                                    else if(ch.getName() == 'EnrichedThroughEnquiry') {
+                                        if(Addresscount == 0)
+                                            rep.Col152__c = ch.getText();
+                                        if(Addresscount == 1)
+                                            rep.Col164__c = ch.getText();
+                                        if(Addresscount == 2)
+                                            rep.Col176__c = ch.getText();
+                                        if(Addresscount == 3)
+                                            rep.Col188__c = ch.getText();
+                                    }
+                                }
+                                Addresscount++;
+                            }
+                        }
+                        
+                        for(Dom.XmlNode child : creditReportNode.getChildElements()) {
+                            if(child.getName() == 'Account') {
+                                String valueofCibilAccInfo = '';
+                                String DateOfLastPaymentOfAcc = '';
+                                String DateOpenedOrDisbursed = '';
+                                String DateClosed = '';
+                                String NewDateReportedAndCertified = '';
+                                String PaymentHistoryStartDate = '';
+                                String PaymentHistoryEndDate = '';
+                                Dom.XmlNode getinfo = child.getChildElement('Account_NonSummary_Segment_Fields', NULL);
+                                rep.Col198__c = String.valueOf(getinfo.getChildElement('CurrentBalance', NULL) != NULL ? getinfo.getChildElement('CurrentBalance', NULL).getText() : '');
+                                for(Dom.XmlNode x : getinfo.getChildElements()) {
+                                    if(x.getName() == 'DateOfLastPayment') {
+                                        DateOfLastPaymentOfAcc = x.getText();
+                                        rep.Col194__c = DateOfLastPaymentOfAcc.substring(0, 2) + '-' + DateOfLastPaymentOfAcc.substring(2, 4) + '-' + DateOfLastPaymentOfAcc.substring(4, 8);
+                                    }
+                                    if(x.getName() == 'DateOpenedOrDisbursed') {
+                                        DateOpenedOrDisbursed = x.getText();
+                                        rep.Col193__c = DateOpenedOrDisbursed.substring(0, 2) + '-' + DateOpenedOrDisbursed.substring(2, 4) + '-' + DateOpenedOrDisbursed.substring(4, 8);
+                                    }
+                                    if(x.getName() == 'DateClosed') {
+                                        DateClosed = x.getText();
+                                        rep.Col195__c = DateClosed.substring(0, 2) + '-' + DateClosed.substring(2, 4) + '-' + DateClosed.substring(4, 8);
+                                    }
+                                    if(x.getName() == 'DateReportedAndCertified') {
+                                        NewDateReportedAndCertified = x.getText();
+                                        rep.Col196__c = NewDateReportedAndCertified.substring(0, 2) + '-' + NewDateReportedAndCertified.substring(2, 4) + '-' + NewDateReportedAndCertified.substring(4, 8);
+                                    }
+                                    if(x.getName() == 'PaymentHistoryStartDate') {
+                                        PaymentHistoryStartDate = x.getText();
+                                        rep.Col202__c = PaymentHistoryStartDate.substring(0, 2) + '-' + PaymentHistoryStartDate.substring(2, 4) + '-' + PaymentHistoryStartDate.substring(4, 8);
+                                    }
+                                    if(x.getName() == 'PaymentHistoryEndDate') {
+                                        PaymentHistoryEndDate = x.getText();
+                                        rep.Col203__c = PaymentHistoryEndDate.substring(0, 2) + '-' + PaymentHistoryEndDate.substring(2, 4) + '-' + PaymentHistoryEndDate.substring(4, 8);
+                                    }
+                                }
+                                rep.Col189__c = String.valueOf(getinfo.getChildElement('ReportingMemberShortName', NULL) != NULL ? getinfo.getChildElement('ReportingMemberShortName', NULL).getText() : '');
+                                valueofCibilAccInfo = String.valueOf(getinfo.getChildElement('AccountType', NULL) != NULL ? getinfo.getChildElement('AccountType', NULL).getText() : '');
+                                for(CIBIL_Integration_Account_Type_Fld_Value__mdt check : listcibilaccfieldVal) {
+                                    if(valueofCibilAccInfo == check.Value__c)
+                                        rep.Col191__c = check.Account_Type__c;
+                                }
+                                rep.Col192__c = String.valueOf(getinfo.getChildElement('OwenershipIndicator', NULL) != NULL ? getinfo.getChildElement('OwenershipIndicator', NULL).getText() : '');
+                                rep.Col197__c = String.valueOf(getinfo.getChildElement('HighCreditOrSanctionedAmount', NULL) != NULL ? getinfo.getChildElement('HighCreditOrSanctionedAmount', NULL).getText() : '');
+                                rep.Col200__c = String.valueOf(getinfo.getChildElement('PaymentHistory1', NULL) != NULL ? getinfo.getChildElement('PaymentHistory1', NULL).getText() : '');
+                                rep.Col201__c = String.valueOf(getinfo.getChildElement('PaymentHistory2', NULL) != NULL ? getinfo.getChildElement('PaymentHistory2', NULL).getText() : '');
+                                rep.Autonum__c = String.valueOf(child.getChildElement('SegmentTag', NULL) != NULL ? child.getChildElement('SegmentTag', NULL).getText() : '');
+                            }
+                            
+                            if(child.getName() == 'Enquiry') {
+                                String Enquirypurpose = '';
+                                rep.Col228__c = String.valueOf(child.getChildElement('EnquiryAmount', NULL).getText());
+                                String DateOfEnquiryFields = '';
+                                for(Dom.XmlNode x : child.getChildElements()) {
+                                    if(x.getName() == 'DateOfEnquiryFields') {
+                                        DateOfEnquiryFields = x.getText();
+                                        rep.Col225__c = DateOfEnquiryFields.substring(0, 2) + '-' + DateOfEnquiryFields.substring(2, 4) + '-' + DateOfEnquiryFields.substring(4, 8);
+                                    }
+                                }
+                                rep.Col226__c = String.valueOf(child.getChildElement('EnquiringMemberShortName', NULL).getText());
+                                Enquirypurpose = String.valueOf(child.getChildElement('EnquiryPurpose', NULL).getText());
+                                for(CIBIL_Integration_Account_Type_Fld_Value__mdt check : listcibilaccfieldVal) {
+                                    if(Enquirypurpose == check.Value__c)
+                                        rep.Col227__c = check.Account_Type__c;
+                                }
+                                rep.Autonum__c = String.valueOf(child.getChildElement('SegmentTag', NULL).getText());
+                            }
+                        }
+                    }
+                
+                
+                Integer tmp = xmlResponse.length();
+                System.debug('Length is :'+tmp);
+                
+                if(tmp<131072 && tmp>0) {
+                    rep.Cibil_Response_Part_1__c = cibilDataWrap.ResponseXml;
+                }
+                else if(tmp>131072 && tmp<750000) {
+                    rep.Cibil_Response_Part_1__c = xmlResponse.substring(0, tmp/8);//0,125000-substring adjust the string length
+                    rep.Cibil_Response_Part_2__c = xmlResponse.substring(tmp/8, tmp/4);//125000,250000
+                    Integer len1 = tmp/4;
+                    rep.Cibil_Response_Part_3__c = xmlResponse.substring(len1, ((len1/2)+len1));//250000,375000
+                    rep.Cibil_Response_Part_4__c = xmlResponse.substring(((len1/2)+len1), tmp/2);//375000,500000
+                    Integer len2 = tmp/2;
+                    rep.Cibil_Response_Part_5__c = xmlResponse.substring(len2, ((len2/4)+len2));//500000,625000
+                    rep.Cibil_Response_Part_6__c = xmlResponse.substring(((len2/4)+len2), ((len2/4)+len2)+tmp/8);//625000,750000
+                    
+                }else {
+                    rep.Cibil_Response_Part_1__c = 'Size of Response is too large to store so you can find it in related attachment file ';
+                }
+                
+                rep.TranId__c = cibilDataWrap.TranId;
+                rep.PWALO_Applicant__c = cibilDataWrap.PWALO_Applicant_Id;
+                pwaloCibilDataList.add(rep);
+                
+                if(pwaloCibilDataList.size()>0){
+                    insert pwaloCibilDataList;
+                    
+                    //Insert Response as Attachment in Related
+                    Attachment att = new Attachment();
+                    att.Body = Blob.valueOf(cibilDataWrap.ResponseXml);
+                    att.Name = 'Cibil Record Response';
+                    att.parentId = cibilDataWrap.PWALO_Applicant_Id;
+                    insert att;
+                    
+                    String s3FileName = 'CIBIL-'+accList[0].Client_ID__pc+'-'+ accList[0].FirstName+' '+ accList[0].LastName;
+                    clsS3BucketProcess.SavCibilResponse(s3FileName, cibilDataWrap.ResponseXml); 
+                    
+                    ModelClass modelClassObj = new ModelClass('Success', 'Cibil Data is Successfully saved.');
+                    return modelClassObj;
+                }
+            }
+            else if(cibilDataWrap.APIType.contains('DOC_API')){
+                
+                PWALO_Cibil_Data__c cibilDoc = new PWALO_Cibil_Data__c();
+                cibilDoc.RecordTypeId = Schema.SObjectType.PWALO_Cibil_Data__c.getRecordTypeInfosByName().get('PWALO Cibil Doc').getRecordTypeId();
+                cibilDoc.Request_XML_for_Cibil_Doc__c = cibilDataWrap.RequestXml;
+                cibilDoc.Message__c = cibilDataWrap.Message;
+                cibilDoc.Status__c = cibilDataWrap.Status;
+                
+                String strtmp = String.valueOf(cibilDataWrap.ResponseXml);
+                Integer tmp = strtmp.length();
+                System.debug('Length is :'+tmp);
+                
+                if(tmp<131072 && tmp>0) {
+                    cibilDoc.Doc_Response_Part_1__c = cibilDataWrap.ResponseXml;
+                }
+                else if(tmp>131072 && tmp<480000) {
+                    cibilDoc.Doc_Response_Part_1__c = strtmp.substring(0, tmp/4);//0,120000-substring adjust the string length
+                    cibilDoc.Doc_Response_Part_2__c = strtmp.substring(tmp/4, tmp/2);//120000,240000
+                    Integer len1 = tmp/2;
+                    cibilDoc.Doc_Response_Part_3__c = strtmp.substring(len1, ((len1/2)+len1));//240000,360000
+                    cibilDoc.Doc_Response_Part_4__c = strtmp.substring(((len1/2)+len1), tmp);//360000,480000
+                }
+                else {
+                    cibilDoc.Doc_Response_Part_1__c = 'Size of Response is too large to store so you can find it in related attachment file';
+                }
+                
+                cibilDoc.TranId__c = cibilDataWrap.TranId;
+                cibilDoc.PWALO_Applicant__c = cibilDataWrap.PWALO_Applicant_Id;
+                pwaloCibilDataList.add(cibilDoc);
+                
+                if(pwaloCibilDataList.size()>0){
+                    insert pwaloCibilDataList;
+                    
+                    //Insert Response as Attachment in Related
+                    Attachment att = new Attachment();
+                    System.debug('cibilDataWrap.ResponseXml++++++++++'+cibilDataWrap.ResponseXml);
+                    
+                    String responseXML = '';
+                    if(!Test.isRunningTest()){
+                    	responseXML = cibilDataWrap.ResponseXml.substringBetween('<a:FileContent>','</a:FileContent>');
+                    }
+                    System.debug('Test ResponseXml'+ cibilDataWrap.ResponseXml);
+                    
+                    if(accList.size() > 0){
+                    	att.name = accList[0].FirstName + ' ' + accList[0].LastName + ' CIBIL.html';
+                    }
+                    else{
+                        att.name = ' CIBIL.html';
+                    }
+                    att.parentId = cibilDataWrap.PWALO_Applicant_Id;
+                    att.ContentType = 'html';
+                    if(!Test.isRunningTest()){
+                    	att.body = EncodingUtil.base64Decode(responseXML);
+                    }
+                    else{
+                        att.body = Blob.valueOf(cibilDataWrap.ResponseXml);
+                    }
+                    insert att;
+                    
+                    //Attachment of Doc Response
+                    Attachment att1 = new Attachment();
+                    att1.Body = Blob.valueOf(cibilDataWrap.ResponseXml);
+                    att1.Name = 'Cibil Doc Record Response';
+                    att1.parentId = cibilDataWrap.PWALO_Applicant_Id;
+                    insert att1;
+                    
+                    //String s3FileName = 'CIBIL-'+accList[0].Client_ID__pc+'-'+ accList[0].FirstName+' '+ accList[0].LastName;
+                    //clsS3BucketProcess.SavCibilResponse(s3FileName, cibilDataWrap.ResponseXml); 
+                    
+                    ModelClass modelClassObj = new ModelClass('Success', 'Cibil Doc Data is Successfully saved.');
+                    return modelClassObj;
+                }
+            }
+            else{
+                ModelClass modelClassObj = new ModelClass('Error', 'Please enter correct information in JSON parameters.');
+                return modelClassObj;
+            }
+        }
+        catch(Exception ex) {
+            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. of = ' + ex.getLineNumber());
+            ModelClass modelClassObj = new ModelClass('Error', 'Development Error From CIBIL Data PWA.');
+            return modelClassObj;
+        }
+        return null;
+    } 
     
-    public static void LeadCustomerRankingMethod(list<lead> ldlist)
-    {
-        try{
-            System.debug('Inside leadCustomer');
-            List<lead> ledlist=new List<lead>();
-            String leadSource = System.Label.AmeyoLeadSource; 
-            System.debug('leadSource'+leadSource);
-            //Added by Ankit Tiwari 2023-11-23
-            String PartenerDetails=Label.NewPartnerDetails;
-            List<String> newPartenerDetails=PartenerDetails.split(',');
-            //End Here
-            List<String> listleadSource = leadSource.split(',');
-            System.debug('listleadSource'+listleadSource);
-            
-            String leadSubSource = System.Label.AmeyoLeadSubSource;
-            System.debug('leadSubSource'+leadSubSource);
-            List<String> listleadSubSource = leadSubSource.split(',');
-            System.debug('listleadSubSource'+listleadSubSource);
-            if(listleadSubSource.contains(ldlist[0].How_did_you_come_to_know_about_us__c))
-            {
-                System.debug('trueeeeeeee');
-            }
-            System.debug('ldlist data'+ldlist[0].How_did_you_come_to_know_about_us__c);
-            // List<lead> ldlst=[SELECT Id,Name,firstName,lastName,Cust_Score__c,Lead_Phone_Number_1__c,Ameyo_Customer_Id__c,How_did_you_come_to_know_about_us__c,Lead_Sub_Source__c
-            //   FROM Lead WHERE Id IN: ldlist AND (How_did_you_come_to_know_about_us__c IN: listleadSource OR Lead_Sub_Source__c IN: listleadSubSource)];
-            
-            //  System.debug('ldlst'+ldlst);
-            List<Lead_Ranking__c> timedataList=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c];
-            Map<Decimal,Decimal> lrMap=new Map<Decimal,Decimal>();
-            
-            for(Lead_Ranking__c lr:timedataList)
-            {
-                lrMap.put(lr.First_Four_Digit_Phone_Number__c,lr.Phone_Number_Ranking__c);
-            }
-            for(lead ld:ldlist)
-            {
-                Integer tempp=0;
-                if(newPartenerDetails.contains(ld.How_did_you_come_to_know_about_us__c))
-                {
-                    tempp=1; 
-                }
-                if(ld.LeadSource=='CustomerApp' && ld.How_did_you_come_to_know_about_us__c=='Customer Referral')
-                {
-                    ld.Cust_Score__c='A';
-                }
-                
-                else if((listleadSource.contains(ld.How_did_you_come_to_know_about_us__c) || listleadSubSource.contains(ld.Lead_Sub_Source__c)) && tempp==0)
-                {
-                    System.debug('Inside ldlist'+ld);
-                    Datetime dt=System.now();
-                    System.debug('dt'+dt);
-                    datetime crdate=datetime.newInstance(dt.year(), dt.Month(), dt.day(), dt.hour()+5, dt.minute()+30, dt.second());
-                    
-                    System.debug('crdate'+crdate);
-                    System.debug('hour'+dt.hour());
-                    String dayOfWeek = dt.format('EEEE'); 
-                    System.debug('dayOfWeek'+dayOfWeek);
-                    Time tm=Time.newInstance(dt.hour(), 0, 0, 0);
-                    Integer temp1=dt.hour();
-                    Time temp;
-                    decimal ph=decimal.valueOf(ld.Lead_Phone_Number_1__c.substring(0, 4)); 
-                    Decimal phnRank;
-                    if(lrMap.containsKey(ph))
-                    {
-                        phnRank=lrMap.get(ph);
-                    }
-                    else
-                    {
-                        phnRank=-1;
-                    }
-                    System.debug('phnRank'+phnRank);
-                    System.debug('temp1'+temp1);
-                    System.debug('tm'+tm);
-                    Lead_Ranking__c timedata=[SELECT Id,StartTime__c,EndTime__c,TimeRanking__c FROM Lead_Ranking__c WHERE StartTime__c=:temp1 LIMIT 1];
-                    System.debug('timedata'+timedata);
-                    Lead_Ranking__c daydata=[SELECT Id,Day__c,Day_In_Number__c FROM Lead_Ranking__c WHERE Day__c=:dayOfWeek LIMIT 1];
-                    
-                    //Lead_Ranking__c phonedata=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c WHERE First_Four_Digit_Phone_Number__c=:ph LIMIT 1];
-                    Decimal tn=timedata.TimeRanking__c+daydata.Day_In_Number__c+phnRank;
-                    System.debug('tn'+tn);
-                    String flag;
-                    if(tn>=Integer.valueOf(Label.A))
-                    {flag='A';}
-                    else if(tn==Integer.valueOf(Label.B))
-                    {flag='B';}
-                    else if(tn==Integer.valueOf(Label.C))
-                    { flag='C';}
-                    else
-                    { flag='D';}   
-                    ld.Cust_Score__c=flag;
-                    System.debug('ld.Cust_Score__c'+tn+'flag'+flag);
-                    // ledlist.add(ld);
-                }
-                
-                
-                
-                
-            }
-        }
-        catch(Exception e)
-        {
-            System.debug('Message '+e.getMessage());
-            System.debug('line no.'+e.getLineNumber());
-        }
-        
-        
+    public class CibilDataWrapper {
+        public String APIType;
+        public String PWALO_Applicant_Id;
+        public String TranId;
+        public String RequestXml;
+        public String ResponseXml ;
+        public Integer Status;
+        public String Message;
     }
     
-    public static void beforeLeadCustomerRankingMethod(list<lead> ldlist){
-        
-        try{
-            System.debug('Inside leadCustomer');
-            List<lead> ledlist=new List<lead>();
-            String leadSource = System.Label.AmeyoLeadSource; 
-            System.debug('leadSource'+leadSource);
-            List<String> listleadSource = leadSource.split(',');
-            System.debug('listleadSource'+listleadSource);
-            //Added by Ankit Tiwari 2023-11-23
-            String PartenerDetails=Label.NewPartnerDetails;
-            List<String> newPartenerDetails=PartenerDetails.split(',');
-            //End Here
-            String leadSubSource = System.Label.AmeyoLeadSubSource;
-            System.debug('leadSubSource'+leadSubSource);
-            List<String> listleadSubSource = leadSubSource.split(',');
-            System.debug('listleadSubSource'+listleadSubSource);
-            // List<lead> ldlst=[SELECT Id,Name,createddate,firstName,lastName,Cust_Score__c,Lead_Phone_Number_1__c,Ameyo_Customer_Id__c,How_did_you_come_to_know_about_us__c,Lead_Sub_Source__c
-            //     FROM Lead WHERE Id IN: ldlist AND (How_did_you_come_to_know_about_us__c IN: listleadSource OR Lead_Sub_Source__c IN: listleadSubSource)];
-            
-            decimal ph = 0;
-            for(lead ld:ldlist){
-                ph = decimal.valueOf(ld.Lead_Phone_Number_1__c.substring(0, 4)); 
-            }
-            List<Lead_Ranking__c> timedataList=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c where First_Four_Digit_Phone_Number__c =: ph];
-            Map<Decimal,Decimal> lrMap=new Map<Decimal,Decimal>();
-            
-            for(Lead_Ranking__c lr:timedataList){
-                lrMap.put(lr.First_Four_Digit_Phone_Number__c,lr.Phone_Number_Ranking__c);
-            }
-            
-            for(lead ld:ldlist){
-                Integer tempp=0;
-                if(newPartenerDetails.contains(ld.How_did_you_come_to_know_about_us__c))
-                {
-                    tempp=1; 
-                }  
-                if(ld.LeadSource=='CustomerApp' && ld.How_did_you_come_to_know_about_us__c=='Customer Referral')
-                {
-                    ld.Cust_Score__c='A';
-                }
-                else if((listleadSource.contains(ld.How_did_you_come_to_know_about_us__c) || listleadSubSource.contains(ld.Lead_Sub_Source__c)) && tempp==0)
-                {
-                    System.debug('Inside ldlist'+ld);
-                    Datetime dt=ld.createddate;
-                    datetime crdate=datetime.newInstance(dt.year(), dt.Month(), dt.day(), dt.hour()+5, dt.minute()+30, dt.second());
-                    
-                    System.debug('crdate'+crdate);
-                    String dayOfWeek = dt.format ('EEEE'); 
-                    Time tm=Time.newInstance(dt.hour(), 0, 0, 0);
-                    Integer temp1=dt.hour();
-                    Time temp;
-                    Decimal phnRank;
-                    if(lrMap.containsKey(ph))
-                    {
-                        phnRank=lrMap.get(ph);
-                    }
-                    else
-                    {
-                        phnRank=-1;
-                    }
-                    System.debug('phnRank'+phnRank);
-                    System.debug('temp1'+temp1);
-                    
-                    System.debug('temp1'+temp1);
-                    System.debug('tm'+tm);
-                    Lead_Ranking__c timedata=[SELECT Id,StartTime__c,EndTime__c,TimeRanking__c FROM Lead_Ranking__c WHERE StartTime__c=:temp1 LIMIT 1];
-                    System.debug('timedata'+timedata);
-                    Lead_Ranking__c daydata=[SELECT Id,Day__c,Day_In_Number__c FROM Lead_Ranking__c WHERE Day__c=:dayOfWeek LIMIT 1];
-                    //Lead_Ranking__c phonedata=[SELECT Id,First_Four_Digit_Phone_Number__c,Phone_Number_Ranking__c FROM Lead_Ranking__c WHERE First_Four_Digit_Phone_Number__c=:ph LIMIT 1];
-                    Decimal tn=timedata.TimeRanking__c+daydata.Day_In_Number__c+phnRank;
-                    String flag;
-                    if(tn>=Integer.valueOf(Label.A))
-                    {flag='A';}
-                    else if(tn==Integer.valueOf(Label.B))
-                    {flag='B';}
-                    else if(tn==Integer.valueOf(Label.C))
-                    { flag='C';}
-                    else
-                    { flag='D';}   
-                    ld.Cust_Score__c=flag;
-                    System.debug('ld.Cust_Score__c'+tn);
-                    System.debug('ld.Cust_Score__c'+tn+'flag'+flag);
-                    //ledlist.add(ld);
-                }
-            }
-        }
-        catch(Exception e){
-            System.debug('Message '+e.getMessage());
-            System.debug('line no.'+e.getLineNumber());
+    global class ModelClass {
+        public String Status;
+        public String Message;
+        public ModelClass(String Status, String Message) {
+            this.Status = Status;
+            this.Message = Message;
         }
     }
 }
 
-this is the test class
 
+
+here is the test class
+
+/*
+Date          :       14 December 2023
+Created By    :       Shivam Agarwal
+Updated By    :       [Your Name]
+Description   :       Comprehensive test class for CreateCibilDataAPIPWA API
+*/
 
 @isTest
-public class LeadCustomerRankingAPIHandlerTest {
+public class CreateCibilDataAPIPWATest {
     
     @testSetup
-    static void setupTestData() {
-        // Create Lead Ranking records for different scenarios
-        Datetime crdate = System.now();
-        String dayOfWeek = crdate.format('EEEE');
-        Integer currentHour = crdate.hour();
+    public static void testData(){
         
-        List<Lead_Ranking__c> rankingRecords = new List<Lead_Ranking__c>();
-        
-        // Time ranking record for current hour
-        Lead_Ranking__c timeRanking = new Lead_Ranking__c();
-        timeRanking.StartTime__c = currentHour;
-        timeRanking.EndTime__c = currentHour + 2;
-        timeRanking.TimeRanking__c = 2;
-        rankingRecords.add(timeRanking);
-        
-        // Additional time ranking for low score testing
-        Lead_Ranking__c timeRanking2 = new Lead_Ranking__c();
-        timeRanking2.StartTime__c = 23;
-        timeRanking2.EndTime__c = 24;
-        timeRanking2.TimeRanking__c = 0;
-        rankingRecords.add(timeRanking2);
-        
-        // Day ranking record
-        Lead_Ranking__c dayRanking = new Lead_Ranking__c();
-        dayRanking.Day__c = dayOfWeek;
-        dayRanking.Day_In_Number__c = 3;
-        rankingRecords.add(dayRanking);
-        
-        // Phone ranking records
-        Lead_Ranking__c phoneRanking1 = new Lead_Ranking__c();
-        phoneRanking1.First_Four_Digit_Phone_Number__c = 9208;
-        phoneRanking1.Phone_Number_Ranking__c = 5;
-        rankingRecords.add(phoneRanking1);
-        
-        Lead_Ranking__c phoneRanking2 = new Lead_Ranking__c();
-        phoneRanking2.First_Four_Digit_Phone_Number__c = 9999;
-        phoneRanking2.Phone_Number_Ranking__c = 2;
-        rankingRecords.add(phoneRanking2);
-        
-        Lead_Ranking__c phoneRanking3 = new Lead_Ranking__c();
-        phoneRanking3.First_Four_Digit_Phone_Number__c = 8888;
-        phoneRanking3.Phone_Number_Ranking__c = 1;
-        rankingRecords.add(phoneRanking3);
-        
-        Lead_Ranking__c phoneRanking4 = new Lead_Ranking__c();
-        phoneRanking4.First_Four_Digit_Phone_Number__c = 7777;
-        phoneRanking4.Phone_Number_Ranking__c = 0;
-        rankingRecords.add(phoneRanking4);
-        
-        insert rankingRecords;
-    }
-    
-    // ============================================
-    // TEST METHODS FOR LeadCustomerRankingMethod
-    // ============================================
-    
-    // Test Case 1: LeadCustomerRankingMethod - Customer App with Customer Referral (Score = A)
-    @isTest
-    static void testLeadCustomerRankingMethod_CustomerAppReferral() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestCustomerApp';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'Call Center';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '9208684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(null);
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-    }
-    
-    // Test Case 2: LeadCustomerRankingMethod - Lead matching AmeyoLeadSource with high ranking
-    @isTest
-    static void testLeadCustomerRankingMethod_HighRankingScore() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestHighRanking';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'Call Center';
-        testLead.How_did_you_come_to_know_about_us__c = 'NA';
-        testLead.Lead_Phone_Number_1__c = '9208684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-    }
-    
-    // Test Case 3: LeadCustomerRankingMethod - Lead with Lead_Sub_Source matching
-    @isTest
-    static void testLeadCustomerRankingMethod_LeadSubSource() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestSubSource';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'CustomerApp';
-        testLead.How_did_you_come_to_know_about_us__c = 'Customer Referral';
-        testLead.Lead_Sub_Source__c = 'Test Sub Source';
-        testLead.Lead_Phone_Number_1__c = '9999684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        Lead updatedLead = [SELECT Cust_Score__c FROM Lead WHERE Id = :testLead.Id];
-        System.assertNotEquals(null, updatedLead.Cust_Score__c, 'Score should be assigned based on sub source');
-    }
-    
-    // Test Case 4: LeadCustomerRankingMethod - Phone number not in ranking map
-    @isTest
-    static void testLeadCustomerRankingMethod_PhoneNotInMap() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestNoPhoneRank';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.LeadSource = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '5555684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-    }
-    
-    // Test Case 5: LeadCustomerRankingMethod - Phone number in ranking map
-    @isTest
-    static void testLeadCustomerRankingMethod_PhoneInMap() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestPhoneInMap';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Customer Service';
-        testLead.Lead_Phone_Number_1__c = '8888684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-    }
-    
-    // Test Case 6: LeadCustomerRankingMethod - Lead matching NewPartnerDetails
-    @isTest
-    static void testLeadCustomerRankingMethod_PartnerDetails() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestPartner';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Partner';
-        testLead.LeadSource = 'Partner';
-        testLead.Lead_Phone_Number_1__c = '8888684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        System.assert(true, 'Partner lead processed');
-    }
-    
-    // Test Case 7: LeadCustomerRankingMethod - Multiple leads
-    @isTest
-    static void testLeadCustomerRankingMethod_MultipleLeads() {
-        List<Lead> leadList = new List<Lead>();
-        
-        Lead lead1 = new Lead();
-        lead1.LastName = 'TestMultiple1';
-        lead1.Company = 'Test Company';
-        lead1.How_did_you_come_to_know_about_us__c = 'Call Center';
-        lead1.LeadSource = 'Call Center';
-        lead1.Lead_Phone_Number_1__c = '9208111111';
-        
-        Lead lead2 = new Lead();
-        lead2.LastName = 'TestMultiple2';
-        lead2.Company = 'Test Company';
-        lead2.How_did_you_come_to_know_about_us__c = 'Call Center';
-        lead2.LeadSource = 'Call Center';
-        lead2.Lead_Phone_Number_1__c = '9999222222';
-        
-        Lead lead3 = new Lead();
-        lead3.LastName = 'TestMultiple3';
-        lead3.Company = 'Test Company';
-        lead3.How_did_you_come_to_know_about_us__c = 'Call Center';
-        lead3.LeadSource = 'Call Center';
-        lead3.Lead_Phone_Number_1__c = '8888333333';
-        
-        leadList.add(lead1);
-        leadList.add(lead2);
-        leadList.add(lead3);
-        insert leadList;
-        
-        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id IN :leadList];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(queryLeads);
-        Test.stopTest();
-        
-        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
-        System.assertEquals(3, updatedLeads.size(), 'All leads should be processed');
-    }
-    
-    // Test Case 8: LeadCustomerRankingMethod - Exception handling with invalid phone
-    @isTest
-    static void testLeadCustomerRankingMethod_ExceptionHandling() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestException';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.LeadSource = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '1234567890'; // Too short
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        System.assert(true, 'Exception should be caught and handled');
-    }
-    
-    // Test Case 9: LeadCustomerRankingMethod - Lead without matching criteria
-    @isTest
-    static void testLeadCustomerRankingMethod_NoMatchingCriteria() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestNoMatch';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Other Source';
-        testLead.Lead_Phone_Number_1__c = '9208684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        System.assert(true, 'Non-matching lead processed');
-    }
-    
-    // Test Case 10: LeadCustomerRankingMethod - Score conditions coverage
-    // Target All Label.A,B,C and one null with added beforeLeadCustomerRankingMethod
-    @isTest
-    static void testLeadCustomerRankingMethod_AllScoreConditions() {
-        
-        delete [Select Id from Lead_Ranking__c];
-        
-        Integer targetA = Integer.valueOf(Label.A);
-        Integer targetB = Integer.valueOf(Label.B);
-        Integer targetC = Integer.valueOf(Label.C);
-        
-        Datetime crdate = System.now();
-        String dayOfWeek = crdate.format('EEEE');
-        Integer currentHour = crdate.hour();
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
+        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
+        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
 
-        insert new Lead_Ranking__c(StartTime__c=currentHour, EndTime__c=currentHour+1, TimeRanking__c=0);
-        insert new Lead_Ranking__c(Day__c=dayOfWeek, Day_In_Number__c=0);
-        insert new Lead_Ranking__c(First_Four_Digit_Phone_Number__c=9208, Phone_Number_Ranking__c=targetA);
-        insert new Lead_Ranking__c(First_Four_Digit_Phone_Number__c=7777, Phone_Number_Ranking__c=targetB);
-        insert new Lead_Ranking__c(First_Four_Digit_Phone_Number__c=6666, Phone_Number_Ranking__c=targetC);
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        cus.Query_Raised_count__c = 17;
+        cus.Hindsight_Approval__c = 'Pending';
+        insert cus;
+        
+        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
+        badc.Bank_name__c = 'HDFC';
+        badc.Is_PennyDrop_Done__c = true;
+        badc.Disbursement_in_this_Account__c = 'Yes';
+        badc.Household__c = cus.Id;
+        badc.Bank_Account_Number__c = '12345678';
+        badc.IFSC_Code__c = 'ABC123456';
+        badc.Percentage__c = '91';
+        badc.Name_of_Account_Holder__c = 'John Doe';
+        badc.PennyDrop_Status_Code__c = 'NP001';
+        insert badc;
+        
+        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
+                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,
+                                 Verify_Mail_Time__c = Datetime.newInstance(2024, 01, 01, 09, 00, 00),
+                                 FirstName = 'Rahul');
+        insert ac;
 
+        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
+        insert cf;
+
+        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
+        insert nsc;
         
-        List<Lead> leadList = new List<Lead>();
+        Loan_Product__c lp = new Loan_Product__c();
+        lp.PF_Rate_1__c = 5.0;
+        insert lp;
         
-        // Lead for Score A
-        Lead leadA = new Lead();
-        leadA.LastName = 'TestScoreA';
-        leadA.Company = 'Test Company';
-        leadA.LeadSource = 'Call Center';
-        leadA.How_did_you_come_to_know_about_us__c = 'Retention';
-        leadA.Lead_Phone_Number_1__c = '9208684851';
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c = 'ISFC0001',
+                                  Address_Line_2__c = 'tmhall', Address_Line_3__c = 'apart',
+                                  Pin_Code__c = 12345);
+        insert con;
         
-        // Lead for Score B
-        Lead leadB = new Lead();
-        leadB.LastName = 'TestScoreB';
-        leadB.Company = 'Test Company';
-        leadB.LeadSource = 'Call Center';
-        leadB.How_did_you_come_to_know_about_us__c = 'Retention';
-        leadB.Lead_Phone_Number_1__c = '7777684851';
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Jaipur-1';
+        branch.Branch_Category__c = 'B';
+        insert branch;
         
-        // Lead for Score C
-        Lead leadC = new Lead();
-        leadC.LastName = 'TestScoreC';
-        leadC.Company = 'Test Company';
-        leadc.LeadSource = 'Call Center';
-        leadC.How_did_you_come_to_know_about_us__c = 'NA';
-        leadC.Lead_Phone_Number_1__c = '6666684851';
+        Opportunity op = new Opportunity(CloseDate = System.today(), Name = 'Rahul',
+                                         PennyDrop_Status__c = 'Success', AccountId = ac.Id,
+                                         HLA_Sign_Date__c = Date.newInstance(2024, 11, 01),
+                                         Collateral_Pin_Code_New__c = nsc.Id,
+                                         Address_Pin_Code_New__c = nsc.Id,
+                                         Household__c = cus.Id, Sanctioned_Amont__c = 300000, 
+                                         Loan_Product__c = lp.Id,
+                                         LM_Loan_Status__c = 'Sanctioned');
+        op.Loan_Number__c = '6983162387';
+        op.Branch__c = branch.Id;
+        op.First_Sanction_Date__c = system.today();
+        op.Loan_Product_Type__c = 'HL';
+        op.Purpose_of_taking_the_loan__c = 'HOME EXTENSION';
+        op.Loan_Amount_Required__c = 1500001;
+        op.DE_Done_By__c = 'By-Pass Ten Thousand Validation';
+        insert op;
         
-        // Lead with no phone ranking
-        Lead leadD = new Lead();
-        leadD.LastName = 'TestScoreD';
-        leadD.Company = 'Test Company';
-        leadD.LeadSource = 'Call Center';
-        leadD.How_did_you_come_to_know_about_us__c = 'Retention';
-        leadD.Lead_Phone_Number_1__c = '2626684851';
+        Login_Session__c ls = new Login_Session__c();
+        ls.Token__c = '783A1B56F1C4CD414F404483D1794BBA259A3DEE13A554CC4535F8036AE7EDB3';
+        ls.Account__c = ac.Id;
+        ls.Last_Hit_Time__c = System.now();
+        DateTime dt = System.now();
+        Integer addhours = dt.hour();
+        addhours = 23 - addhours;
+        dt = dt.addHours(addhours);
+        Integer addminutes = dt.minute();
+        addminutes = 59 - addminutes;
+        dt = dt.addminutes(addminutes);
+        ls.Expiry_Date_Time__c = dt;
+        insert ls;
         
-        leadList.add(leadA);
-        leadList.add(leadB);
-        leadList.add(leadC);
-        leadList.add(leadD);
-        insert leadList;
+        PWALO_OPP__c pwalo = new PWALO_OPP__c();
+        pwalo.Application__c = op.Id;
+        insert pwalo;
         
-        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id IN :leadList];
+        PWALO_Applicant__c pwaloApplicant = new PWALO_Applicant__c();
+        pwaloApplicant.PWALO_OPP__c = pwalo.Id;
+        pwaloApplicant.iTrust_Applicant_Id__c = '123uni';
+        pwaloApplicant.Applicant_Id__c = ac.Id;
+        insert pwaloApplicant;
         
-        List<Lead> queryLeads1 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id = :leadA.Id];
-        List<Lead> queryLeads2 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id = :leadB.Id];
-        List<Lead> queryLeads3 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id = :leadC.Id];
-        List<Lead> queryLeads4 = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id = :leadD.Id];
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.LeadCustomerRankingMethod(queryLeads);
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads1);
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads2);
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads3);
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads4);
-        Test.stopTest();
         
-        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
-        for(Lead ld : updatedLeads) {
-            System.assert(
-                ld.Cust_Score__c == 'A' || 
-                ld.Cust_Score__c == 'B' || 
-                ld.Cust_Score__c == 'C' || 
-                ld.Cust_Score__c == 'D' ||
-                ld.Cust_Score__c == null,
-                'Score should be A, B, C, D or null'
-            );
-        }
     }
     
-    // =============================================
-    // TEST METHODS FOR beforeLeadCustomerRankingMethod
-    // =============================================
-    
-    // Test Case 11: beforeLeadCustomerRankingMethod - Customer App with Customer Referral
     @isTest
-    static void testBeforeLeadCustomerRankingMethod_CustomerAppReferral() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforeCustomerApp';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'Call Center';
-        testLead.How_did_you_come_to_know_about_us__c = 'RULOANS';
-        testLead.Lead_Phone_Number_1__c = '9208684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
+    public static void testCibilAPISuccess(){
         Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(null);
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        
+        Test.setMock(HttpCalloutMock.class, new S3HttpCalloutMock());
+         amazon_s3__c s3Config = new amazon_s3__c();
+        s3Config.Name = 'CIBIL';
+        s3Config.S3_bucketname__c = 'my-test-bucket';
+        s3Config.S3_Key__c = 'my-access-key';
+        s3Config.S3_Secret__c = 'my-secret-key';
+        s3Config.S3_URL__c = 'https://my-test-bucket.s3.amazonaws.com';
+        s3Config.AWSREGION__c = 'us-east-1';
+        s3Config.FOLDERNAME__c = 'test-folder';
+        insert s3Config;
+        
+        
+        PWALO_Applicant__c pwaloApplicant = [Select Id from PWALO_Applicant__c where iTrust_Applicant_Id__c = '123uni' LIMIT 1];
+        
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/CreateCibilDataAPIPWA'; 
+        req.httpMethod = 'POST';
+        
+        String xmlResponse = getCibilXmlResponse();
+        String requestPayload = buildCibilRequestPayload(pwaloApplicant.Id, xmlResponse);
+        req.requestBody = Blob.valueOf(requestPayload);
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        CreateCibilDataAPIPWA.ModelClass response = CreateCibilDataAPIPWA.doCreateCibilData();
+        
+        System.debug('Response Status: ' + response.Status);
+        System.debug('Response Message: ' + response.Message);
+        
+        List<PWALO_Cibil_Data__c> cibilDataList = [Select Id, ApplicationId__c, CIBIL_Score__c from PWALO_Cibil_Data__c];
+        System.debug('CIBIL Data List Size: ' + cibilDataList.size());
+        
+        List<Attachment> attachmentList = [Select Id, Name from Attachment where parentId = :pwaloApplicant.Id];
+        System.debug('Attachment List Size: ' + attachmentList.size());
+        
         Test.stopTest();
     }
     
-    // Test Case 12: beforeLeadCustomerRankingMethod - Lead matching AmeyoLeadSource
     @isTest
-    static void testBeforeLeadCustomerRankingMethod_AmeyoLeadSource() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforeAmeyo';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'CustomerApp';
-        testLead.How_did_you_come_to_know_about_us__c = 'Customer Referral';
-        testLead.Lead_Phone_Number_1__c = '9208684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
+    public static void testDocAPISuccess(){
         Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
-        Test.stopTest();
         
-        Lead updatedLead = [SELECT Cust_Score__c FROM Lead WHERE Id = :testLead.Id];
-        System.assertNotEquals(null, updatedLead.Cust_Score__c, 'Score should be assigned');
+        PWALO_Applicant__c pwaloApplicant = [Select Id from PWALO_Applicant__c where iTrust_Applicant_Id__c = '123uni' LIMIT 1];
+        
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/CreateCibilDataAPIPWA'; 
+        req.httpMethod = 'POST';
+        
+        String xmlResponse = getDocXmlResponse();
+        String requestPayload = buildDocRequestPayload(pwaloApplicant.Id, xmlResponse);
+        req.requestBody = Blob.valueOf(requestPayload);
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        CreateCibilDataAPIPWA.ModelClass response = CreateCibilDataAPIPWA.doCreateCibilData();
+        
+        System.debug('Response Status: ' + response.Status);
+        System.debug('Response Message: ' + response.Message);
+        
+        List<PWALO_Cibil_Data__c> cibilDocList = [Select Id from PWALO_Cibil_Data__c];
+        System.debug('CIBIL Doc List Size: ' + cibilDocList.size());
+        
+        List<Attachment> attachmentList = [Select Id, Name from Attachment where parentId = :pwaloApplicant.Id];
+        System.debug('Attachment List Size: ' + attachmentList.size());
+        Test.stopTest();
     }
     
-    // Test Case 13: beforeLeadCustomerRankingMethod - Lead with Lead_Sub_Source
     @isTest
-    static void testBeforeLeadCustomerRankingMethod_LeadSubSource() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforeSubSource';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'Call Center';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.Lead_Sub_Source__c = 'Test Sub Source';
-        testLead.Lead_Phone_Number_1__c = '9999684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
+    public static void testInvalidAPIType(){
         Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
-        Test.stopTest();
         
-       
+        PWALO_Applicant__c pwaloApplicant = [Select Id from PWALO_Applicant__c where iTrust_Applicant_Id__c = '123uni' LIMIT 1];
+        
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/CreateCibilDataAPIPWA'; 
+        req.httpMethod = 'POST';
+        
+        String requestPayload = '{"APIType":"INVALID_API","PWALO_Applicant_Id":"' + pwaloApplicant.Id + '","TranId":"PWA000123","RequestXml":"test","ResponseXml":"test","Status":200,"Message":"Test"}';
+        req.requestBody = Blob.valueOf(requestPayload);
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        CreateCibilDataAPIPWA.ModelClass response = CreateCibilDataAPIPWA.doCreateCibilData();
+        
+        System.debug('Response Status: ' + response.Status);
+        System.debug('Response Message: ' + response.Message);
+        
+        Test.stopTest();
     }
     
-    // Test Case 14: beforeLeadCustomerRankingMethod - Phone not in ranking map
     @isTest
-    static void testBeforeLeadCustomerRankingMethod_PhoneNotInMap() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforeNoPhone';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.LeadSource = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '5555684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
+    public static void testExceptionHandling(){
         Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
-        Test.stopTest();
         
-       
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/CreateCibilDataAPIPWA'; 
+        req.httpMethod = 'POST';
+        
+        String invalidPayload = '{"invalid json format"';
+        req.requestBody = Blob.valueOf(invalidPayload);
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        CreateCibilDataAPIPWA.ModelClass response = CreateCibilDataAPIPWA.doCreateCibilData();
+        
+        System.assertNotEquals(null, response, 'Response should not be null even with invalid JSON');
+        System.assertEquals('Error', response.Status, 'Status should be Error for invalid JSON');
+        System.assert(response.Message.contains('Development Error'), 'Message should indicate development error');
+        
+        
+        Test.stopTest();
     }
     
-    // Test Case 15: beforeLeadCustomerRankingMethod - Phone in ranking map
     @isTest
-    static void testBeforeLeadCustomerRankingMethod_PhoneInMap() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforePhoneMap';
-        testLead.Company = 'Test Company';
-        testLead.LeadSource = 'Call Center';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '8888684851';
-        insert testLead;
-        
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
+    public static void testMissingApplicantId(){
         Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
+        
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/CreateCibilDataAPIPWA'; 
+        req.httpMethod = 'POST';
+        
+        String requestPayload = '{"APIType":"CIBIL_API","PWALO_Applicant_Id":"","TranId":"PWA000123","RequestXml":"test","ResponseXml":"test","Status":200,"Message":"Test"}';
+        req.requestBody = Blob.valueOf(requestPayload);
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        CreateCibilDataAPIPWA.ModelClass response = CreateCibilDataAPIPWA.doCreateCibilData();
+        
+        System.debug('Response Status: ' + response.Status);
+        System.debug('Response Message: ' + response.Message);
+        
         Test.stopTest();
-        
-        
     }
     
-    // Test Case 16: beforeLeadCustomerRankingMethod - Partner details
-    @isTest
-    static void testBeforeLeadCustomerRankingMethod_PartnerDetails() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforePartner';
-        testLead.Company = 'Test Company';
-       testLead.LeadSource = 'Call Center';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '8888684851';
-        insert testLead;
+   
+    
+    // Helper methods
+    private static String getCibilXmlResponse(){
+        String xmlContent = '<ExecuteXMLStringResult>' +
+            '<ContextData>' +
+            '<Field Pass="1">' +
+            '<Applicants>' +
+            '<Applicant>' +
+            '<DsCibilBureau>' +
+            '<Response>' +
+            '<CibilBureauResponse>' +
+            '<BureauResponseXml>' +
+            '<CreditReport>' +
+            '<Header>' +
+            '<SegmentTag>100</SegmentTag>' +
+            '<Version>1</Version>' +
+            '<ReferenceNumber>12345</ReferenceNumber>' +
+            '<SubjectReturnCode>1</SubjectReturnCode>' +
+            '<EnquiryControlNumber>ECN123</EnquiryControlNumber>' +
+            '<DateProcessed>01012024</DateProcessed>' +
+            '<TimeProcessed>10:30:00</TimeProcessed>' +
+            '</Header>' +
+            '<NameSegment>' +
+            '<ConsumerName1>JOHN</ConsumerName1>' +
+            '<ConsumerName2>DOE</ConsumerName2>' +
+            '<DateOfBirth>15011990</DateOfBirth>' +
+            '<Gender>2</Gender>' +
+            '</NameSegment>' +
+            '<EmploymentSegment>' +
+            '<OccupationCode>01</OccupationCode>' +
+            '<AccountType>10</AccountType>' +
+            '<DateReportedCertified>01012024</DateReportedCertified>' +
+            '</EmploymentSegment>' +
+            '<ScoreSegment>' +
+            '<ScoreCardName>Default</ScoreCardName>' +
+            '<Score>750</Score>' +
+            '<ScoreCardVersion>1.0</ScoreCardVersion>' +
+            '<ReasonCode1>01</ReasonCode1>' +
+            '<ReasonCode2>02</ReasonCode2>' +
+            '<ScoreDate>01012024</ScoreDate>' +
+            '</ScoreSegment>' +
+            '<TelephoneSegment>' +
+            '<TelephoneNumber>9876543210</TelephoneNumber>' +
+            '<TelephoneType>01</TelephoneType>' +
+            '<EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry>' +
+            '</TelephoneSegment>' +
+            '<EmailContactSegment>' +
+            '<EmailID>test@test.com</EmailID>' +
+            '</EmailContactSegment>' +
+            '<IDSegment>' +
+            '<IDType>01</IDType>' +
+            '<IDNumber>AAAPK1234P</IDNumber>' +
+            '<EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry>' +
+            '</IDSegment>' +
+            '<Address>' +
+            '<AddressLine1>123 Test Street</AddressLine1>' +
+            '<AddressLine2>Apt 45</AddressLine2>' +
+            '<AddressLine5>TestCity</AddressLine5>' +
+            '<StateCode>01</StateCode>' +
+            '<PinCode>560001</PinCode>' +
+            '<AddressCategory>01</AddressCategory>' +
+            '<ResidenceCode>1</ResidenceCode>' +
+            '<DateReported>01012024</DateReported>' +
+            '<EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry>' +
+            '</Address>' +
+            '<Account>' +
+            '<SegmentTag>400</SegmentTag>' +
+            '<Account_NonSummary_Segment_Fields>' +
+            '<ReportingMemberShortName>HDFC</ReportingMemberShortName>' +
+            '<AccountType>10</AccountType>' +
+            '<OwenershipIndicator>1</OwenershipIndicator>' +
+            '<HighCreditOrSanctionedAmount>500000</HighCreditOrSanctionedAmount>' +
+            '<DateOpenedOrDisbursed>01012020</DateOpenedOrDisbursed>' +
+            '<DateClosed>31122023</DateClosed>' +
+            '<DateOfLastPayment>01012024</DateOfLastPayment>' +
+            '<DateReportedAndCertified>15012024</DateReportedAndCertified>' +
+            '<PaymentHistoryStartDate>01012020</PaymentHistoryStartDate>' +
+            '<PaymentHistoryEndDate>01012024</PaymentHistoryEndDate>' +
+            '<CurrentBalance>250000</CurrentBalance>' +
+            '<PaymentHistory1>000</PaymentHistory1>' +
+            '<PaymentHistory2>000</PaymentHistory2>' +
+            '</Account_NonSummary_Segment_Fields>' +
+            '</Account>' +
+            '<Enquiry>' +
+            '<SegmentTag>500</SegmentTag>' +
+            '<EnquiringMemberShortName>BANK1</EnquiringMemberShortName>' +
+            '<EnquiryAmount>500000</EnquiryAmount>' +
+            '<EnquiryPurpose>10</EnquiryPurpose>' +
+            '<DateOfEnquiryFields>01012024</DateOfEnquiryFields>' +
+            '</Enquiry>' +
+            '</CreditReport>' +
+            '</BureauResponseXml>' +
+            '</CibilBureauResponse>' +
+            '</Response>' +
+            '<Document>' +
+            '<Id>DOC123</Id>' +
+            '</Document>' +
+            '</DsCibilBureau>' +
+            '</Applicant>' +
+            '</Applicants>' +
+            '</Field>' +
+            '</ContextData>' +
+            '</ExecuteXMLStringResult>';
         
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        System.assert(true, 'Partner lead processed');
+        return xmlContent;
     }
     
-    // Test Case 17: beforeLeadCustomerRankingMethod - Multiple leads
-    @isTest
-    static void testBeforeLeadCustomerRankingMethod_MultipleLeads() {
-        List<Lead> leadList = new List<Lead>();
+    private static String getDocXmlResponse(){
+        String xmlContent = '<ExecuteXMLStringResult>' +
+            '<ContextData>' +
+            '<Field Pass="1">' +
+            '<Applicants>' +
+            '<Applicant>' +
+            '<DsCibilBureau>' +
+            '<Document>' +
+            '<Id>DOC123</Id>' +
+            '<FileContent>UEsDBBQABgAIAAAAIQDfIQqJJQAAAAwBAAATAAAAZG9jUHJvcHMvY29yZS54bWytVM1u2zAM/hXBZ1vOUtjZsJ3QYcOGHoZhCARbikWJkigJdoH+9/nJThHHqZGgEOzP73khKRxj2TKVCyakDgVGU2VQCyFJtTkSCuqPH1SnY6F1x1A5hYDQzJWrU3E5xLFxHC6xhEfXL6zJJj2SzRaQWSDZx4sgrGQzQmQGEfTqXwRbwMXFaYh5TnhOuY543rmecP5jPOZ4mMoXO3lUzguFxNw2BfhfbK1kXHGGWfm+wTQvqEqQDvXQVHqe6gwNmvC1QLqVvTIa1LJxVpqLVUDrPWQOXnvjfKYKzh3dNGfVhz7p9YCQdWXP6fwMAAP//AAAAAAAA</FileContent>' +
+            '</Document>' +
+            '</DsCibilBureau>' +
+            '</Applicant>' +
+            '</Applicants>' +
+            '</Field>' +
+            '</ContextData>' +
+            '</ExecuteXMLStringResult>';
         
-        Lead lead1 = new Lead();
-        lead1.LastName = 'TestBeforeMulti1';
-        lead1.Company = 'Test Company';
-        lead1.How_did_you_come_to_know_about_us__c = 'Call Center';
-        lead1.LeadSource = 'Call Center';
-        lead1.Lead_Phone_Number_1__c = '9208111111';
-        
-        Lead lead2 = new Lead();
-        lead2.LastName = 'TestBeforeMulti2';
-        lead2.Company = 'Test Company';
-        Lead2.LeadSource = 'Call Center';
-        Lead2.How_did_you_come_to_know_about_us__c = 'Call Center';
-        lead2.Lead_Phone_Number_1__c = '9999222222';
-        
-        leadList.add(lead1);
-        leadList.add(lead2);
-        insert leadList;
-        
-        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id IN :leadList];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads);
-        Test.stopTest();
-        
-        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
-        System.assertEquals(2, updatedLeads.size(), 'All leads should be processed');
+        return xmlContent;
     }
     
-    // Test Case 18: beforeLeadCustomerRankingMethod - Exception handling
-    @isTest
-    static void testBeforeLeadCustomerRankingMethod_ExceptionHandling() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforeException';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Call Center';
-        testLead.LeadSource = 'Call Center';
-        testLead.Lead_Phone_Number_1__c = '1234567890'; // Too short
-        insert testLead;
+    private static String buildCibilRequestPayload(String pwaloApplicantId, String responseXml){
+        Map<String, Object> payloadMap = new Map<String, Object>();
+        payloadMap.put('APIType', 'CIBIL_API');
+        payloadMap.put('PWALO_Applicant_Id', pwaloApplicantId);
+        payloadMap.put('TranId', 'PWA000123');
+        payloadMap.put('RequestXml', '<Request><Test>Data</Test></Request>');
+        payloadMap.put('ResponseXml', responseXml);
+        payloadMap.put('Status', 200);
+        payloadMap.put('Message', 'Success');
         
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        System.assert(true, 'Exception should be caught and handled');
+        return JSON.serialize(payloadMap);
     }
     
-    // Test Case 19: beforeLeadCustomerRankingMethod - No matching criteria
-    @isTest
-    static void testBeforeLeadCustomerRankingMethod_NoMatchingCriteria() {
-        Lead testLead = new Lead();
-        testLead.LastName = 'TestBeforeNoMatch';
-        testLead.Company = 'Test Company';
-        testLead.How_did_you_come_to_know_about_us__c = 'Other Source';
-        testLead.Lead_Phone_Number_1__c = '9208684851';
-        insert testLead;
+    private static String buildDocRequestPayload(String pwaloApplicantId, String responseXml){
+        Map<String, Object> payloadMap = new Map<String, Object>();
+        payloadMap.put('APIType', 'DOC_API');
+        payloadMap.put('PWALO_Applicant_Id', pwaloApplicantId);
+        payloadMap.put('TranId', 'PWA000123');
+        payloadMap.put('RequestXml', '<Request><Test>Data</Test></Request>');
+        payloadMap.put('ResponseXml', responseXml);
+        payloadMap.put('Status', 200);
+        payloadMap.put('Message', 'Success');
         
-        List<Lead> leadList = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                               Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                               createddate FROM Lead WHERE Id = :testLead.Id];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(leadList);
-        Test.stopTest();
-        
-        System.assert(true, 'Non-matching lead processed');
+        return JSON.serialize(payloadMap);
     }
     
-    // Test Case 20: beforeLeadCustomerRankingMethod - All score conditions
-    @isTest
-    static void testBeforeLeadCustomerRankingMethod_AllScoreConditions() {
-        List<Lead> leadList = new List<Lead>();
-        
-        Lead leadA = new Lead();
-        leadA.LastName = 'TestBeforeScoreA';
-        leadA.Company = 'Test Company';
-        leadA.How_did_you_come_to_know_about_us__c = 'Customer Service';
-        leadA.Lead_Phone_Number_1__c = '9208684851';
-        
-        Lead leadB = new Lead();
-        leadB.LastName = 'TestBeforeScoreB';
-        leadB.Company = 'Test Company';
-        leadB.How_did_you_come_to_know_about_us__c = 'Customer Service';
-        leadB.Lead_Phone_Number_1__c = '7777684851';
-        
-        Lead leadC = new Lead();
-        leadC.LastName = 'TestBeforeScoreC';
-        leadC.Company = 'Test Company';
-        leadC.How_did_you_come_to_know_about_us__c = 'Customer Service';
-        leadC.Lead_Phone_Number_1__c = '6666684851';
-        
-        leadList.add(leadA);
-        leadList.add(leadB);
-        leadList.add(leadC);
-        insert leadList;
-        
-        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id IN :leadList];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads);
-        Test.stopTest();
-        
-        List<Lead> updatedLeads = [SELECT Cust_Score__c FROM Lead WHERE Id IN :leadList];
-        for(Lead ld : updatedLeads) {
-            System.assert(
-                ld.Cust_Score__c == 'A' || 
-                ld.Cust_Score__c == 'B' || 
-                ld.Cust_Score__c == 'C' || 
-                ld.Cust_Score__c == 'D' ||
-                ld.Cust_Score__c == null,
-                'Score should be A, B, C, D or null'
-            );
-        }
-    }
     
-    // Test Case 20: beforeLeadCustomerRankingMethod - All score conditions
-    @isTest
-    static void testBeforeLeadCustomerRankingMethodAllScoreConditions1() {
-        List<Lead> leadList = new List<Lead>();
-        
-        Lead leadA = new Lead();
-        leadA.LastName = 'TestBeforeScoreA';
-        leadA.Company = 'Test Company';
-        leadA.How_did_you_come_to_know_about_us__c = 'Retention';
-        leadA.Lead_Phone_Number_1__c = '9208684851';
-        
-        Lead leadB = new Lead();
-        leadB.LastName = 'TestBeforeScoreB';
-        leadB.Company = 'Test Company';
-        leadB.How_did_you_come_to_know_about_us__c = 'Retention';
-        leadB.Lead_Phone_Number_1__c = '7777684851';
-        
-        Lead leadC = new Lead();
-        leadC.LastName = 'TestBeforeScoreC';
-        leadC.Company = 'Test Company';
-        leadC.How_did_you_come_to_know_about_us__c = 'Retention';
-        leadC.Lead_Phone_Number_1__c = '6666684851';
-        
-        leadList.add(leadA);
-        leadList.add(leadB);
-        leadList.add(leadC);
-        insert leadList;
-        
-        List<Lead> queryLeads = [SELECT Id, LeadSource, How_did_you_come_to_know_about_us__c, 
-                                 Lead_Phone_Number_1__c, Lead_Sub_Source__c, Cust_Score__c, 
-                                 createddate FROM Lead WHERE Id IN :leadList];
-        
-        Test.startTest();
-        LeadCustomerRankingAPIHandler.beforeLeadCustomerRankingMethod(queryLeads);
-        Test.stopTest();
-        
+    public class S3HttpCalloutMock implements HttpCalloutMock {
+    public HttpResponse respond(HttpRequest request) {
+        HttpResponse response = new HttpResponse();
+        response.setHeader('Content-Type', 'application/xml');
+        response.setBody('<?xml version="1.0" encoding="UTF-8"?><S3Response><Success>true</Success></S3Response>');
+        response.setStatusCode(200);
+        return response;
     }
-    
 }
+}
+
+
