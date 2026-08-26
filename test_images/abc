@@ -1,29 +1,788 @@
-@isTest
-private class RunLoanServiceClassTest {
-    @isTest
-    static void testMethod1() {
-        // 1. Create and insert your mock data
-        // insert disbRec;
+this is an apex class
 
-        // 2. Mock the Visualforce Page Reference context
-        PageReference pageRef = new PageReference('/apex/YourVFPageName'); 
+/*
+*  Class : RunLoanServiceClass 
+*  VF Page : RunLoanService
+*  Developed by : Saifullah Saif & Vinay
+*  Last Modification : 19/09/2018
+* 
+*  
+* Description : This class is called when " Book Loan "  button of DM is clicked then this class validates the required fields
+*              after the validation , this class decides to call subsequent api or collateral api based on tranch
+* 
+* 
+* 
+*/
+
+public class RunLoanServiceClass{
+    
+    public String recordId {get;set;}
+    public String appId {get;set;}
+    public List<WrapperClass> wrapperlst{get;set;}
+    public String tranch{get;set;}
+    public String emp{get;set;}
+    public boolean val{get;set;}
+    String recName;
+    
+    public Boolean closeWindow {get;set;}
+    public Boolean chck {get;set;}
+    
+    public RunLoanServiceClass(){
+        wrapperlst = new List<WrapperClass>();
+        closeWindow = false;
+        chck=false;
+        val=false;
+        recordId = apexPages.currentPage().getParameters().get('id');
+        appId= apexPages.currentPage().getParameters().get('appId');
+        tranch= apexPages.currentPage().getParameters().get('tranch');
+        System.debug(recordId+'==='+appId+'==='+tranch+'---'+apexPages.currentPage().getParameters().get('loan'));
+        //string loan=apexPages.currentPage().getParameters().get('loan');
+        String NatureOfcollection = Label.Finnone_Nature_of_collection2;
+        String NatureOfcollection1= Label.Finnone_Nature_of_collection1;
+        List<Disbursement__c> recrd=[SELECT Cheque_Handover_To_Customer__c,Cheque_Handover_Date__c,PF_received__c,Disbursement_Mode__c,Beneficiary_Name__c,Loan_Status__c,PF_Waiver_Amount__c,PF_Collected__c,PF_not_to_be_collected__c ,EMI_Flag__c,CurtailmentFlag__c,createdDate FROM Disbursement__c  WHERE id =:recordId];
+        list<Opportunity> AppList=[select id,Sanctioned_Amont__c,FinnoneClient_Id__c,Household__c,Loan_Product__r.PF_Rate__c,CollAdd1__c,ColPin__c,
+                                   Collateral_Pin_Code_New__c,Purpose_of_loan__c,
+                                   (select Status__c,Amount__c,Nature_of_Collection__c,FinnOne_ReceiptID__c,Instrument__c from Collections__r
+                                    where (Nature_of_Collection__c =:NatureOfcollection OR 
+                                           Nature_of_Collection__c =:NatureOfcollection1 OR Nature_of_Collection__c='Search Fees (Incl. Service Tax)')AND (Status__c='Active') ),(SELECT Id,Name,Status__c FROM Waivers__r WHERE Status__c!='Moved To Finnone'),
+                                   (SELECT Id,amount__c,chargeType__c,isActive__c FROM Nucleus_Reciepts__r 
+                                    WHERE (chargeType__c='L&T Charge' OR chargeType__c='Processing Fee (incl. Service tax)' OR chargeType__c='Search Fees (Incl. Service Tax)')
+                                    AND isActive__c=true AND amount__c!=null)
+                                   from opportunity where id =:appId];
+        string csApp=appId; 
+        System.debug(recordId+'==='+appId+'==='+tranch+'---'+apexPages.currentPage().getParameters().get('loan'));
+        System.debug('recrd'+recrd);
+        System.debug('AppList'+AppList);
+        List<Opportunity> prntApp=[select Br_net_HL_ID__c,Finnone_Loan_Id__c   from Opportunity where id <>:appId and /*Br_net_Client_ID__c*/ FinnoneClient_Id__c != Null AND FinnoneClient_Id__c=:AppList[0].FinnoneClient_Id__c /*Br_net_Client_ID__c*/];
+        if(prntApp.size()>0)
+            csApp=prntApp[0].id;
+        
+        //system.debug(AppList[0].Customers__r[0].id);
+        list<Property_Master__c> proList=[SELECT Property_Type__c,Total_Property_Value__c,Land_Area__c,Land_Value__c
+                                          from Property_Master__c where Household__c=:AppList[0].Household__c limit 1];
+        
+       set<String> AccountSet= new set<String>();
+        List<Account> acList=[select Name, Pan_Card_No__pc,Finnone_Client_Id__c,Ration_Card__pc,Passport_No__pc,Aadhar_Card__pc,Voter_Card__pc,Drv_Licn__pc,
+                              Address_Line_1__pc,Mobile__pc,Address_Office__pc,Pin_Code_Office_new__c,Pin_code_new__c,Mother_s_Name__pc,Pin_Code_Office__pc,Pin_Code__pc,
+                              Marital_Status__pc from Account where HouseHold__c=:AppList[0].Household__c];
+        /* List<Vendor_Request__c> listVenderrequest=[Select Id,Property_Type__c,Request_Type__c,
+		(SELECT  Property_Situated_At__c,id,Age_of_the_Property__c,Residual_age_of_the_property__c
+		FROM Technical_Verifications__r order by createddate asc limit 1) 
+		FROM Vendor_Request__c WHERE Request_Type__c='Technical' AND Application__c =:appId order by createddate asc limit 1];
+		*/
+        List< Technical_Verification__c	> listTechVerify = [ SELECT  Property_Situated_At__c,id,Age_of_the_Property__c,Residual_age_of_the_property__c
+                                                            FROM Technical_Verification__c 
+                                                            WHERE Vendor_Request__r.Request_Type__c='Technical' AND Vendor_Request__r.Application__c =: appId 
+                                                            AND (Status__c = 'Final Approved' OR Status__c = 'Approved')
+                                                            order by createddate asc limit 1 ];
+        //active colelction
+        decimal amt=0;
+        for(Collection__c col:applist[0].Collections__r){
+            amt+=col.Amount__c;
+            
+        }
+        ////active receipt for collection
+        Decimal receiptAmount=0;
+        for(Nucleus_Reciept__c nuc:AppList[0].Nucleus_Reciepts__r){
+            receiptAmount+=nuc.amount__c;
+        }
+        
+        
+        
+        // tranch selection
+        
+        if(recrd[0].Loan_Status__c=='Moved To FinnOne')
+            chck=true;
+        else{
+            List<Disbursement__c> disbList=[SELECT Loan_Status__c,Loan_SubStatus__c,EMI_Flag__c FROM Disbursement__c  WHERE Application__c =:appId order by createdDate];
+            if(disbList.size()>1){
+                Integer fulldisb=0;
+                integer tranchc=0;
+                for(Disbursement__c ds:disbList){
+                    if(ds.Loan_SubStatus__c=='Fully Disbursed')
+                        fulldisb+=1;
+                    if(ds.Loan_Status__c=='Moved To FinnOne'){
+                        tranchc++;
+                    }
+                }
+                if(fulldisb>=1)
+                    chck=true;    
+                else if(tranchc>=1)
+                    tranch='Subsequent';
+                if(disbList[0].EMI_Flag__c == 'Yes')
+                    emp='Yes';
+                else{
+                    emp='No';
+                    if(recrd[0].EMI_Flag__c == 'No' && recrd[0].CurtailmentFlag__c == 'Yes')
+                        chck=true;
+                }
+            }
+        }
+        System.debug(tranch);
+        System.debug('csApp'+csApp);
+         System.debug('csApp'+appId);
+         System.debug('status : '+csApp==appId);
+        System.debug('chck'+chck);
+        //waiver and error management
+        if(chck==false && tranch!='Subsequent' && csApp==appId){
+            System.debug('run without subsequent');
+            // adding cheque handover to customer by saif 9 may 2019
+            system.debug('ajfhkafh>>'+Label.Handover_Cheque_Loan_Service+'kufadf>>'+recrd[0].Cheque_Handover_To_Customer__c+'kfukfw>'+recrd[0].Disbursement_Mode__c);
+            if(Label.Handover_Cheque_Loan_Service=='Yes' && (recrd[0].Cheque_Handover_To_Customer__c==false  || recrd[0].Cheque_Handover_Date__c==Null ) && recrd[0].Disbursement_Mode__c=='Cheque'){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Cheque Handover To Customer should be checked On DM';
+                wr.FldName= 'Cheque Handover';
+                wrapperlst.add(wr);
+            }
+            /*if(listVenderrequest.size()==0){
+			WrapperClass wr= new WrapperClass();
+			wr.errorDetail='There should be atleast 1 vendor request with 1 technical verification';
+			wr.FldName= 'Vendor Request';
+			wrapperlst.add(wr);      
+			}
+			else{*/
+            //if(listVenderrequest[0].Technical_Verifications__r.size()==0){
+            if( listTechVerify.size() == 0){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='There should be atleast 1 technical Verification';
+                wr.FldName= 'Technical Verification';
+                wrapperlst.add(wr);      
+            }
+            else{
+                //if(listVenderrequest[0].Technical_Verifications__r[0].Age_of_the_Property__c==null){
+                if(listTechVerify[0].Age_of_the_Property__c==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Age of Property is Blank';
+                    wr.FldName= 'Technical Verification';
+                    wrapperlst.add(wr); 
+                }
+                //if(listVenderrequest[0].Technical_Verifications__r[0].Residual_age_of_the_property__c==null){
+                if(listTechVerify[0].Residual_age_of_the_property__c==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Residual Age of Property is Blank';
+                    wr.FldName= 'Technical Verification';
+                    wrapperlst.add(wr);                     
+                }
+                //if(listVenderrequest[0].Technical_Verifications__r[0].Property_Situated_At__c==null){
+                if(listTechVerify[0].Property_Situated_At__c==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Property Situated At is Blank';
+                    wr.FldName= 'Technical Verification';
+                    wrapperlst.add(wr); 
+                }
+                
+            }
+            // }
+            /*if(proList.size()==0){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='There should be atleast 1 Property Master';
+                wr.FldName= 'Property Master';
+                wrapperlst.add(wr); 
+            }
+            else{
+                if(proList[0].Property_Type__c==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Property Type in Property Master is blank';
+                    wr.FldName= 'Property Type';
+                    wrapperlst.add(wr);       
+                }
+                if(proList[0].Total_Property_Value__c==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Total Property Value in Property Master is blank';
+                    wr.FldName= 'Total Property Value';
+                    wrapperlst.add(wr);       
+                }
+                if(proList[0].Land_Area__c==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Land Area in Property Master is blank';
+                    wr.FldName= 'Land Area';
+                    wrapperlst.add(wr);       
+                }
+             }*/
+            // commented by saif on 7th may 2019 jawahar  
+            /*   if(AppList[0].Purpose_of_loan__c==null){
+			WrapperClass wr= new WrapperClass();
+			wr.errorDetail='Purpose of loan of Application is blank';
+			wr.FldName= 'Purpose of loan';
+			wrapperlst.add(wr);    
+			}*/
+            if(AppList[0].CollAdd1__c==null){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Collateral Address 1 of Application is blank';
+                wr.FldName= 'Collateral Address 1';
+                wrapperlst.add(wr);     
+            }
+            if(AppList[0].Collateral_Pin_Code_New__c==null && AppList[0].ColPin__c==null){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Collateral Pincode New LOV of Application is blank';
+                wr.FldName= 'Collateral Pin code';
+                wrapperlst.add(wr);    
+            }
+            if(recrd[0].Disbursement_Mode__c==null){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Disbursement Mode of Disbursement is blank';
+                wr.FldName= 'Disbursement mode ';
+                wrapperlst.add(wr);    
+            }
+            if(recrd[0].Beneficiary_Name__c==null){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Beneficiary Name of Disbursement is blank'; 
+                wr.FldName= 'Beneficiary Name';
+                wrapperlst.add(wr);    
+            }     
+            System.debug('acList'+acList.size());
+            System.debug('acList'+acList);
+            
+            for(Collection__c col:applist[0].Collections__r){
+                
+                if(col.status__c=='Active' && col.FinnOne_ReceiptID__c==null && (col.Nature_of_Collection__c=='Facilitation Charges' || col.Nature_of_Collection__c=='Technical Charges' || col.Nature_of_Collection__c=='Processing Fee (incl. Service tax)' || col.Nature_of_Collection__c=='Search Fees (Incl. Service Tax)' || col.Nature_of_Collection__c=='L&T Charge' || col.Nature_of_Collection__c=='Stamp Duty Amount' || col.Nature_of_Collection__c=='Stamp Duty Service Charge') && col.Instrument__c!='Deducted from DM' && col.Instrument__c!='Instrument on Collections' )
+                {
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='FinnOne Receipt No. Can not be blank'; 
+                wr.FldName= 'Loan Sub-Status';
+                wrapperlst.add(wr);   
+                }
+           
+            
+           }
+            
+            
+            
+            for(Account ac:acList){
+                Integer count=0;
+                if(ac.Pan_Card_No__pc!=null)
+                    count++;
+                if(ac.Ration_Card__pc!=null)
+                    count++;
+                if(ac.Passport_No__pc!=null)
+                    count++;
+                if(ac.Voter_Card__pc!=null)
+                    count++;
+                if(ac.Drv_Licn__pc!=null)
+                    count++;
+                if(ac.Aadhar_Card__pc!=null)
+                    count++;
+                
+                if(count==0){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='KYC Section of '+ac.Name+' is Blank';
+                    wr.FldName= 'KYC Detail Issue';
+                    wrapperlst.add(wr);   
+                }
+                //move with comment 
+              /*  System.debug('ac.Finnone_Client_Id__c'+ac.Finnone_Client_Id__c);
+                 if(ac.Finnone_Client_Id__c==null){
+                     System.debug('Blank');
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Finnone Client Id Should Not Blank';
+                    wr.FldName= 'Finnone Client Id';
+                    wrapperlst.add(wr);    
+                }*/
+                
+                if(ac.Mobile__pc==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Mobile of '+ac.Name+' is Blank';
+                    wr.FldName= 'Mobile Number';
+                    wrapperlst.add(wr);    
+                }
+                else if(ac.Mobile__pc.length()!=10 && !(ac.Mobile__pc.isNumeric())){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Mobile of '+ac.Name+' is Not valid';
+                    wr.FldName= 'Mobile Number';
+                    wrapperlst.add(wr);   
+                }
+                if(ac.Address_Line_1__pc==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Address Line 1 of '+ac.Name+' is Blank';
+                    wr.FldName= 'Address Line 1';
+                    wrapperlst.add(wr);   
+                }
+                if(ac.Pin_Code__pc==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Pincode  of '+ac.Name+' is Blank';
+                    wr.FldName= 'Pin code';
+                    wrapperlst.add(wr);   
+                }
+                if(ac.Address_Office__pc!=null && ac.Pin_Code_Office__pc==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Office Pincode of '+ac.Name+' is Blank';
+                    wr.FldName= 'Office Pin code';
+                    wrapperlst.add(wr);   
+                }
+                if(ac.Mother_s_Name__pc==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Mother\'s Name of '+ac.Name+' is Blank';
+                    wr.FldName= 'Mother\'s Name';
+                    wrapperlst.add(wr);   
+                }
+                if(ac.Marital_Status__pc==null){
+                    WrapperClass wr= new WrapperClass();
+                    wr.errorDetail='Marital Status of '+ac.Name+' is Blank';
+                    wr.FldName= 'Marital Status';
+                    wrapperlst.add(wr);   
+                }
+                
+            }
+            /*   decimal amt=0;
+			for(Collection__c col:applist[0].Collections__r){
+			amt+=col.Amount__c;
+
+			}
+			Decimal receiptAmount=0;
+			for(Nucleus_Reciept__c nuc:AppList[0].Nucleus_Reciepts__r){
+			receiptAmount+=nuc.amount__c;
+			}
+			*/
+            if(AppList[0].Waivers__r.size()>0){                
+                WrapperClass wr= new WrapperClass();
+                if(AppList[0].Waivers__r.size()==1)
+                    wr.FldName= AppList[0].Waivers__r[0].Name;
+                else
+                    wr.FldName= AppList[0].Waivers__r[0].Name+' and more';
+                wr.errorDetail='Set Waiver status Moved To Finnone';
+                wrapperlst.add(wr);
+            }
+            decimal wav=0,pf=0;
+            if(applist[0].Sanctioned_Amont__c==null){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Sanctioned Amount blank';
+                wr.FldName= 'Sanctioned Amount';
+                wrapperlst.add(wr);                
+            }
+            /*else if(label.Run_Validation_Logic_For_Receipt== 'Yes' && amt!=receiptAmount){
+			WrapperClass wr= new WrapperClass();
+			wr.errorDetail='All the receipts are not moved to FinnOne, please re-check.';
+			wr.FldName= 'Receipt Issue';
+			wrapperlst.add(wr);
+			}*/
+            /*  else if(applist[0].Loan_Product__r.PF_Rate__c!=null){
+			double pfnbt=0;
+			if(recrd[0].PF_Waiver_Amount__c!=null)
+			wav=recrd[0].PF_Waiver_Amount__c;
+			if(recrd[0].PF_Collected__c!=null)
+			pf=recrd[0].PF_Collected__c;
+			if(recrd[0].PF_not_to_be_collected__c!=null)
+			pfnbt=recrd[0].PF_not_to_be_collected__c;
+			if((wav+pf+amt+pfnbt)<(applist[0].Sanctioned_Amont__c*applist[0].Loan_Product__r.PF_Rate__c / 100 )){
+			WrapperClass wr= new WrapperClass();
+			wr.errorDetail='Kindly collect complete Processing Fee defined at product level Or do the Waivers.';
+			wr.FldName= 'Waiver Detail';
+			wrapperlst.add(wr);
+			}               
+			}
+			else{
+			WrapperClass wr= new WrapperClass();
+			wr.errorDetail='PF rate in Loan Product is blank';
+			wr.FldName= 'Pf Rate';
+			wrapperlst.add(wr);                
+			} */
+            if(wrapperlst.size()>0 && tranch!='Subsequent')
+                val=true;
+        }else
+        {
+            System.debug('run success');
+            // added dm sequence validation by Tarun 8 may 2019 
+            set<string> stCacnel=new set<string>{'Cancelled DE','Cancelled by Finance','Cancelled By UW','Cancelled by branch','Cancelled by Legal','Cancelled','Cancelled by CPU'};
+                List<Disbursement__c> disbList1=[SELECT Loan_Status__c FROM Disbursement__c  WHERE Application__c =:appId AND createddate <=:recrd[0].createdDate AND Disb_Status__c NOT IN:stCacnel order by createdDate];
+            System.debug(disbList1);
+            if(disbList1.size()>1){               
+                for(Integer i=disbList1.size()-1;i>0;i--){
+                    System.debug('---->'+disbList1[i].Loan_Status__c+']]]]]'+disbList1[i-1].Loan_Status__c);
+                    if((disbList1[i].Loan_Status__c=='Moved To FinnOne'|| disbList1[i].Loan_Status__c=='Pending') &&  disbList1[i-1].Loan_Status__c!='Moved To FinnOne'){
+                        WrapperClass wr= new WrapperClass();
+                        wr.errorDetail='Please book the previous DM';
+                        wr.FldName= 'Loan Status';
+                        wrapperlst.add(wr); 
+                    }
+                }
+            }
+            // adding cheque handover to customer by saif 9 may 2019
+            if(Label.Handover_Cheque_Subsequent=='Yes' && (recrd[0].Cheque_Handover_To_Customer__c==false || recrd[0].Cheque_Handover_Date__c==Null ) && recrd[0].Disbursement_Mode__c=='Cheque'){
+                WrapperClass wr= new WrapperClass();
+                wr.errorDetail='Cheque Handover To Customer should be checked On DM';
+                wr.FldName= 'Cheque Handover';
+                wrapperlst.add(wr);
+            }
+            System.debug('[[[['+wrapperlst);
+            if(wrapperlst.size()>0)
+                val=true;
+        }
+        /*
+        if(tranch=='First' && label.Run_Validation_Logic_For_Receipt== 'Yes' && amt!=receiptAmount){
+            WrapperClass wr= new WrapperClass();
+            wr.errorDetail='All the receipts are not moved to FinnOne, please re-check.';
+            wr.FldName= 'Receipt Issue';
+            wrapperlst.add(wr);
+        }
+*/
+        if(wrapperlst.size()>0)
+            val=true;
+    }
+    public void loanService(){
+        system.debug('loanService 388 ');
+        system.debug('chck 388 '+chck);
+        system.debug('val 388 '+val);
+        system.debug('Label.Finnone_Status 388 '+Label.Finnone_Status);
+        set<string> stSet=new set<string>();
+        if(Label.Profile1 != Null)
+            stset.add(Label.Profile1);
+        if(Label.Profile2 != Null)
+            stset.add(Label.Profile2);
+        if(chck==false && val==false && !Test.isRunningTest() && Label.Finnone_Status=='Started' /*&& stset.contains(userinfo.getProfileId())*/){
+            if(tranch=='First')
+                ID jobID = System.enqueueJob(new CollateralServiceHitAPIJSON(appId,recordId,tranch));
+            else if(tranch=='Subsequent')
+                ID job1ID = System.enqueueJob(new SubseqLoanServiceclassJSON(appId,recordId, emp));
+            system.debug(recordId+'>>>'+appId+'>>>'+tranch);
+            closeWindow = true;
+        }
+        else
+            closeWindow = false;
+    }
+    public  class WrapperClass{
+        public string FldName{get;set;}
+        Public string  errorDetail{get;set;}
+        
+        public WrapperClass(){
+            
+        }
+    }
+}
+
+
+here is its test class
+
+
+@istest
+public class RunLoanServiceClassTest {
+  @testSetup
+    public static void testsetup(){
+        
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
+        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
+        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
+
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        cus.Query_Raised_count__c=17;
+        cus.Hindsight_Approval__c='Pending';
+        insert cus;
+        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
+        badc.Bank_name__c='HDFC';
+        badc.Disbursement_in_this_Account__c='Yes';
+        badc.Household__c = cus.Id;
+        badc.Bank_Account_Number__c = '12345678';
+        badc.IFSC_Code__c = 'BARBOMUZRAM';
+        badc.Percentage__c='91';
+        badc.Is_PennyDrop_Done__c=true;
+        badc.Name_of_Account_Holder__c = 'John Doe';
+        badc.PennyDrop_Status_Code__c='NP001';
+        insert badc;
+
+        Bank_Detail__c bank=new Bank_Detail__c();
+        bank.Name='abcd';
+        bank.Status__c='Active';
+        bank.IFSC__c='BARBOMUZRAM';
+        insert bank;
+        
+        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
+                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
+        insert ac;
+
+        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
+        insert cf;
+
+        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
+        insert nsc;
+        
+        Loan_Product__c lp=new Loan_Product__c();
+        lp.PF_Rate_1__c=5.0;
+        lp.Status__c='Active';
+        insert lp;
+        
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);
+        insert con;
+        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
+        User testUser = new User(
+            FirstName = 'Test',
+            LastName = 'User',
+            Email = 'testuser@example.com',
+            Username = 'testuser' + DateTime.now().getTime() + '@testorg.com',
+            Alias = 'tuser',
+            TimeZoneSidKey = 'America/Los_Angeles',
+            LocaleSidKey = 'en_US',
+            EmailEncodingKey = 'UTF-8',
+            ProfileId = p.Id,
+            LanguageLocaleKey = 'en_US'
+        );
+        testUser.EmployeeNumber='ISFC12121';
+        insert testUser;
+        System.runAs(testUser) {
+            String employeeCode = [Select Id, EmployeeNumber from User where Id =: UserInfo.getUserId()].EmployeeNumber;
+        
+            String profileName = [SELECT Id, Name FROM Profile WHERE Id = :UserInfo.getProfileId()].Name;
+        }
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Jaipur-1';
+        branch.Branch_Category__c = 'B';
+        insert branch;
+        
+        Opportunity op = new Opportunity(CloseDate=System.today(), Name='Rahul',
+                                         PennyDrop_Status__c='Success', AccountId=ac.Id,
+                                         HLA_Sign_Date__c=Date.newInstance(2024,11,01),
+                                         Collateral_Pin_Code_New__c=nsc.Id,
+                                         Address_Pin_Code_New__c=nsc.Id,
+                                         Household__c=cus.Id, Sanctioned_Amont__c=300000, 
+                                         Loan_Product__c=lp.Id,
+                                         LM_Loan_Status__c='Sanctioned');
+        op.Loan_Number__c='6983162387';
+        op.Branch__c=branch.Id;
+        op.First_Sanction_Date__c=system.today();
+        op.Loan_Product_Type__c='HL';
+        op.Purpose_of_taking_the_loan__c='HOME EXTENSION';
+        op.Loan_Amount_Required__c=1500001;
+        op.DE_Done_By__c='By-Pass Ten Thousand Validation';
+        
+        insert op;
+        
+        Monthly_Collectable_Charge__c mc =new Monthly_Collectable_Charge__c();
+        mc.Visiting_Charges__c=766;
+        mc.Application__c=op.Id;
+        insert mc;
+        
+        CAM__c camObj = new CAM__c();
+        camObj.Branch_Name__c = 'Jaipur';
+        camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+        camObj.Loan_Application__c = op.Id;
+        camObj.Branch_Manager_Name__c = 'Gaurav';
+        camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+        camObj.Land_Area__c = 22;
+        camObj.Build_Up_Area__c = 44;
+        camObj.Final_Decision__c = 'Pending';
+        camObj.Property_Type__c='Commercial Building';
+        camObj.NHB_Categories__c='Construction/purchase of new units';
+        insert camObj;
+		camObj.Final_Decision__c = 'Approved';
+        camObj.BRE_Rule_Approved__c=true;
+        camObj.BRE__c=true;
+        camObj.Loan_Product__c=lp.id;
+        camObj.Purpose_of_Loan__c='Construction Loan';
+		//update camObj;        
+        Post_Sanction_Pre_Disbursement_Changes__c pspdcRecord = new Post_Sanction_Pre_Disbursement_Changes__c(LTV__c=80, CAM__c=camObj.Id);
+        insert pspdcRecord;
+        
+        Insurance_Generation_Data__c life = new Insurance_Generation_Data__c();
+        life.Life_Insurance_Company_Name__c='ICICI';
+        life.Life_Insurance_Tenure__c=10;
+        life.Life_Insurance_Premium_2__c=0;
+        life.Accidental_Death_Insurance_Premium__c=0;
+        life.Property_Insurance_Premium__c=0;
+        life.Critical_illness_Required__c='Yes';
+        life.Health_Insurance_Required__c='Yes';
+        life.Application__c=op.id;
+        life.Contact__c=con.Id;
+        life.Nominee_Name__c='jatin';
+        insert life;
+         Test.startTest();
+        Collection__c collec = new Collection__c(Amount__c=6000, Collector__c=con.Id,
+                                                 Date_of_Deposit__c=System.today(),
+                                                 SFDC_Customer__c=op.Id, Deposited_In_bank__c=true,
+                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
+                                                 Status__c='Active', RMobile_No__c='1234567891',
+                                                 Branch_Name__c='testBranch',
+                                                 Nature_of_Collection__c='L&T Charge');
+        insert collec;
+        cus.LoanAppID__c=op.Id;
+        update cus;
+
+        Id rctype = Schema.SObjectType.Pay_Slip__c.getRecordTypeInfosByName().get('Online payment').getRecordTypeId();
+        
+        Document_Checklist__c docChecklist = new Document_Checklist__c(Date_of_Disbursement__c=System.now(),
+                                                                       Application__c=op.Id,
+                                                                       Physical_file_status__c='Approved',
+                                                                       Scan_image_status__c='Rejected');
+        insert docChecklist;
+        
+        Document_Checklist_History__c docHistory = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Pre-Approved Loan');
+        Document_Checklist_History__c docHistory2 = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Top-Up');
+        insert new List<Document_Checklist_History__c>{docHistory, docHistory2};
+
+        Check_List_History_Line_Item__c lineItem = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistory.Id,
+                                                                                        CPU_RPU_Comments__c='Yes',
+                                                                                        Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
+        Check_List_History_Line_Item__c lineItem2 = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistory2.Id,
+                                                                                        CPU_RPU_Comments__c='Yes',
+                                                                                        Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
+        insert new List<Check_List_History_Line_Item__c> {lineItem,lineItem2};
+        
+        Vendor_Rate__c vr=new Vendor_Rate__c();
+        vr.Work_Name__c='Pre - Sanction Technical Report';
+        vr.Vendor_Name__c=con.Id;
+        
+        insert vr; 
+        
+        vr.Work_Name__c='Pre - Sanction Technical Report';
+        update vr;
+        
+        Cibil__c ci=new Cibil__c();
+        ci.Application__c=op.Id;
+        insert ci; 
+
+		OpportunityContactRole opc=new  OpportunityContactRole();
+        opc.OpportunityId=op.id;
+        opc.ContactId=con.id;
+        insert opc;
+
+		Customer_App_Login_Log__c cal=new Customer_App_Login_Log__c();
+         cal.Customer__c=cus.id;
+        cal.Auth_code__c='dfghjhgfdsdfghjkjhgfdfgggggggggggggggggggggggggggggggggggggggggg';
+        insert cal;
+        
+        Property_Master__c pr=new Property_Master__c();
+        pr.Customer__c=cus.id;
+        insert pr;
+        
+        Case cs=new Case();
+        cs.Application_Name__c=op.id;
+        cs.Status='Closed';
+        cs.Request__c='Property Papers Verification';
+        cs.Reason='Complete Document Received';
+        insert cs;
+        
+        
+        Id RecordTypeIdContact = Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
+        
+        Technical_Verification__c techVerification = new Technical_Verification__c(
+            Percent_completion_as_on_date__c=80,
+            Status__c='Approved',
+            Occupancy__c=88,
+            Report_Type__c='Pre - Sanction Technical Report',
+            Radial_High_Count__c=89,
+            Application__c=op.Id,
+            Construction_FF_Area__c=100,
+            Construction_FF_Value__c=1000,
+            Approval_Date__c=System.today(),
+            Area_Proposed_Construction__c=100,
+            Value_per_unit_propsed_construction__c=100,
+            Area_Existing_Construction__c=100,
+            Value_per_unit_existing_construction__c=100,
+            Area__c=100,
+            Length_Land_Measurement__c=100,
+            Breadth_Land_Measurement__c=100,
+            Value_per_unit_land_Vaue__c=100
+        );
+        techVerification.Basement_LGF__c=1233;
+        techVerification.RecordTypeId=RecordTypeIdContact;
+        techVerification.Self_Occupied_by_Owner__c='Seller';
+        techVerification.Re_initiate__c=true;
+        techVerification.CAM_Number__c=camObj.Id;
+        techVerification.Construction_as_per_approved_plans__c='No Caution area';
+        insert techVerification;
+
+        NEILON__File__c nc=new NEILON__File__c();
+		nc.Subcategory__c='Signed Home Loan Agreement';
+        nc.Name='zaxdjfh';
+        nc.NEILON__Opportunity__c=op.Id;
+		insert nc;  
+        
+        Id RecordTypeIdContact2 = Schema.SObjectType.Vendor_Request__c.getRecordTypeInfosByName().get('Legal').getRecordTypeId();
+        
+        Vendor_Request__c vendorReq = new Vendor_Request__c(Date_First_Submitted__c=System.today(),
+                                                            Application__c=op.Id, Request_Type__c='Technical',
+                                                            Report_Type__c ='Pre - Sanction Technical Report',
+                                                            Prior_Disbursement__c=454,
+                                                            Is_Submitted_through_Legal__c=True);
+        vendorReq.RecordTypeId=RecordTypeIdContact2;
+        insert vendorReq;
+        
+        techVerification.Vendor_Request__c=vendorReq.Id;
+        Deviation__c deviation = new Deviation__c(); 
+        deviation.Reason_For_Waiver__c = 'test';
+        deviation.Type_of_Waiver__c = 'OTC';    
+        deviation.Opportunity__c = op.Id; 
+        deviation.Approval_Status__c = 'Pending';   
+        deviation.Approved_By__c = testUser.Id; 
+        deviation.OTC_Submission_Date__c = Date.newinstance(2026,01,01);
+        deviation.Waiver__c = 'NOI / Lien / EC -SRO / MODT / Khata-OTC';
+        deviation.Person_who_can_Approve__c='Mohit Grover';
+        //deviation.Effective_PF__c = 100;
+       // insert deviation; 
+        deviation.Approval_Status__c = 'Approved';
+       // update deviation;
+        Test.stoptest();
+    }
+    
+    @isTest
+    public static void test(){
+        
+        Opportunity op = [SELECT Id,HLA_Sign_Date__c,Loan_Number__c,Sanctioned_Date__c FROM Opportunity LIMIT 1];
+        Contact con = [Select Id from Contact where LastName = 'sde12'];
+        
+        Disbursement__c disbRec = new Disbursement__c(
+            Application__c=op.Id,
+            Disbursement_Amount__c=16000,
+            Maker_CRD_Sign_Date__c=System.today(),
+            CRD_Sign_Date__c=System.today(),
+            Disbursement_LTV__c=8138,
+            Cheque_Handover_Date__c=System.today(),
+            Tranch_Details__c='First',
+             Disbursement_Mode__c ='Cheque',
+            Disb_Status__c='Send to PRE-CPU',
+            Insurance_Premium__c=0,
+            Insurance_Company__c='Max life insurance',
+            Accidental_Life_Insurance__c=987,
+            Effective_PF__c=3,
+            Beneficiary_Name__c='test',
+            CPU_Bank_Account_No__c='12345678',
+            Bank_Account_No__c='12345678',
+            BrokenPeriod__c=123,
+            IFSC_Code__c='BARBOMUZRAM',
+            Date_of_Disbursement__c=System.today(),
+            Checker_CRD_Sign_Date__c=System.today(),
+            Levels_Of_Tranch__c='First Tranche',
+            caseTyp__c='Topup',
+            PF_Waiver_Amount__c=100,
+            Bank_Branch_Name__c='RAMBAGHGH',
+            MICR_Code__c='hu82u893',
+            Cheque_Handover_To_Customer__c=true,
+            PF_received__c=1000,
+            Loan_Status__c='Moved To FinnOne',
+            PF_Collected__c=500,
+            PF_not_to_be_collected__c=500,
+            EMI_Flag__c='Yes',
+            CurtailmentFlag__c='Yes'
+        );
+               
+        Collection__c collec = new Collection__c(Amount__c=6000, Collector__c=con.Id,
+                                                 Date_of_Deposit__c=System.today(),
+                                                 SFDC_Customer__c=op.Id, Deposited_In_bank__c=true,
+                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
+                                                 Status__c='Active', RMobile_No__c='1234567891',
+                                                 Branch_Name__c='testBranch',
+                                                 Nature_of_Collection__c='Search Fees (Incl. Service Tax)');
+        Test.startTest();
+        insert collec;
+        insert disbRec; 
+        
+        PageReference pageRef = new PageReference('Test'); 
         Test.setCurrentPage(pageRef);
 
-        // 3. Inject the variables into the page parameters BEFORE calling the constructor
-        // (Adjust the string keys like 'id' or 'appId' if you know the exact ones the class uses)
-        ApexPages.currentPage().getParameters().put('id', disbRec.Id);
         ApexPages.currentPage().getParameters().put('recordId', disbRec.Id);
         ApexPages.currentPage().getParameters().put('appId', disbRec.Application__c);
 
-        Test.startTest();
-
-        // 4. NOW it is safe to call the constructor. It will grab the injected parameters and run smoothly!
         RunLoanServiceClass runLoan = new RunLoanServiceClass();
 
-        // 5. Explicitly assign them to properties just to be safe
         runLoan.appId = disbRec.Application__c;
         runLoan.recordId = disbRec.Id;
 
         Test.stopTest();
+            
     }
+
+    
 }
