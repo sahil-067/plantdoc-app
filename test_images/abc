@@ -1,153 +1,187 @@
-// Second Queueable class for handling additional callouts
-global class ProcessReceiptStep2 implements Queueable, Database.AllowsCallouts {
-    private Id recordId;
-    private Collection__c collist;
-    private Opportunity oplist;
-    private String accesstoken;
-    private String strCheck;
+@isTest
+public class ProcessReceiptStep2Test {
     
-    // Constructor to initialize data
-    public ProcessReceiptStep2(Id recordId, Collection__c collist, Opportunity oplist, String accesstoken,string strCheck) {
-        this.recordId = recordId;
-        this.collist = collist;
-        this.oplist = oplist;
-        this.accesstoken = accesstoken;
-        this.strCheck=strCheck;
+    // =======================================================================
+    // 1. HTTP Callout Mock Class
+    // =======================================================================
+    private class MockHttpResponse implements HttpCalloutMock {
+        String responseBody;
+        Integer statusCode;
+
+        public MockHttpResponse(String responseBody, Integer statusCode) {
+            this.responseBody = responseBody;
+            this.statusCode = statusCode;
+        }
+
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setBody(responseBody);
+            res.setStatusCode(statusCode);
+            return res;
+        }
+    }
+
+    // =======================================================================
+    // 2. Setup Test Data
+    // =======================================================================
+    @testSetup
+    static void setupTestData() {
+        // Setup Account (Required for standardized Opportunities)
+        Account acc = new Account(Name = 'Test Account for Queueable');
+        insert acc;
+
+        // Setup Opportunity
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opp',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Finnone_Loan_Id__c = 'LN1234567890'
+        );
+        insert opp;
+
+        // Setup Collection 1: For Creation Scenario 
+        // Note: Using single-digit month/day to cover 'day <= 9' padding logic
+        Collection__c colCreate = new Collection__c(
+            Opportunity__c = opp.Id,
+            Nature_of_Collection__c = 'Emi/Advances/Part Payment',
+            Status__c = 'Receipted', // Will trigger Creation
+            Instrument__c = 'Cash',
+            Date_of_Collection__c = Date.newInstance(2024, 5, 5) 
+        );
+        insert colCreate;
+
+        // Setup Collection 2: For Cancellation Scenario
+        // Note: Using double-digit month/day to cover the else 'day > 9' condition
+        Collection__c colCancel = new Collection__c(
+            Opportunity__c = opp.Id,
+            Nature_of_Collection__c = 'Pre-EMI',
+            Status__c = 'Cancelled', // Will trigger Cancellation
+            Instrument__c = 'Cash',
+            Date_of_Collection__c = Date.newInstance(2024, 11, 15),
+            transactionReferenceNumber__c = '987654321'
+        );
+        insert colCancel;
     }
     
-    public void execute(QueueableContext context) {
-        // New Logic added by AT 17-09-2024
-        Id clientRT = SObjectType.Adhoc_charges__c.getRecordTypeInfosByDeveloperName().get('Record_Type_Cash').getRecordTypeId();
-        List<Adhoc_charges__c> adlList = new List<Adhoc_charges__c>();
-        List<Collection__c> colListn = new List<Collection__c>();
+    // =======================================================================
+    // 3. Test Methods
+    // =======================================================================
+    
+    @isTest
+    static void testExecuteCreationSuccess() {
+        Opportunity opp = [SELECT Id, Finnone_Loan_Id__c FROM Opportunity LIMIT 1];
+        Collection__c col = [SELECT Id, Date_of_Collection__c, Nature_of_Collection__c, Status__c, Instrument__c FROM Collection__c WHERE Status__c = 'Receipted' LIMIT 1];
         
-        // STEP 1: MAKE ADDITIONAL CALLOUTS
-        String duedate;
-        if(collist.Date_of_Collection__c != Null) {
-            Integer day = collist.Date_of_Collection__c.day();
-            Integer month = collist.Date_of_Collection__c.month();
-            String daystr = day <= 9 ? '0' + day : String.valueof(day);
-            String monthstr = month <= 9 ? '0' + month : String.valueof(month);
-            duedate = daystr + '/' + monthstr + '/' + collist.Date_of_Collection__c.Year();
-        }
-        System.debug('strCheck 2 '+strCheck);
-        if(strCheck.containsIgnoreCase('success')){
-        if((collist.Nature_of_Collection__c=='Emi/Advances/Part Payment' || collist.Nature_of_Collection__c=='Pre-EMI') && collist.Status__c!='Cancelled' && collist.Instrument__c=='Cash') {
-            String bdy;
-            try {
-                Adhoc_charges__c adh = new Adhoc_charges__c();
-                Adhoc_creation__mdt dfd = [Select Id, API_End_Point_URL__c,autoAuthorizeFlag__c,branchId__c,businessPatnerId__c,businessPatnerTypeCode__c,chargeId__c,dueAmount__c,dynamicFieldsData__c,property1__c,property2__c,reasonCode__c,remarks__c,requestChannel__c,requestHeader__c,tenantId__c,userCode__c,userDetail__c from Adhoc_creation__mdt];
-                
-                bdy = '{"autoAuthorizeFlag":"'+dfd.autoAuthorizeFlag__c+'","businessPatnerId":'+Integer.valueof(dfd.businessPatnerId__c)+',"businessPatnerTypeCode":"'+dfd.businessPatnerTypeCode__c+'","chargeId":'+Integer.valueof(dfd.chargeId__c)+',"dueAmount":'+Integer.valueof(dfd.dueAmount__c)+',"dueDate":"'+duedate+'","dynamicFieldsData":{"property1":{},"property2":{}},"loanAccountNumber":"'+oplist.Finnone_Loan_Id__c+'","reasonCode":"'+dfd.reasonCode__c+'","remarks":"'+dfd.remarks__c+'","requestChannel":"'+dfd.requestChannel__c+'","requestHeader":{"tenantId":"'+dfd.tenantId__c+'","userDetail":{"branchId":5000232,"userCode":"'+dfd.userCode__c+'"}}}'; 
-                System.debug('bdy '+bdy);
-                
-                Http hreq = new Http();
-                HttpRequest req = new HttpRequest();
-                
-                req.setHeader('Content-type', 'application/json');   
-                req.setHeader('access_token',accesstoken);
-                req.setEndpoint(dfd.API_End_Point_URL__c);
-                req.setTimeout(120000);
-                req.setMethod('POST');
-                req.setBody(bdy);
-                System.debug('Helloooo req '+req);
-                
-                adh.Adhoc_Request__c = bdy;
-                adh.URL__c = dfd.API_End_Point_URL__c;
-                adh.recordTypeId = clientRT;
-                
-                String str = '';
-                HttpResponse res = hreq.send(req);
-                system.debug('response---->' + res);
-                system.debug('response---->' + res.getbody());
-                
-                adh.Adhoc_Response__c = res.getbody();
-                adh.Collection__c = collist.Id;
-                adh.recordTypeId = clientRT;
-                
-                // ADD NULL CHECK HERE
-                adhocApex successWrapperList;
-                try {
-                    successWrapperList = adhocApex.parse(res.getbody());
-                    if(successWrapperList != null && successWrapperList.success != null) {
-                        System.debug('successWrapperList.success.transactionReferenceNumber '+successWrapperList.success.transactionReferenceNumber);
-                        collist.transactionReferenceNumber__c = String.valueof(successWrapperList.success.transactionReferenceNumber);
-                        colListn.add(collist);
-                        adlList.add(adh);
-                    } else {
-                        system.debug('successWrapperList is null or success is null');
-                    }
-                } catch(Exception e) {
-                    system.debug('Error parsing adhoc response: ' + e.getMessage());
-                }
-                
-                // Always add the record regardless of parsing success
-                adlList.add(adh);
-                colListn.add(collist);
-            } catch(Exception e) {
-                Adhoc_charges__c adh = new Adhoc_charges__c();
-                adh.Adhoc_Request__c = bdy;
-                adh.Adhoc_Response__c = e.getMessage() + ' and Error Line Number' + e.getLineNumber();
-                adlList.add(adh);
-            }
-        } 
-        else if((collist.Nature_of_Collection__c=='Emi/Advances/Part Payment' || collist.Nature_of_Collection__c=='Pre-EMI') && collist.Status__c=='Cancelled' && collist.Instrument__c=='Cash') {
-            string strbody;
-            try {
-                Adhoc_charges__c adh = new Adhoc_charges__c();
-                Adhoc_cancellation__mdt ad = [Select Id, attachmentReferenceId__c,End_Point_URL__c,autoAuthorizeFlag__c,branchId__c,cancelreason__c,remarks__c,requestHeader__c,tenantId__c,transactionReferenceNumber__c,userCode__c from Adhoc_cancellation__mdt];
-                
-                strbody = '{"attachmentReferenceId":"'+ad.attachmentReferenceId__c+'","autoAuthorizeFlag":"'+ad.autoAuthorizeFlag__c+'","cancelreason":"'+ad.cancelreason__c+'","remarks":"'+ad.remarks__c+'","requestHeader":{"tenantId":'+Integer.valueof(ad.tenantId__c)+',"userDetail":{"branchId":'+Integer.valueof(ad.branchId__c)+',"userCode":"'+ad.userCode__c+'"}},"transactionReferenceNumber":'+Integer.valueof(collist.transactionReferenceNumber__c)+'}';
-                
-                Http hreq = new Http();
-                HttpRequest req = new HttpRequest();
-                
-                req.setHeader('Content-type', 'application/json');   
-                req.setHeader('access_token',accesstoken);
-                req.setEndpoint(ad.End_Point_URL__c);
-                req.setTimeout(120000);
-                req.setMethod('POST');
-                req.setBody(strbody);
-                System.debug('Helloooo req '+req);
-                
-                String str = '';
-                HttpResponse res = hreq.send(req);
-                system.debug('response---->' + res.getBody());
-                
-                adh.Adhoc_Request__c = strbody;
-                adh.URL__c = String.valueof(ad.End_Point_URL__c);
-                adh.Adhoc_Response__c = res.getBody();
-                adh.Collection__c = collist.Id;
-                adh.recordTypeId = clientRT;
-                adlList.add(adh);
-                colListn.add(collist);
-            } catch(Exception e) {
-                Adhoc_charges__c adh = new Adhoc_charges__c();
-                adh.Adhoc_Request__c = strbody;
-                adh.Adhoc_Response__c = e.getMessage() + ' and Error Line Number' + e.getLineNumber();
-                adlList.add(adh);
-            }
-        }
+        // JSON block formatted to match the expected 'adhocApex.parse' wrapper result
+        String jsonResponse = '{"success": {"transactionReferenceNumber": 12345678}}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponse(jsonResponse, 200));
+
+        Test.startTest();
+        ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'success');
+        System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        // Verification
+        Collection__c updatedCol = [SELECT transactionReferenceNumber__c FROM Collection__c WHERE Id = :col.Id];
+        System.assertEquals('12345678', updatedCol.transactionReferenceNumber__c, 'Transaction Reference Number should be updated upon success');
         
-        // STEP 2: PERFORM ALL DML OPERATIONS AFTER ALL CALLOUTS
-        try {
-            Set<Collection__c> colSet=new Set<Collection__c>(colListn);
-            List<Collection__c> coListUp=new List<Collection__c>(colSet);
-            if(coListUp.size() > 0) {
-                System.debug('colListn '+coListUp);
-                update coListUp;
-            }
-            Set<Adhoc_charges__c> adhSet=new Set<Adhoc_charges__c>(adlList);
-            List<Adhoc_charges__c> adhListIn=new List<Adhoc_charges__c>(adhSet);
-            if(adhListIn.size() > 0) {
-                System.debug('adlList '+adhListIn);
-                insert adhListIn;
-            }
-        }
-        catch(Exception e) {
-            System.debug('Error Message '+e.getMessage());
-            System.debug('Error Line Number '+e.getLineNumber());
-        }
-            }
+        List<Adhoc_charges__c> adhocCharges = [SELECT Id, Adhoc_Request__c, Adhoc_Response__c FROM Adhoc_charges__c WHERE Collection__c = :col.Id];
+        System.assertEquals(1, adhocCharges.size(), 'One Adhoc_charges__c record should be created.');
+    }
+    
+    @isTest
+    static void testExecuteCancellationSuccess() {
+        Opportunity opp = [SELECT Id, Finnone_Loan_Id__c FROM Opportunity LIMIT 1];
+        Collection__c col = [SELECT Id, Date_of_Collection__c, Nature_of_Collection__c, Status__c, Instrument__c, transactionReferenceNumber__c FROM Collection__c WHERE Status__c = 'Cancelled' LIMIT 1];
+        
+        String jsonResponse = '{"status": "Success", "message": "Cancelled Successfully"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponse(jsonResponse, 200));
+
+        Test.startTest();
+        ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'success');
+        System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        // Verification
+        List<Adhoc_charges__c> adhocCharges = [SELECT Id, Adhoc_Request__c, Adhoc_Response__c FROM Adhoc_charges__c WHERE Collection__c = :col.Id];
+        System.assertEquals(1, adhocCharges.size(), 'One Adhoc_charges__c record should be created for cancellation path.');
+        System.assert(adhocCharges[0].Adhoc_Response__c.contains('Cancelled Successfully'), 'Callout response body mapped incorrectly.');
+    }
+    
+    @isTest
+    static void testExecuteCreationException() {
+        // Passing null Opportunity object to intentionally trigger a NullPointerException at oplist.Finnone_Loan_Id__c
+        Collection__c col = [SELECT Id, Date_of_Collection__c, Nature_of_Collection__c, Status__c, Instrument__c FROM Collection__c WHERE Status__c = 'Receipted' LIMIT 1];
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponse('{}', 200));
+
+        Test.startTest();
+        ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, null, 'mock-access-token', 'success');
+        System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        // Verification: Catch block should insert an Adhoc_charges__c with the error message logged
+        List<Adhoc_charges__c> adhocCharges = [SELECT Id, Adhoc_Response__c FROM Adhoc_charges__c];
+        System.assert(!adhocCharges.isEmpty(), 'Error Adhoc charge record should be created inside the catch block');
+        System.assert(adhocCharges[0].Adhoc_Response__c.contains('Error Line Number'), 'System exception message not caught correctly');
+    }
+
+    @isTest
+    static void testExecuteCancellationException() {
+        Opportunity opp = [SELECT Id, Finnone_Loan_Id__c FROM Opportunity LIMIT 1];
+        Collection__c col = [SELECT Id, Date_of_Collection__c, Nature_of_Collection__c, Status__c, Instrument__c, transactionReferenceNumber__c FROM Collection__c WHERE Status__c = 'Cancelled' LIMIT 1];
+        
+        // Introduce TypeException intentionally by breaking Integer.valueOf(collist.transactionReferenceNumber__c)
+        col.transactionReferenceNumber__c = 'ALPHABETICAL_STRING'; 
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponse('{}', 200));
+
+        Test.startTest();
+        ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'success');
+        System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        // Verification: Cancellation catch block should trigger
+        List<Adhoc_charges__c> adhocCharges = [SELECT Id, Adhoc_Response__c FROM Adhoc_charges__c];
+        System.assert(!adhocCharges.isEmpty(), 'Error record should be created for cancellation failure');
+        System.assert(adhocCharges[0].Adhoc_Response__c.contains('Error Line Number'), 'System exception message not caught correctly');
+    }
+    
+    @isTest
+    static void testExecuteFailedStrCheck() {
+        Opportunity opp = [SELECT Id, Finnone_Loan_Id__c FROM Opportunity LIMIT 1];
+        Collection__c col = [SELECT Id, Date_of_Collection__c, Nature_of_Collection__c, Status__c, Instrument__c FROM Collection__c WHERE Status__c = 'Receipted' LIMIT 1];
+        
+        Test.startTest();
+        // Send a parameter that DOES NOT contain "success" in `strCheck`
+        ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'RandomFailureString');
+        System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        // Verification: Code should skip everything. Nothing should be created.
+        List<Adhoc_charges__c> adhocCharges = [SELECT Id FROM Adhoc_charges__c];
+        System.assertEquals(0, adhocCharges.size(), 'Logic gate bypassed incorrectly. No Adhoc charge should be inserted.');
+    }
+    
+    @isTest
+    static void testExecuteWithEmptyAdhocParse() {
+        Opportunity opp = [SELECT Id, Finnone_Loan_Id__c FROM Opportunity LIMIT 1];
+        Collection__c col = [SELECT Id, Date_of_Collection__c, Nature_of_Collection__c, Status__c, Instrument__c FROM Collection__c WHERE Status__c = 'Receipted' LIMIT 1];
+        
+        // Mock a response that DOES NOT contain the exact payload, meaning successWrapperList will evaluate as null
+        String jsonResponse = '{"error": "Unauthorized / Bad Request"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponse(jsonResponse, 400));
+
+        Test.startTest();
+        ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'success');
+        System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        // Verification: Ensuring the inner null check behaves correctly and bypasses Assignment gracefully
+        Collection__c updatedCol = [SELECT transactionReferenceNumber__c FROM Collection__c WHERE Id = :col.Id];
+        System.assertEquals(null, updatedCol.transactionReferenceNumber__c, 'Transaction ref shouldn\'t map anything if parse is null/failed.');
+        
+        List<Adhoc_charges__c> adhocCharges = [SELECT Id, Adhoc_Request__c, Adhoc_Response__c FROM Adhoc_charges__c WHERE Collection__c = :col.Id];
+        System.assert(!adhocCharges.isEmpty(), 'A standard adhoc tracking log still needs to be inserted.');
     }
 }
