@@ -1,337 +1,823 @@
-here  is an apex class
+here is the apex class
 
-/* 
-Author : Shivam Agarwal
-
-
-Description :  This trigger is invoked by approval process when CAM Sanctioned Loan Amount is less than the Actual Approver limits based on Load Type then throw validation error.	
-ModifiedDate : 16/12/2022
-*/
-public with sharing class CAMSanctionAmountLimit {
-    public static void doValidate(List<CAM__c> camList){
-       
-        Set<String> camIdSet = new Set<String>();
-        for(CAM__c camObj : camList) {
-            camIdSet.add(camObj.Id);
+public class DMGenerationValidation {
+    public static void run(List<Disbursement__c> disbursementlist,Map<Id,Disbursement__c> oldMap){
+        Decimal Amount = 0;
+        Decimal NewAmount = 0;
+        
+        String DisbursementStartDateLabel = Label.DisbursementStartDate;
+        Integer currentYear = System.Today().year();
+        Integer currentMonth = System.Today().month();
+        Integer currentDay = System.Today().day();
+        String addressFull  = Label.DisbursementStartDate;
+        String[] address    = addressFull.split('/');
+        Integer day          =     Integer.valueOf(address[0]); 
+        Integer month        =    Integer.valueOf(address[1]);
+        Integer year         =    Integer.valueOf(address[2]);
+        system.debug('day'+day+'month'+month+'year'+year);
+        system.debug('Size'+disbursementlist.size());
+        
+        date myDate = date.today();
+        date dueDate = date.newInstance(year, month, day);
+        
+        system.debug('myDate --> '+myDate);
+        
+        system.debug('dueDate --> '+dueDate);
+        
+        
+        Set<ID> ApplicationSet = new Set<ID>();
+        Map<string,Disbursement__c> MapDisbursemen=new Map<string,Disbursement__c>();
+        for(Disbursement__c db : disbursementlist){
+            if(db.Application__c != null){
+                ApplicationSet.add(db.Application__c);
+                if(db.Disbursement_Amount__c != null &&(db.Disb_Status__c=='Cancelled by branch'||db.Disb_Status__c=='Cancelled DE'||db.Disb_Status__c=='Cancelled')){   
+                }
+                else{
+                    if(db.Disbursement_Amount__c != null){
+                        NewAmount=db.Disbursement_Amount__c;
+                    }
+                }  
+            }
         }
         
-        Map<String, Approval_Matrix__c> approvalMatrixMap = new Map<String, Approval_Matrix__c>();
-        for(Approval_Matrix__c appMat : [SELECT Id, HL__c, LAP__c, Recommended_For__c, Recommended_For__r.UserName FROM Approval_Matrix__c where Status__c = 'Approved'
-                                         AND Recommended_For__r.UserName =: UserInfo.getUserName()]){
-                                             approvalMatrixMap.put(appMat.Recommended_For__c, appMat);
-                                         }
-        System.debug('UserInfo.getUserName()==>'+UserInfo.getUserName());
-        System.debug('approvalMatrixMap==>'+approvalMatrixMap.containskey(UserInfo.getUserId()));
+        /*
+        Date myDate1 = null;
+        List<Disbursement__c> ListOfDisbursementTocheckDate = [Select Id,Tranch_Details__c,Date_Created__c,Application__c,CreatedDate,Levels_Of_Tranch__c from Disbursement__c Where Application__c =: ApplicationSet AND Levels_Of_Tranch__c =: 'First Tranche' ];
+        if(ListOfDisbursementTocheckDate.size()>0){
+            Date DateofFirstTranch  = ListOfDisbursementTocheckDate[0].Date_Created__c;
+            myDate1 = date.newinstance(DateofFirstTranch.year(), DateofFirstTranch.month(), DateofFirstTranch.day());
+        }
+        Date  myDate2 = null;
+        List<Disbursement__c> ListOfDisbursementTocheckDate1 = [Select Id,Tranch_Details__c,Date_Created__c,Application__c,CreatedDate,Levels_Of_Tranch__c from Disbursement__c Where Application__c =: ApplicationSet AND Levels_Of_Tranch__c =: '2nd Tranche' ];
+        if(ListOfDisbursementTocheckDate1.size()>0){
+            Date DateofFirstTranch1  = ListOfDisbursementTocheckDate1[0].Date_Created__c;
+            myDate2 = date.newinstance(DateofFirstTranch1.year(), DateofFirstTranch1.month(), DateofFirstTranch1.day());
+        }
         
-        if(camIdSet.size() > 0){
-            List<ProcessInstance> pi = [SELECT Id, LastActor.Name, (SELECT Id, ActorId, ProcessInstanceId FROM Workitems LIMIT 1) FROM ProcessInstance where TargetObjectId IN: camIdSet order by CompletedDate DESC LIMIT 1];
-            //System.debug('pi[0].Workitems==>'+pi[0].Workitems.size());
-            for(CAM__c camObj : camList) {
+        Date  myDate3 = null;
+        List<Disbursement__c> ListOfDisbursementTocheckDate2 = [Select Id,Tranch_Details__c,Date_Created__c,Application__c,CreatedDate,Levels_Of_Tranch__c from Disbursement__c Where Application__c =: ApplicationSet AND Levels_Of_Tranch__c =: '3rd Tranche' ];
+        if(ListOfDisbursementTocheckDate2.size()>0){
+            Date DateofFirstTranch2  = ListOfDisbursementTocheckDate2[0].Date_Created__c;
+            myDate3 = date.newinstance(DateofFirstTranch2.year(), DateofFirstTranch2.month(), DateofFirstTranch2.day());
+        }
+        
+        Date  myDate4 = null;
+        List<Disbursement__c> ListOfDisbursementTocheckDate3 = [Select Id,Tranch_Details__c,Date_Created__c,Application__c,CreatedDate,Levels_Of_Tranch__c from Disbursement__c Where Application__c =: ApplicationSet AND Levels_Of_Tranch__c =: '4th Tranche' ];
+        if(ListOfDisbursementTocheckDate3.size()>0){
+            Date DateofFirstTranch3  = ListOfDisbursementTocheckDate3[0].Date_Created__c;
+            myDate4 = date.newinstance(DateofFirstTranch3.year(), DateofFirstTranch3.month(), DateofFirstTranch3.day());
+        }
+        
+        Date  myDate5 = null;
+        List<Disbursement__c> ListOfDisbursementTocheckDate4 = [Select Id,Tranch_Details__c,Date_Created__c,Application__c,CreatedDate,Levels_Of_Tranch__c from Disbursement__c Where Application__c =: ApplicationSet AND Levels_Of_Tranch__c =: '5th Tranche' ];
+        if(ListOfDisbursementTocheckDate4.size()>0){
+            Date DateofFirstTranch4  = ListOfDisbursementTocheckDate4[0].Date_Created__c;
+            myDate5 = date.newinstance(DateofFirstTranch4.year(), DateofFirstTranch4.month(), DateofFirstTranch4.day());
+        }
+        */
+        
+        
+        List<Disbursement__c> ListOfDisbursement = new List<Disbursement__c>();
+        Map<String,Opportunity> MapOfApplication = new Map<String,Opportunity>(); 
+        Map<String,Collection__c> MapforCollection = new Map<String,Collection__c>();
+        for(Collection__c cc : [Select Status__c,SFDC_Customer__c,Instrument__c from Collection__c Where SFDC_Customer__c IN:ApplicationSet  ORDER BY CreatedDate DESC LIMIT 1]){
+            MapforCollection.put(cc.SFDC_Customer__c,cc);
+        }
+        system.debug('MapforCollection'+MapforCollection);
+        for( Opportunity Opp :   [Select Id,Disbursed_Amount__c,Collection_mode__c,Pending_Disbursement__c,
+                                  ACH_Registration_Status__c,LM_Loan_Status__c,DE_Done_By__c,Sanctioned_Amont__c,
+                                  CmitDisAmt__c
+                                  from Opportunity Where ID IN:ApplicationSet]){
+                                      MapOfApplication.put(Opp.id,Opp);
+                                  }
+        
+        Decimal AmountToUseinDMUpdateCase = 0;
+        Decimal Amounttdx = 0;
+        Decimal Amountrrrrr = 0;
+        system.debug('Amount'+Amount);
+        AmountToUseinDMUpdateCase = Amount;
+        Decimal DisbursementPendingAmount  = Integer.valueOf(label.Pending_amount_of_Disbursement);
+        for(Disbursement__c db : disbursementlist){
+            system.debug('currentDay'+currentDay+'currentMonth'+currentMonth+'currentYear'+currentYear);
+            system.debug('DisbursementStartDateLabel'+DisbursementStartDateLabel);  
+            //Decimal ActualPendingAmounonApplication = MapOfApplication.get(db.Application__c).Pending_Disbursement__c;
+            Decimal ActualPendingAmounonApplication = MapOfApplication.get(db.Application__c).Sanctioned_Amont__c != null ? MapOfApplication.get(db.Application__c).Sanctioned_Amont__c : 0;
+            system.debug('ActualPendingAmounonApplication'+ActualPendingAmounonApplication);
+            
+            Decimal ValueOfNewDisbursementAmount = 0;
+            Decimal ValueOfNewDMAfterminusTenThousand = 0 ;
+            if(ActualPendingAmounonApplication != null)
+                ValueOfNewDisbursementAmount = db.Disbursement_Amount__c + ActualPendingAmounonApplication;
+            system.debug('ValueOfNewDisbursementAmount'+ValueOfNewDisbursementAmount);
+            
+            ValueOfNewDMAfterminusTenThousand = ValueOfNewDisbursementAmount - 10000;
+            system.debug('ValueOfNewDMAfterminusTenThousand'+ValueOfNewDMAfterminusTenThousand);
+            
+            Decimal Total = ActualPendingAmounonApplication - DisbursementPendingAmount;
+            system.debug('Total'+Total); 
+            if(Trigger.isInsert){
                 
-                if(pi != null && pi.size() > 0) {
-                    if(pi[0].Workitems.size() > 0){
-                    System.debug('pi[0].Workitems[0].ActorId==>'+pi[0].Workitems[0].ActorId);
-                    if(approvalMatrixMap.get(pi[0].Workitems[0].ActorId) != null && UserInfo.getUserId() == pi[0].Workitems[0].ActorId){
-                        if(camObj.Final_Decision__c == 'Approved' && camObj.Loan_Type__c.contains('LAP') && camObj.Combined_Exposure__c > approvalMatrixMap.get(pi[0].Workitems[0].ActorId).LAP__c) {
-                            //camObj.addError('You don\'t have permission to approve above ' + approvalMatrixMap.get(pi[0].LastActor.Id).LAP__c + ' LAP Loan Type amount');
-                            camObj.addError(Label.CAMSanctionAmountLimitValidation);
-                        } 
-                        if(camObj.Final_Decision__c == 'Approved' && camObj.Loan_Type__c.contains('HL') && camObj.Combined_Exposure__c > approvalMatrixMap.get(pi[0].Workitems[0].ActorId).HL__c) {
-                            //camObj.addError('You don\'t have permission to approve above ' + approvalMatrixMap.get(pi[0].LastActor.Id).HL__c + ' HL Loan Type amount');
-                            camObj.addError(Label.CAMSanctionAmountLimitValidation); 
+                List<Disbursement__c> ListOfDM = [Select Id,Disbursement_Amount__c,Disb_Status__c,Application__r.Sanctioned_Amont__c
+                                                  from Disbursement__c 
+                                                  Where Application__c =: db.Application__c AND  Disb_Status__c != 'Cancelled by branch' AND Disb_Status__c != 'Cancelled DE' AND Disb_Status__c != 'Cancelled'
+                                                  
+                                                  AND Id NOT IN: disbursementlist
+                                                 ];
+                
+                system.debug('listOfDMoninsert'+ListOfDM.size()+ListOfDM);
+                Decimal TestAmountValue = 0;
+                for(Disbursement__c d : ListOfDM){
+                    if(d.Disbursement_Amount__c != null)
+                        TestAmountValue += d.Disbursement_Amount__c;
+                    system.debug('TestAmountValue'+TestAmountValue);
+                }
+                system.debug('TestAmountValue'+TestAmountValue);
+                
+                if(MapOfApplication.containskey(db.Application__c)){
+                    
+                    // if(integer.valueOf(MapOfApplication.get(db.Application__c).Pending_Disbursement__c)>0 ){
+                    if((db.Disbursement_Amount__c + TestAmountValue) > MapOfApplication.get(db.Application__c).Sanctioned_Amont__c){
+                        db.addError('Sorry! Disbursement Amount is exceeding the sanctioned Amount');  
+                        
+                    }
+                    else{
+                        if(MapOfApplication.get(db.Application__c).DE_Done_By__c != 'By-Pass Ten Thousand Validation'){
+                            if((db.Disbursement_Amount__c + TestAmountValue) !=  MapOfApplication.get(db.Application__c).Sanctioned_Amont__c){
+                                if((db.Disbursement_Amount__c + TestAmountValue) > Total ){
+                                    if(myDate>dueDate){
+                                        db.addError('Sorry! Pending Disbursement amount should be > 10,000 post disbursement of this tranche, Please disburse complete amount.');  
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // } 
+                }
+                
+                String ACHRegistrationValue = MapOfApplication.get(db.Application__c).ACH_Registration_Status__c;
+                if(MapOfApplication.get(db.Application__c).DE_Done_By__c != 'By-Pass'){
+                    if(MapOfApplication.containskey(db.Application__c)){
+                        if(MapOfApplication.get(db.Application__c).ACH_Registration_Status__c != 'Registered'){
+                            // if(db.Tranch_Details__c == 'Subsequent' ){
+                            
+                            if(db.Levels_Of_Tranch__c == '2nd Tranche'){
+                                
+                                //  if(myDate1 != null && system.today() == myDate1){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                //  }
+                                
+                            }
+                            else if(db.Levels_Of_Tranch__c == '3rd Tranche'){
+                                //if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '4th Tranche'){
+                                //if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                //}
+                            }
+                            else if(db.Levels_Of_Tranch__c == '5th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '6th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '7th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '8th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '9th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '10th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '11th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            else if(db.Levels_Of_Tranch__c == '12th Tranche'){
+                                //  if((myDate2 != null && system.today() == myDate2) || (myDate1 != null && system.today() == myDate1) || (myDate3 != null && system.today() == myDate3) || (myDate4 != null && system.today() == myDate4)){
+                                db.addError('DM Creation is not allowed as NACH is not Registered');  
+                                // }
+                            }
+                            
+                            
+                            //}
+                        }
+                        else if(MapOfApplication.get(db.Application__c).ACH_Registration_Status__c == 'Registered' ){
+                            system.debug('141');
+                            if(MapforCollection.containskey(db.Application__c)){
+                                if(MapforCollection.get(db.Application__c).Status__c == 'Bounced' && 
+                                   (MapforCollection.get(db.Application__c).Instrument__c == 'ACH' ||
+                                    MapforCollection.get(db.Application__c).Instrument__c == 'DDM' ||
+                                    MapforCollection.get(db.Application__c).Instrument__c == 'ECS' ||
+                                    MapforCollection.get(db.Application__c).Instrument__c == 'eNACH') ){
+                                        db.addError('Sorry! DM creation is not allowed, As recent payment through NACH got bounced');
+                                    }
+                            } 
+                        }
+                    }
+                }
+            }
+            
+            if(Trigger.isUpdate){
+                
+                if(db.Commitment_Charge__c !=oldMap.get(db.Id).Commitment_Charge__c)
+                {}
+                else
+                {
+                     List<Disbursement__c> ListOfDM = [Select Id,Disbursement_Amount__c,Disb_Status__c,Application__r.Sanctioned_Amont__c
+                                                  from Disbursement__c 
+                                                  Where Application__c =: db.Application__c AND  Disb_Status__c != 'Cancelled by branch' AND Disb_Status__c != 'Cancelled DE' AND Disb_Status__c != 'Cancelled'
+                                                  
+                                                  AND Id NOT IN: disbursementlist
+                                                 ];
+                Decimal TestTotalAmountValue = 0;
+                for(Disbursement__c d : ListOfDM){
+                    if(d.Disbursement_Amount__c != null)
+                        TestTotalAmountValue += d.Disbursement_Amount__c;
+                    system.debug('TestTotalAmountValue'+TestTotalAmountValue);
+                }
+                Decimal ValueOfActualAmount  = TestTotalAmountValue + db.Disbursement_Amount__c;
+                system.debug('ValueOfActualAmount 157'+ValueOfActualAmount);
+                Decimal ValueOfSumOfDisbursementAmount = 0;
+                for(Disbursement__c dis: ListOfDM){
+                    if(dis.Disbursement_Amount__c != null)
+                        ValueOfSumOfDisbursementAmount += dis.Disbursement_Amount__c;
+                }
+                if(db.Disbursement_Amount__c != null)
+                    ValueOfSumOfDisbursementAmount += db.Disbursement_Amount__c ;
+                system.debug('ValueOfSumOfDisbursementAmount'+ValueOfSumOfDisbursementAmount);
+                
+                if(MapOfApplication.containskey(db.Application__c)){
+                    //integer.valueOf(MapOfApplication.get(db.Application__c).Pending_Disbursement__c) != 0  &&
+                    //if( integer.valueOf(MapOfApplication.get(db.Application__c).Pending_Disbursement__c)>0){ 
+                    if(ValueOfActualAmount > MapOfApplication.get(db.Application__c).Sanctioned_Amont__c  )  {
+                        if(db.Disb_Status__c != 'Cancelled by branch' && db.Disb_Status__c != 'Cancelled DE' && db.Disb_Status__c != 'Cancelled'){
+                            db.addError('Sorry! Disbursement Amount is exceeding the sanctioned Amount'); 
                         }
                     }
                     else{
-                        camObj.addError(Label.CAMSanctionAmountLimitValidation);
+                        if(ValueOfActualAmount !=  MapOfApplication.get(db.Application__c).Sanctioned_Amont__c){
+                            if(ValueOfActualAmount > Total ){
+                                if(myDate>dueDate){
+                                    if(db.Disb_Status__c != 'Cancelled by branch' && db.Disb_Status__c != 'Cancelled DE' && db.Disb_Status__c != 'Cancelled'){
+                                        db.addError('Sorry! Pending Disbursement amount should be > 10,000 post disbursement of this tranche, Please disburse complete amount.');
+                                    }
+                                }
+                            }
+                        }
+                        
                     }
+                    // }
+                }       
                 }
-                }
-                
+               
             }
             
             
-        }
-    }
+            
+            
+            /* if(Trigger.isInsert && (MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Fully Disbursed (Active)')
+|| MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Sanctioned Expired'){
+db.addError('Sorry! Case is Fully Disbursed / Sanctioned Expired, No Further disbursement is allowed');
+} */
+            
+            if(Trigger.isInsert ){
+                if(MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Fully Disbursed (Active)')
+                    db.addError('Sorry! Case is Fully Disbursed, No Further disbursement is allowed');
+                
+                if(MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Sanctioned Expired')
+                    db.addError('Sorry! Case is Sanctioned Expired, No Further disbursement is allowed');
+                
+                if(MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Rejected by Call Center')
+                    db.addError('Sorry! Case is Rejected by Call Center, No Further disbursement is allowed');
+                
+                if(MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Rejected By Operation')
+                    db.addError('Sorry! Case is Rejected By Operation, No Further disbursement is allowed');
+                
+                if(MapOfApplication.get(db.Application__c).LM_Loan_Status__c == 'Rejected Post Disbursement')
+                    db.addError('Sorry! Case is Rejected Post Disbursement, No Further disbursement is allowed');
+            }
+            
+        }   
+    } 
 }
 
-and here is its test class
+
+and here is the test class
 
 
-@isTest
-public class CAMSanctionAmountLimitTest {
-   @isTest
-    public static void setupTestData(){
+@IsTest
+public class DMGenerationValidationTest {
+
+    private static Opportunity createApplication() {
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
+        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
+        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
+
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        cus.Query_Raised_count__c=17;
+        cus.Hindsight_Approval__c='Pending';
+        insert cus;
         
-        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
-        tbypass.isActive__c=false;
-        tbypass.Name='Deactivate';
-        insert tbypass;
+        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
+        badc.Bank_name__c='HDFC';
+        badc.Is_PennyDrop_Done__c=true;
+        badc.Disbursement_in_this_Account__c='Yes';
+        badc.Household__c = cus.Id;
+        badc.Bank_Account_Number__c = '12345678';
+        badc.IFSC_Code__c = 'ABC123456';
+        badc.Percentage__c='91';
+        badc.Is_PennyDrop_Done__c=true;
+        badc.Name_of_Account_Holder__c = 'John Doe';
+        badc.PennyDrop_Status_Code__c='NP001';
+        insert badc;
         
-        Trigger_BYPass__c triggerWhatsappApplication = new Trigger_BYPass__c();
-        triggerWhatsappApplication.isActive__c=true;
-        triggerWhatsappApplication.Name='WhatsappApplication';
-        insert triggerWhatsappApplication;
+        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
+                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,
+                                 Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
+        insert ac;
+
+        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
+        insert cf;
+
+        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
+        insert nsc;
         
-        // Code to insert User Record
+        Loan_Product__c lp=new Loan_Product__c();
+        lp.PF_Rate_1__c=5.0;
+        insert lp;
         
-        Profile p = [SELECT Id FROM Profile WHERE Name='Standard User']; 
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);
+        insert con;
         
-        User u = new User(Alias = 'standt', Email='standarduser@testorg.com', 
-                          EmailEncodingKey='UTF-8', LastName='Testing', LanguageLocaleKey='en_US', 
-                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0007',
-                          TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9078@testorg.com');
-        System.runAs(u){
-            
-            Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-            insert cf;
-            
-            Branch__c br = new Branch__c();
-            br.Name = 'Ajmer-1';
-            br.Branch_ACM__c = u.Id;
-            br.Branch_City__c = 'Ajmer';
-            br.Branch_State__c = 'Rajasthan';
-            br.Branch_Code__c ='5000049';
-            br.Branch_PinCode__c='305001';
-            br.Branch_User__c = u.id;
-            br.Branch_Approver__c = userinfo.getUserId();
-            br.Branch_Location__Latitude__s = 28.5849485;
-            br.Branch_Location__Longitude__s = 77.3149885;
-            br.Finnone_Branch_Code__c='test6';
-            insert br; 
-            
-            Approval_Matrix__c apro = new Approval_Matrix__c();
-            apro.Name='sujeet';
-            apro.Amount__c=876;
-            apro.HL__c=87600;
-            apro.LAP__c=87600;
-            apro.Recommended_For__c=u.Id;
-            apro.Status__c='Approved';
-            apro.Branch__c=br.Id;
-            insert apro;
-            
-            String recTypeId = [select Id from RecordType where (SobjectType='Account') and IsPersonType=True limit 1].Id;
-            Account acc = new Account();
-            acc.FirstName='Test';
-            acc.LastName='Account';
-            acc.Mobile__pc = '1234567897';
-            acc.Is_this_WhatsApp_Number__pc=true;
-            acc.RecordTypeId = recTypeId;
-            
-            insert acc;
-            Contact cc = [Select id, AccountId,LastName From Contact where AccountId =: acc.Id Limit 1];
-            
-            List<CAM__c> CamList = new List<CAM__c>();
-            List<Customer__c> CustList = new List<Customer__c>();
-            
-            Customer__c customerObj= new Customer__c();
-            customerObj.Name = 'test';
-            customerObj.Property_Status__c = 'Owned';
-            customerObj.Father_Husband_Name__c = 'test1';
-            customerObj.Customer_Address__c = 'c-125';
-            customerObj.Customer_Status__c = 'Pending';
-            customerObj.Mobile__c = '1234567890';
-            customerObj.Customer_Type__c ='Normal' ;
-            customerObj.Loan_Amount_Applied__c = 1234.45;
-            customerObj.Alternate_Mobile_No__c = '0987654321';
-            customerObj.Address_Line_1__c = 'noida';
-            customerObj.Comfortable_EMI__c = 300.99;
-            customerObj.Is_Property_Identified__c ='Yes' ;
-            customerObj.Number_of_years_at_current_residence__c = 2;
-            customerObj.Is_the_above_address_Native_place_also__c = true;
-            customerObj.Total_number_of_family_members__c = 5;
-            customerObj.Total_number_of_family_members_met__c = 3;
-            customerObj.Pucca_House__c = 'Yes';
-            customerObj.Electricity__c = true;
-            customerObj.TV__c = true;
-            customerObj.Fridge__c = True;
-            customerObj.SmartPhone__c = true;
-            customerObj.Car__c ='yes';
-            customerObj.Toilet__c = true;
-            customerObj.Gas_Connection__c = true;
-            customerObj.Cooler__c =true;
-            customerObj.Two_Wheeler__c = true;
-            customerObj.Pucca_House__c = 'yes';
-            customerObj.Washing_Machine__c = 'yes';
-            customerObj.Name_of_the_Neighbour__c = 'test2';
-            customerObj.Contact_number_of_Neighbour__c = '123456765';
-            customerObj.Feedback__c = 'Positive';
-            customerObj.Neighbour_Comments__c ='good';
-            customerObj.Food__c = 234;
-            customerObj.Electricity_Expense__c = 123.90;
-            customerObj.Medicine__c = 123456;
-            customerObj.Children_Fees_Education__c =87465;
-            customerObj.Rent__c = 12345;
-            customerObj.Petrol_Conveyance__c =763;
-            customerObj.Approach_of_residence_with_Road__c =true;
-            customerObj.Front_portion_of_residence__c = true;
-            customerObj.One_inside_photograph__c = true;
-            customerObj.X1_inside_photograph_Kitchen__c =true;
-            customerObj.Photo_Toilet__c = true;
-            customerObj.Credit_PD_Comments__c = 'alkjhdlksac';
-            customerObj.LnApp__c =874387;
-            customerObj.Landmark__c = 'tmc';
-            customerObj.City__c = 'Agra';
-            customerObj.State__c = 'Uttar Pradesh';
-            customerObj.Location_Type__c ='Urban';
-            customerObj.Hindsight_Approval__c='Approved';
-            customerObj.Customer_Name__c = 'xadf';
-            customerObj.Mobile__c = '1234567898';
-            //customerObj.LoanAppID__c = oppObj.Id;
-            customerObj.Contact_number_of_Neighbour__c = '9876543212';
-            CustList.add(customerObj);
-            insert CustList;
-            
-            Loan_Product__c loan = new Loan_Product__c();
-            loan.Name='MIG01';
-            loan.Loan_Type__c  = 'LAP';
-            loan.Status__c = 'Active';
-            //loan.loan_type__c = 'Home Loan (HL)' ;
-            insert loan;        
-            
-            Opportunity oppObj = new Opportunity();
-            oppObj.Name = 'testT';
-            oppObj.Current_Mobile_Number__c = '9112323432';
-            //oppObj.Customer_Mobile__c = '12323432';
-            oppObj.Household__c = customerObj.Id;
-            oppObj.StageName = 'Active';
-            oppObj.CloseDate = date.valueOf('2021-10-10');
-            oppObj.Loan_Number__c = 'AP'+cf.Value__c;
-            oppObj.Religion__c = 'Hindu';
-            oppObj.Location_Type__c = 'Urban';
-            oppObj.Purpose_of_taking_the_loan__c ='LAP' ;
-            oppObj.Purpose_of_loan__c ='Loan Against Property enhancement' ;
-            oppObj.Caste__c= 'Genral';
-            oppObj.Owner_of_Property__c = 'Male';
-            oppObj.MFN__c = 'test2';
-            oppObj.Is_Owner_2__c = true;
-            oppObj.Add_L1__c = 'test3';
-            oppObj.Add_L2__c = 'test4';
-            oppObj.Add_L3__c = 'test5';
-            oppObj.A_District__c = 'Test6';
-            oppObj.Address_City__c = 'Ajmer';
-            oppObj.Address_State__c = 'Rajasthan';
-            oppObj.AddPin_Code__c = 123345;
-            oppObj.CollAdd1__c = 'Test7';
-            oppObj.CollAdd2__c = 'test8';
-            oppObj.CollAdd3__c = 'test9';
-            oppObj.ColPin__c = 654321;
-            oppObj.Units__c ='Sq. Feet' ;
-            oppObj.Is_Owner_1__c = true;
-            oppObj.CFN2__c = 'Test10';
-            oppObj.Area_of_property__c =9838 ;
-            oppObj.Present_Condition_of_the_Property__c ='Rented' ; 
-            oppObj.CO_Applicant_1_First_Name__c = 'test11';
-            oppObj.COApplicant_1_Last_Name__c = 'test12';
-            oppObj.NHB_Categories__c ='mortgage/property/home equity loans	' ;
-            oppObj.BM_PD_Status__c ='Positive' ;
-            oppObj.Welcome_Call__c =true ;
-            oppObj.isPhoneVerified__c= true ;
-            oppObj.isAltPhVerified__c = true;
-            oppObj.Loan_Product_Type__c ='LAP' ; 
-            oppObj.Whatsapp_Number1__c='565566877';
-            oppObj.Whatsapp_Number2__c='565566877';
-            oppObj.Whatsapp_Number3__c='565566877';
-            oppObj.Whatsapp_Number4__c='565566877';
-            oppObj.Whatsapp_Number5__c='565566877';
-            oppObj.Description = 'hyyyy';
-            oppObj.AccountId = acc.Id;
-            oppObj.LM_Loan_Status__c = 'Sanctioned';
-            insert oppObj;
-            
-            CAM__c camObj = new CAM__c();
-            //Loan_Application__r.Household__c
-            camObj.Total_Number_of_Family_Members__c=12;
-            camObj.RHExpenses__c =123;
-            camObj.Radial_Low_Count__c=234;
-            camObj.Radial_Low__c=235;
-            camObj.Radial_High_Count__c=234; 
-            camObj.Radial_High__c=234; 
-            camObj.Proposed_Construction_Value__c=234; 
-            camObj.Proposed_Construction_area__c=456; 
-            camObj.Property_Location__c='Gram Panchayat Area'; 
-            camObj.Property_is_self_occupied_residential_pr__c=true;
-            camObj.Property_is_not_in_Negative_area__c=true; 
-            camObj.property_is_not_identified__c=true; 
-            camObj.PropArea_Units__c='sq meters'; 
-            camObj.Product__c='Home Extension'; 
-            camObj.No_Applicant_in_Caution_profile_list__c=false; 
-            camObj.NHB_Categories__c='Construction/purchase of new units'; 
-            camObj.Loan_Type__c='LAP'; 
-            //camObj.Loan_Product__r.Name
-            camObj.LnApp__c =12324;
-            camObj.LAP_End_use_Comment__c='eee'; 
-            camObj.LAP_End_use__c='Marriage'; 
-            camObj.Land_Value__c=231; 
-            camObj.Land_Area_Units__c='Sq meters'; 
-            camObj.Land_area_is_more_than_minimum_norms__c=false; 
-            camObj.Land_Area__c=5645; 
-            camObj.Is_DedupePositive__c=true; 
-            camObj.Income_Type__c ='Undocumented'; 
-            camObj.Income__c=668;
-            camObj.Income_2__c =668;
-            camObj.Income_3__c=668;
-            camObj.Income_4__c=668;
-            camObj.Income_5__c=668;
-            camObj.Income_6__c=234234;
-            camObj.House_Type__c='Independent'; 
-            camObj.HL_Tenor__c=55; 
-            camObj.HLROI__c=12; 
-            camObj.Exposure_Type__c='Individual'; 
-            camObj.Education__c='Post Graduate'; 
-            camObj.Education_2__c ='Graduate';
-            camObj.Education_3__c='12th Pass';
-            camObj.Education_4__c='10th Pass';
-            camObj.Doc_Value_of_Prop__c=123; 
-            camObj.Credit_PD__c='Field Visit'; 
-            camObj.ComEMI__c=23423;
-            camObj.Citizenship__c = 'Resident Indian';
-            camObj.Build_Up_Construction_Value__c=34234; 
-            camObj.Build_Up_Area_Units__c = 'sq meters';
-            camObj.Build_Up_Area__c=1234;
-            camObj.Approval_Date__c = system.today();         
-            camObj.Name_of_Account_Holder_1__c  = 'xzc'; 
-            camObj.Bank_name__c  = 'xzc'; 
-            camObj.Bank_Cheque_Bounces__c = 23423;
-            camObj.Name_of_Account_Holder_2__c  = 'xzc'; 
-            camObj.Bank_Name_2__c = 'xxxvv'; 
-           camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
-            camObj.Bank_Cheque_Bounces_2__c=2342;  
-            camObj.Name_of_Account_Holder_3__c = 'xzc'; 
-            camObj.Bank_Name_3__c  ='xyz';
-            camObj.Bank_Cheque_Bounces_3__c =234;  
-            camObj.Name_of_Account_Holder_4__c = 'test';
-            camObj.Bank_Name_4__c = 'werwer';  
-            camObj.Bank_Cheque_Bounces_4__c = 7553; 
-            camObj.Saving_Method_1__c ='rerw';
-            camObj.Saving_Method_1_Amount__c = 2334;
-            camObj.Saving_Method_2__c = 'rtry'; 
-            camObj.Saving_Method_2_Amount__c = 234;
-            camObj.Saving_Method_3__c  = 'new';
-            camObj.Saving_Method_3_Amount__c = 12321;
-           
-            camObj.Highmark_Score_of_Main_applicant__c = '1234'; 
-            camObj.Branch_Name__c = 'Ajmer-1';
-            camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
-            camObj.Loan_Application__c = oppObj.Id;
-            camObj.Branch_Manager_Name__c = 'Gaurav';
-              camObj.Purpose_of_Loan__c = 'Construction Loan';
-            camObj.Land_Area__c = 22;
-            camObj.Build_Up_Area__c = 44;
-            camObj.Final_Decision__c = 'Pending';
-            camObj.Loan_Application__c = oppObj.Id;
-            camObj.Branch__c = br.id;
-            camObj.Loan_Product__c = loan.Id;
-            camObj.UnderWriter__c = u.Id;
-           
-            insert camObj;
-            camObj.Final_Decision__c='Approved';
-            try{
-            update camObj;
-            }
-            catch(Exception e){
-                
-            }
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Jaipur-1';
+        branch.Branch_Category__c = 'B';
+        insert branch;
+        
+        Opportunity op = new Opportunity(CloseDate=System.today(), Name='Rahul',
+                                         PennyDrop_Status__c='Success', AccountId=ac.Id,
+                                         HLA_Sign_Date__c=Date.newInstance(2024,11,01),
+                                         Collateral_Pin_Code_New__c=nsc.Id,
+                                         Address_Pin_Code_New__c=nsc.Id,
+                                         Household__c=cus.Id, Sanctioned_Amont__c=300000, 
+                                         Loan_Product__c=lp.Id, ACH_Registration_Status__c='Registered',
+                                         LM_Loan_Status__c='Sanctioned');
+        op.Loan_Number__c='6983162387';
+        op.Branch__c=branch.Id;
+        op.First_Sanction_Date__c=system.today();
+        op.Loan_Product_Type__c='HL';
+        op.Purpose_of_taking_the_loan__c='HOME EXTENSION';
+        op.Loan_Amount_Required__c=1500001;
+        op.DE_Done_By__c='By-Pass Ten Thousand Validation';
+        insert op;
+        
+        NEILON__File__c nc = new NEILON__File__c();
+        nc.Subcategory__c='Signed Home Loan Agreement';
+        nc.Name='zaxdjfh';
+        nc.NEILON__Opportunity__c=op.Id;
+        insert nc;  
+
+        /*Collection__c collec = new Collection__c(Amount__c=6000, Collector__c=con.Id,
+                                                 Date_of_Deposit__c=System.today(),
+                                                 SFDC_Customer__c=op.Id, Deposited_In_bank__c=true,
+                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
+                                                 Status__c='Active', RMobile_No__c='1234567891',
+                                                 Branch_Name__c='testBranch',
+                                                 Nature_of_Collection__c='Other Administrative Charges');
+        insert collec;*/
+        CAM__c camObj = new CAM__c();
+        camObj.Branch_Name__c = 'Jaipur';
+        camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+        camObj.Loan_Application__c = op.Id;
+        camObj.Branch_Manager_Name__c = 'Gaurav';
+        camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+        camObj.Land_Area__c = 22;
+        camObj.Build_Up_Area__c = 44;
+        camObj.Final_Decision__c = 'Pending';
+        camObj.Property_Type__c='Commercial Building';
+        camObj.NHB_Categories__c='Construction/purchase of new units';
+        insert camObj;
+            Deviation__c dev = new Deviation__c(Opportunity__c=op.Id,
+                                            Waiver__c='Search Fee Waiver',
+                                            Approval_Status__c='OTC Approved',
+                                           	Person_who_can_Approve__c='Nitin Singh',
+            								Type_of_Waiver__c='OTC',
+            								OTC_Submission_Date__c = Date.today().addDays(10));
+            insert dev;
+        cus.LoanAppID__c=op.Id;
+        update cus;
+        
+        Document_Checklist__c docChecklist = new Document_Checklist__c(Date_of_Disbursement__c=System.now(),
+                                                                       Application__c=op.Id,
+                                                                       Physical_file_status__c='Approved',
+                                                                       Scan_image_status__c='Rejected');
+        insert docChecklist;
+        
+        Document_Checklist_History__c docHistoryPurchase = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Purchase');
+        insert docHistoryPurchase;
+        Check_List_History_Line_Item__c lineItemPurchase = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistoryPurchase.Id,
+                                                                                               CPU_RPU_Comments__c='Not Applicable',
+                                                                                               Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
+        insert lineItemPurchase;
+
+        Document_Checklist_History__c docHistory = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Top-UP');
+        insert docHistory;
+
+        Check_List_History_Line_Item__c lineItem = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistory.Id,
+                                                                                        CPU_RPU_Comments__c='2nd Tranche',
+                                                                                        Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
+        insert lineItem;
+        
+        
+        return op;
+    }
+
+    private static Disbursement__c createDisbursement(Id oppId, String tranche, Decimal amount) {
+        
+        Bank_Detail__c bank=new Bank_Detail__c();
+        bank.Name='abcd';
+        bank.IFSC__c='BARBOMUZRAM';
+        bank.Status__c='Active';
+        insert bank;
+        
+        return new Disbursement__c(
+            Application__c=oppId,
+            Disbursement_Amount__c=amount,
+            Maker_CRD_Sign_Date__c=System.today(),
+            CRD_Sign_Date__c=System.today(),
+            Disbursement_LTV__c=8138,
+            Cheque_Handover_Date__c=System.today(),
+            Tranch_Details__c='First',
+            Disbursement_Mode__c='Direct Transfer',
+            Disb_Status__c='Send to PRE-CPU',
+            Insurance_Premium__c=0,
+            Insurance_Company__c='Max life insurance',
+            Accidental_Life_Insurance__c=987,
+            Effective_PF__c=3,
+            Beneficiary_Name__c='test',
+            CPU_Bank_Account_No__c='12345678',
+            Bank_Account_No__c='12345678',
+            BrokenPeriod__c=123,
+            IFSC_Code__c='BARBOMUZRAM',
+            Date_of_Disbursement__c=System.today(),
+            Checker_CRD_Sign_Date__c=System.today(),
+            Levels_Of_Tranch__c=tranche,
+            caseTyp__c='Topup',
+            PF_Waiver_Amount__c=100,
+            Bank_Branch_Name__c='HDFC',
+            MICR_Code__c='hu82u893',
+            Bank_Detail__c=bank.Id
+        );
+    }
+
+    @IsTest
+    static void testInsertValidDisbursement() {
+        Opportunity opp = createApplication();        
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+
+        Test.startTest();
+        insert disbRec;
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testInsertExceedSanctionedAmount() {
+        Opportunity opp = createApplication();
+        opp.ACH_Registration_Status__c = 'Registered';
+        update opp;
+        
+        Disbursement__c disbRec = createDisbursement(opp.Id, '2nd Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testNachNotRegisteredSecondTranche() {
+        Opportunity opp = createApplication(); 
+        opp.ACH_Registration_Status__c = 'Pending';
+        List<Disbursement__c> disbRecList = new List<Disbursement__c>();
+        for(Integer i = 4; i <= 12; i++){
+            Disbursement__c disbRec = createDisbursement(opp.Id, i+'th Tranche', 16000);
+            disbRecList.add(disbRec);
+        }
+       
+        Test.startTest();
+        try {
+            insert disbRecList;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testFullyDisbursedCase() {
+        Opportunity opp = createApplication();        
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+        
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+            System.debug('Error: ' + e.getMessage());
+        }
+        Test.stopTest();
+    }
+    
+    @IsTest
+    static void testUpdateDisbursementAmount() {
+        Opportunity opp = createApplication();
+        Disbursement__c disb = createDisbursement(opp.Id, 'First Tranche', 16000);
+        Test.startTest();
+        insert disb;
+
+        disb.Disbursement_Amount__c = 20000;
+        update disb;
+        Test.stopTest();
+    }
+
+    // NEW TEST METHODS FOR INCREASED COVERAGE
+
+    @IsTest
+    static void testUpdateExceedingSanctionedAmount() {
+        Opportunity opp = createApplication();
+        Disbursement__c disb = createDisbursement(opp.Id, 'First Tranche', 100000);
+        Test.startTest();
+        insert disb;
+
+        disb.Disbursement_Amount__c = 350000;
+        try {
+            update disb;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testUpdateCommitmentChargeBypass() {
+        Opportunity opp = createApplication();
+        Disbursement__c disb = createDisbursement(opp.Id, 'First Tranche', 100000);
+        Test.startTest();
+        insert disb;
+
+        
+        disb.Commitment_Charge__c = 500;
+        update disb;
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testBouncedNACHCollection() {
+        Opportunity opp = createApplication();
+        opp.ACH_Registration_Status__c = 'Registered';
+        update opp;
+
+        /*Collection__c coll = new Collection__c(
+            SFDC_Customer__c = opp.Id,
+            Status__c = 'Bounced',
+            Instrument__c = 'ACH'
+        );*/
+       // insert coll;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, '2nd Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testBouncedDDMCollection() {
+        Opportunity opp = createApplication();
+        opp.ACH_Registration_Status__c = 'Registered';
+        update opp;
+
+        /*Collection__c coll = new Collection__c(
+            SFDC_Customer__c = opp.Id,
+            Status__c = 'Bounced',
+            Instrument__c = 'DDM'
+        );
+        insert coll;
+*/
+        Disbursement__c disbRec = createDisbursement(opp.Id, '2nd Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testBouncedECSCollection() {
+        Opportunity opp = createApplication();
+        opp.ACH_Registration_Status__c = 'Registered';
+        update opp;
+
+        //Collection__c coll = new Collection__c(
+          //  SFDC_Customer__c = opp.Id,
+            //Status__c = 'Bounced',
+            //Instrument__c = 'ECS'
+      //  );
+        //insert coll;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, '2nd Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testBouncedENACHCollection() {
+        Opportunity opp = createApplication();
+        opp.ACH_Registration_Status__c = 'Registered';
+        update opp;
+
+       /* Collection__c coll = new Collection__c(
+            SFDC_Customer__c = opp.Id,
+            Status__c = 'Bounced',
+            Instrument__c = 'eNACH'
+        );
+        insert coll;*/
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, '2nd Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testRejectedByCallCenter() {
+        Opportunity opp = createApplication();
+        opp.LM_Loan_Status__c = 'Rejected by Call Center';
+        update opp;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testRejectedByOperation() {
+        Opportunity opp = createApplication();
+        opp.LM_Loan_Status__c = 'Rejected By Operation';
+        update opp;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testRejectedPostDisbursement() {
+        Opportunity opp = createApplication();
+        opp.LM_Loan_Status__c = 'Rejected Post Disbursement';
+        update opp;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testSanctionedExpired() {
+        Opportunity opp = createApplication();
+        opp.LM_Loan_Status__c = 'Sanctioned Expired';
+        update opp;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testFullyDisbursedActive() {
+        Opportunity opp = createApplication();
+        opp.LM_Loan_Status__c = 'Fully Disbursed (Active)';
+        update opp;
+
+        Disbursement__c disbRec = createDisbursement(opp.Id, 'First Tranche', 16000);
+
+        Test.startTest();
+        try {
+            insert disbRec;
+        } catch (DmlException e) {
+            System.debug(e.getMessage());
+            System.assert(e.getMessage().contains('Fully Disbursed'));
+        }
+        Test.stopTest();
+    }
+
+   
+    @IsTest
+    static void testUpdateCancelledStatusBypass() {
+        Opportunity opp = createApplication();
+        Test.startTest();
+        Disbursement__c disb = createDisbursement(opp.Id, 'First Tranche', 100000);
+        insert disb;
+
+        
+        disb.Disb_Status__c = 'Cancelled by branch';
+        disb.Disbursement_Amount__c = 350000;
+        update disb;
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testUpdateCancelledDEStatusBypass() {
+        Opportunity opp = createApplication();
+        Disbursement__c disb = createDisbursement(opp.Id, 'First Tranche', 100000);
+        Test.startTest();
+        insert disb;
+
+        
+        disb.Disb_Status__c = 'Pending';
+        disb.Disbursement_Amount__c = 350000;
+        update disb;
+        Test.stopTest();
+    }
+
+
+    @IsTest
+    static void testNACHNotRegisteredAllTranches() {
+        Opportunity opp = createApplication();
+        
+        List<Disbursement__c> disbList = new List<Disbursement__c>();
+        String[] tranches = new String[]{'2nd Tranche', '3rd Tranche', '6th Tranche', 
+                                         '7th Tranche', '8th Tranche', '9th Tranche', 
+                                         '10th Tranche', '11th Tranche', '12th Tranche'};
+        
+        for(String tranche : tranches) {
+            disbList.add(createDisbursement(opp.Id, tranche, 10000));
+        }
+
+        Test.startTest();
+        Database.SaveResult[] results = Database.insert(disbList, false);
+        Test.stopTest();
+        
+        for(Database.SaveResult sr : results) {
         }
     }
- 
 }
