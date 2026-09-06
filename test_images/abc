@@ -1,87 +1,301 @@
-@isTest
-static void testExecuteCreationSuccess() {
-    Opportunity opp = new Opportunity(Id = getFakeId(Opportunity.SObjectType), Finnone_Loan_Id__c = 'LN1234567890');
-    Collection__c col = new Collection__c(
-        Id = getFakeId(Collection__c.SObjectType),
-        Opportunity__c = opp.Id,
-        Nature_of_Collection__c = 'Emi/Advances/Part Payment',
-        Status__c = 'Receipted', 
-        Instrument__c = 'Cash',
-        Date_of_Collection__c = Date.newInstance(2024, 5, 5) 
-    );
-    
-    String jsonResponse = '{"success": {"transactionReferenceNumber": 12345678}}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponse(jsonResponse, 200));
+here is an apex class
 
-    Test.startTest();
-    ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'success');
-    System.enqueueJob(queueableJob);
-    Test.stopTest();
-
-    System.assertEquals(1, Limits.getQueueableJobs(), 'Queueable job should execute bypassing DB triggers.');
+/* 
+Author : Shivam Agarwal
+Description :  This trigger is invoked by approval process when DM Amount is less than the Actual Approver limits based on Load Type then throw validation error. 
+ModifiedDate : 11/08/2023
+*/
+public class DMAmountLimit {
+    public static void doValidate(List<Disbursement__c> dmList){
+        try{
+            Set<String> dmIdSet = new Set<String>();
+            for(Disbursement__c dmObj : dmList) {
+                dmIdSet.add(dmObj.Id);
+            }
+            
+            Map<String, DM_Approval_Matrix__c> dmApprovalMatrixMap = new Map<String, DM_Approval_Matrix__c>();
+            for(DM_Approval_Matrix__c dmAppMat : [SELECT Id, HL__c, LAP__c, Recommended_For__c, Recommended_For__r.UserName FROM DM_Approval_Matrix__c where Status__c = 'Approved' AND Recommended_For__r.UserName =: UserInfo.getUserName()]){
+                dmApprovalMatrixMap.put(dmAppMat.Recommended_For__r.UserName, dmAppMat);
+            }
+            
+            Map<String, Disbursement__c> dmToApplicationLoanTypeMap = new Map<String, Disbursement__c>();
+            for(Disbursement__c dm : [SELECT Id, Application__c, Application__r.Loan_Type__c, Application__r.Sanctioned_Amont__c FROM Disbursement__c where Id IN: dmIdSet]){
+                dmToApplicationLoanTypeMap.put(dm.Id, dm);
+            }
+            if(dmIdSet.size() > 0){
+                List<ProcessInstance> pi = [SELECT Id, LastActor.Name, (SELECT Id, ActorId, ProcessInstanceId FROM Workitems LIMIT 1) FROM ProcessInstance where TargetObjectId IN: dmIdSet order by CompletedDate DESC LIMIT 1];
+                for(Disbursement__c dmObj : dmList) {
+                    if(dmApprovalMatrixMap.containskey(UserInfo.getUserName())){
+                        if((dmObj.Disb_Status__c == 'Send to CPU' || dmObj.Disb_Status__c == 'Payment Under Process' || dmObj.Disb_Status__c == 'Cancelled by PRE-CPU' || dmObj.Disb_Status__c == 'Cancelled by CPU') && dmToApplicationLoanTypeMap.containskey(dmObj.Id) && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Loan_Type__c.contains('LAP') && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Sanctioned_Amont__c > dmApprovalMatrixMap.get(UserInfo.getUserName()).LAP__c) {
+                            dmObj.addError(Label.DMAmountLimitValidation);
+                        } 
+                        if((dmObj.Disb_Status__c == 'Send to CPU' || dmObj.Disb_Status__c == 'Payment Under Process' || dmObj.Disb_Status__c == 'Cancelled by PRE-CPU' || dmObj.Disb_Status__c == 'Cancelled by CPU') && dmToApplicationLoanTypeMap.containskey(dmObj.Id) && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Loan_Type__c.contains('Housing Loan') && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Sanctioned_Amont__c > dmApprovalMatrixMap.get(UserInfo.getUserName()).HL__c) {
+                            dmObj.addError(Label.DMAmountLimitValidation); 
+                        }
+                    }
+                    else{
+                        dmObj.addError('Sorry!! You don\'t have rights on the DM Approval Matrix'); 
+                    }
+                }
+            }
+        }
+        catch(Exception ex){
+            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. of = ' + ex.getLineNumber());        
+        }
+    }
 }
 
-@isTest
-static void testExecuteCancellationSuccess() {
-    Opportunity opp = new Opportunity(Id = getFakeId(Opportunity.SObjectType), Finnone_Loan_Id__c = 'LN1234567890');
-    Collection__c col = new Collection__c(
-        Id = getFakeId(Collection__c.SObjectType),
-        Opportunity__c = opp.Id,
-        Nature_of_Collection__c = 'Pre-EMI',
-        Status__c = 'Cancelled', 
-        Instrument__c = 'Cash',
-        Date_of_Collection__c = Date.newInstance(2024, 11, 15),
-        transactionReferenceNumber__c = '987654321'
-    );
-    
-    String jsonResponse = '{"status": "Success", "message": "Cancelled Successfully"}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponse(jsonResponse, 200));
-
-    Test.startTest();
-    ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'success');
-    System.enqueueJob(queueableJob);
-    Test.stopTest();
-
-    System.assertEquals(1, Limits.getQueueableJobs(), 'Queueable job should execute bypassing DB triggers.');
-}
+and here is the test class im working on
 
 @isTest
-static void testExecuteCreationException() {
-    Collection__c col = new Collection__c(
-        Id = getFakeId(Collection__c.SObjectType),
-        Nature_of_Collection__c = 'Emi/Advances/Part Payment',
-        Status__c = 'Receipted', 
-        Instrument__c = 'Cash',
-        Date_of_Collection__c = Date.newInstance(2024, 5, 5) 
-    );
+public class DMAmountLimitTest {
     
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponse('{}', 200));
+    public static Id getFakeId(Schema.SObjectType sObjectType) {
+        String prefix = sObjectType.getDescribe().getKeyPrefix();
+        return (Id)(prefix + '000000000001AAA');
+    }
 
-    Test.startTest();
-    // Passing a Null Opportunity triggers the required exception coverage
-    ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, null, 'mock-access-token', 'success');
-    System.enqueueJob(queueableJob);
-    Test.stopTest();
+    @TestSetup
+    public static void setupTestData(){
+        
+        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
+        tbypass.isActive__c=false;
+        tbypass.Name='Deactivate';
+        insert tbypass;
+        
+        Trigger_BYPass__c triggerWhatsappApplication = new Trigger_BYPass__c();
+        triggerWhatsappApplication.isActive__c=true;
+        triggerWhatsappApplication.Name='WhatsappApplication';
+        insert triggerWhatsappApplication;
+        
+        // Code to insert User Record
+        
+        Profile p = [SELECT Id FROM Profile WHERE Name='Standard User']; 
+        
+        User u = new User(Alias = 'standt', Email='standarduser@testorg.com', 
+                          EmailEncodingKey='UTF-8', LastName='Testing', LanguageLocaleKey='en_US', 
+                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0001',
+                          TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9078@testorg.com');
+        insert u;
+        System.runAs(u){
+            
+            Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+            insert cf;
+            
+            Branch__c br = new Branch__c();
+            br.Name = 'Ajmer-1';
+            br.Branch_ACM__c = u.Id;
+            br.Branch_City__c = 'Ajmer';
+            br.Branch_State__c = 'Rajasthan';
+            br.Branch_Code__c ='5000049';
+            br.Branch_PinCode__c='305001';
+            br.Branch_User__c = u.id;
+            br.Branch_Approver__c = userinfo.getUserId();
+            br.Branch_Location__Latitude__s = 28.5849485;
+            br.Branch_Location__Longitude__s = 77.3149885;
+            br.Finnone_Branch_Code__c='test6';
+            insert br; 
+            
+            DM_Approval_Matrix__c dmAprMat = new DM_Approval_Matrix__c();
+            dmAprMat.Name = 'sujeet';
+            dmAprMat.Amount__c = 876;
+            dmAprMat.HL__c = 87600;
+            dmAprMat.LAP__c = 97600;
+            dmAprMat.Recommended_For__c = u.Id;
+            dmAprMat.Status__c = 'Approved';
+            insert dmAprMat;
+            
+            String recTypeId = [select Id from RecordType where (SobjectType='Account') and IsPersonType=True limit 1].Id;
+            Account acc = new Account();
+            acc.FirstName='Test';
+            acc.LastName='Account';
+            acc.Mobile__pc = '1234567897';
+            acc.Is_this_WhatsApp_Number__pc=true;
+            acc.RecordTypeId = recTypeId;
+            
+            insert acc;
+            Contact cc = [Select id, AccountId,LastName From Contact where AccountId =: acc.Id Limit 1];
+            
+            List<CAM__c> CamList = new List<CAM__c>();
+            List<Customer__c> CustList = new List<Customer__c>();
+            
+            Customer__c customerObj= new Customer__c();
+            customerObj.Name = 'test';
+            customerObj.Property_Status__c = 'Owned';
+            customerObj.Father_Husband_Name__c = 'test1';
+            customerObj.Customer_Address__c = 'c-125';
+            customerObj.Customer_Status__c = 'Pending';
+            customerObj.Mobile__c = '1234567890';
+            customerObj.Customer_Type__c ='Normal' ;
+            customerObj.Loan_Amount_Applied__c = 1234.45;
+            customerObj.Alternate_Mobile_No__c = '9987654321';
+            customerObj.Address_Line_1__c = 'noida';
+            customerObj.Comfortable_EMI__c = 300.99;
+            customerObj.Is_Property_Identified__c ='Yes' ;
+            customerObj.Number_of_years_at_current_residence__c = 2;
+            customerObj.Is_the_above_address_Native_place_also__c = true;
+            customerObj.Total_number_of_family_members__c = 5;
+            customerObj.Total_number_of_family_members_met__c = 3;
+            customerObj.Pucca_House__c = 'Yes';
+            customerObj.Electricity__c = true;
+            customerObj.TV__c = true;
+            customerObj.Fridge__c = True;
+            customerObj.SmartPhone__c = true;
+            customerObj.Car__c ='yes';
+            customerObj.Toilet__c = true;
+            customerObj.Gas_Connection__c = true;
+            customerObj.Cooler__c =true;
+            customerObj.Two_Wheeler__c = true;
+            customerObj.Pucca_House__c = 'yes';
+            customerObj.Washing_Machine__c = 'yes';
+            customerObj.Name_of_the_Neighbour__c = 'test2';
+            customerObj.Contact_number_of_Neighbour__c = '8888889999';
+            customerObj.Feedback__c = 'Positive';
+            customerObj.Neighbour_Comments__c ='good';
+            customerObj.Food__c = 234;
+            customerObj.Electricity_Expense__c = 123.90;
+            customerObj.Medicine__c = 123456;
+            customerObj.Children_Fees_Education__c =87465;
+            customerObj.Rent__c = 12345;
+            customerObj.Petrol_Conveyance__c =763;
+            customerObj.Approach_of_residence_with_Road__c =true;
+            customerObj.Front_portion_of_residence__c = true;
+            customerObj.One_inside_photograph__c = true;
+            customerObj.X1_inside_photograph_Kitchen__c =true;
+            customerObj.Photo_Toilet__c = true;
+            customerObj.Credit_PD_Comments__c = 'alkjhdlksac';
+            customerObj.LnApp__c =874387;
+            customerObj.Landmark__c = 'tmc';
+            customerObj.City__c = 'Agra';
+            customerObj.State__c = 'Uttar Pradesh';
+            customerObj.Location_Type__c ='Urban';
+            customerObj.Hindsight_Approval__c='Approved';
+            customerObj.Customer_Name__c = 'xadf';
+            customerObj.Mobile__c = '1234567898';
+            //customerObj.LoanAppID__c = oppObj.Id;
+            CustList.add(customerObj);
+            insert CustList;
+            
+            Loan_Product__c loan = new Loan_Product__c();
+            loan.Name='MIG01';
+            loan.Loan_Type__c  = 'LAP';
+            loan.Status__c = 'Active';
+            //loan.loan_type__c = 'Home Loan (HL)' ;
+            insert loan;        
+            
+            Opportunity oppObj = new Opportunity();
+            oppObj.Name = 'testT';
+            oppObj.Current_Mobile_Number__c = '9987654321';
+            //oppObj.Customer_Mobile__c = '12323432';
+            oppObj.Household__c = customerObj.Id;
+            oppObj.StageName = 'Active';
+            oppObj.CloseDate = date.valueOf('2021-10-10');
+            oppObj.Loan_Number__c = 'AP'+cf.Value__c;
+            oppObj.Religion__c = 'Hindu';
+            oppObj.Location_Type__c = 'Urban';
+            oppObj.Purpose_of_taking_the_loan__c ='LAP' ;
+            oppObj.Purpose_of_loan__c ='Loan Against Property enhancement' ;
+            oppObj.Caste__c= 'Genral';
+            oppObj.Owner_of_Property__c = 'Male';
+            oppObj.MFN__c = 'test2';
+            oppObj.Is_Owner_2__c = true;
+            oppObj.Add_L1__c = 'test3';
+            oppObj.Add_L2__c = 'test4';
+            oppObj.Add_L3__c = 'test5';
+            oppObj.A_District__c = 'Test6';
+            oppObj.Address_City__c = 'Ajmer';
+            oppObj.Address_State__c = 'Rajasthan';
+            oppObj.AddPin_Code__c = 123345;
+            oppObj.CollAdd1__c = 'Test7';
+            oppObj.CollAdd2__c = 'test8';
+            oppObj.CollAdd3__c = 'test9';
+            oppObj.ColPin__c = 654321;
+            oppObj.Units__c ='Sq. Feet' ;
+            oppObj.Is_Owner_1__c = true;
+            oppObj.CFN2__c = 'Test10';
+            oppObj.Area_of_property__c =9838 ;
+            oppObj.Present_Condition_of_the_Property__c ='Rented' ; 
+            oppObj.CO_Applicant_1_First_Name__c = 'test11';
+            oppObj.COApplicant_1_Last_Name__c = 'test12';
+            oppObj.NHB_Categories__c ='mortgage/property/home equity loans	' ;
+            oppObj.BM_PD_Status__c ='Positive' ;
+            oppObj.Welcome_Call__c =true ;
+            oppObj.isPhoneVerified__c= true ;
+            oppObj.isAltPhVerified__c = true;
+            oppObj.Loan_Product_Type__c ='LAP' ; 
+            oppObj.Whatsapp_Number1__c='565566877';
+            oppObj.Whatsapp_Number2__c='565566877';
+            oppObj.Whatsapp_Number3__c='565566877';
+            oppObj.Whatsapp_Number4__c='565566877';
+            oppObj.Whatsapp_Number5__c='565566877';
+            oppObj.Description = 'hyyyy';
+            oppObj.AccountId = acc.Id;
+            oppObj.LM_Loan_Status__c = 'Sanctioned';
+            oppObj.DE_Done_By__c = 'By-Pass Penny Drop';
+            oppObj.ACH_Registration_Status__c = 'Pending';
+            oppObj.PennyDrop_Status__c = 'Failure';
+            oppObj.Sanctioned_Amont__c = 1000000;
+            oppObj.HLA_Sign_Date__c = Date.today();
+            insert oppObj;
+            
+        	Deviation__c dev = new Deviation__c(Opportunity__c=oppObj.Id,
+                                            Waiver__c='Search Fee Waiver',
+                                            Approval_Status__c='OTC Approved',
+                                           	Person_who_can_Approve__c='Nitin Singh',
+            								Type_of_Waiver__c='OTC',
+            								OTC_Submission_Date__c = Date.today().addDays(10));
+            
+    /*    	NEILON__File__c nc=new NEILON__File__c();
+			nc.Subcategory__c='Signed Home Loan Agreement';
+ 	        nc.Name='zaxdjfh';
+    	    nc.NEILON__Opportunity__c=oppObj.Id;
+			insert nc;  
+      */      
+        }
+    }
+    public static testMethod void Util_1(){
+        User usr = [Select Id, username from User where Alias='standt' limit 1];
+        Contact cc = [Select Id from Contact limit 1];
+        Opportunity oppObj = [Select Id from Opportunity limit 1];
+        Profile p = [SELECT Id FROM Profile WHERE Name='Standard User']; 
 
-    System.assertEquals(1, Limits.getQueueableJobs(), 'Queueable job should execute bypassing DB triggers.');
-}
+        User u1 = new User(Alias = 'standt1', Email='standarduser1@testorg.com', 
+                          EmailEncodingKey='UTF-8', LastName='Testing1', LanguageLocaleKey='en_US', 
+                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0002',
+                          TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9079@testorg.com');
+        System.runAs(u1){
+            
+        	Collection__c collec = new Collection__c(Id = getFakeId(Collection__c.SObjectType),
+                                                     Amount__c=6000, Collector__c=cc.Id,
+            	                                     Date_of_Deposit__c=System.today(),
+                	                                 SFDC_Customer__c=oppObj.Id, Deposited_In_bank__c=true,
+                    	                             Instrument__c='Cash', ClearenceStatus__c='Handover pending',
+                        	                         Status__c='Active', RMobile_No__c='1234567891',
+                            	                     Branch_Name__c='testBranch',
+                                	                 Nature_of_Collection__c='Other Administrative Charges');
+     	   //insert collec;
+            
+            Disbursement__c dis = new Disbursement__c();
+            dis.Date_of_Disbursement__c = System.today();
+            dis.Disbursement_Amount__c = 10065;
+            dis.Disb_Status__c = 'Send to PRE-CPU';
+            dis.Tranch_Details__c = 'First';
+            dis.Application__c = oppObj.Id;
+            dis.Disbursement_Mode__c = 'Cheque';
+            dis.Levels_Of_Tranch__c = 'First Tranche';
+            dis.Maker_CRD_Sign_Date__c=System.today();
+            dis.Checker_CRD_Sign_Date__c=System.today();
+            dis.CRD_Sign_Date__c=System.today();
+            insert dis;
 
-@isTest
-static void testExecuteFailedStrCheck() {
-    Opportunity opp = new Opportunity(Id = getFakeId(Opportunity.SObjectType), Finnone_Loan_Id__c = 'LN1234567890');
-    Collection__c col = new Collection__c(
-        Id = getFakeId(Collection__c.SObjectType),
-        Nature_of_Collection__c = 'Emi/Advances/Part Payment',
-        Status__c = 'Receipted', 
-        Instrument__c = 'Cash',
-        Date_of_Collection__c = Date.newInstance(2024, 5, 5) 
-    );
-    
-    Test.startTest();
-    // Pass string failing the success check
-    ProcessReceiptStep2 queueableJob = new ProcessReceiptStep2(col.Id, col, opp, 'mock-access-token', 'RandomFailureString');
-    System.enqueueJob(queueableJob);
-    Test.stopTest();
-
-    System.assertEquals(1, Limits.getQueueableJobs(), 'Queueable job should execute bypassing DB triggers.');
+            Test.startTest();
+            //dis.Disb_Status__c = 'Send to CPU';
+            dis.Disbursement_Amount__c = 10085;
+            dis.UAlldocs__c = true;
+            update dis;
+            DMAmountLimit.doValidate(new List<Disbursement__c>{dis});
+            Test.stopTest();
+        	
+        }
+    }
 }
