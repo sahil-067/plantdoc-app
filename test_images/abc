@@ -1,61 +1,65 @@
-here is an apex class
+here  is an apex class
 
 /* 
 Author : Shivam Agarwal
-Description :  This trigger is invoked by approval process when DM Amount is less than the Actual Approver limits based on Load Type then throw validation error. 
-ModifiedDate : 11/08/2023
+
+
+Description :  This trigger is invoked by approval process when CAM Sanctioned Loan Amount is less than the Actual Approver limits based on Load Type then throw validation error.	
+ModifiedDate : 16/12/2022
 */
-public class DMAmountLimit {
-    public static void doValidate(List<Disbursement__c> dmList){
-        try{
-            Set<String> dmIdSet = new Set<String>();
-            for(Disbursement__c dmObj : dmList) {
-                dmIdSet.add(dmObj.Id);
-            }
-            
-            Map<String, DM_Approval_Matrix__c> dmApprovalMatrixMap = new Map<String, DM_Approval_Matrix__c>();
-            for(DM_Approval_Matrix__c dmAppMat : [SELECT Id, HL__c, LAP__c, Recommended_For__c, Recommended_For__r.UserName FROM DM_Approval_Matrix__c where Status__c = 'Approved' AND Recommended_For__r.UserName =: UserInfo.getUserName()]){
-                dmApprovalMatrixMap.put(dmAppMat.Recommended_For__r.UserName, dmAppMat);
-            }
-            
-            Map<String, Disbursement__c> dmToApplicationLoanTypeMap = new Map<String, Disbursement__c>();
-            for(Disbursement__c dm : [SELECT Id, Application__c, Application__r.Loan_Type__c, Application__r.Sanctioned_Amont__c FROM Disbursement__c where Id IN: dmIdSet]){
-                dmToApplicationLoanTypeMap.put(dm.Id, dm);
-            }
-            if(dmIdSet.size() > 0){
-                List<ProcessInstance> pi = [SELECT Id, LastActor.Name, (SELECT Id, ActorId, ProcessInstanceId FROM Workitems LIMIT 1) FROM ProcessInstance where TargetObjectId IN: dmIdSet order by CompletedDate DESC LIMIT 1];
-                for(Disbursement__c dmObj : dmList) {
-                    if(dmApprovalMatrixMap.containskey(UserInfo.getUserName())){
-                        if((dmObj.Disb_Status__c == 'Send to CPU' || dmObj.Disb_Status__c == 'Payment Under Process' || dmObj.Disb_Status__c == 'Cancelled by PRE-CPU' || dmObj.Disb_Status__c == 'Cancelled by CPU') && dmToApplicationLoanTypeMap.containskey(dmObj.Id) && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Loan_Type__c.contains('LAP') && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Sanctioned_Amont__c > dmApprovalMatrixMap.get(UserInfo.getUserName()).LAP__c) {
-                            dmObj.addError(Label.DMAmountLimitValidation);
+public with sharing class CAMSanctionAmountLimit {
+    public static void doValidate(List<CAM__c> camList){
+       
+        Set<String> camIdSet = new Set<String>();
+        for(CAM__c camObj : camList) {
+            camIdSet.add(camObj.Id);
+        }
+        
+        Map<String, Approval_Matrix__c> approvalMatrixMap = new Map<String, Approval_Matrix__c>();
+        for(Approval_Matrix__c appMat : [SELECT Id, HL__c, LAP__c, Recommended_For__c, Recommended_For__r.UserName FROM Approval_Matrix__c where Status__c = 'Approved'
+                                         AND Recommended_For__r.UserName =: UserInfo.getUserName()]){
+                                             approvalMatrixMap.put(appMat.Recommended_For__c, appMat);
+                                         }
+        System.debug('UserInfo.getUserName()==>'+UserInfo.getUserName());
+        System.debug('approvalMatrixMap==>'+approvalMatrixMap.containskey(UserInfo.getUserId()));
+        
+        if(camIdSet.size() > 0){
+            List<ProcessInstance> pi = [SELECT Id, LastActor.Name, (SELECT Id, ActorId, ProcessInstanceId FROM Workitems LIMIT 1) FROM ProcessInstance where TargetObjectId IN: camIdSet order by CompletedDate DESC LIMIT 1];
+            //System.debug('pi[0].Workitems==>'+pi[0].Workitems.size());
+            for(CAM__c camObj : camList) {
+                
+                if(pi != null && pi.size() > 0) {
+                    if(pi[0].Workitems.size() > 0){
+                    System.debug('pi[0].Workitems[0].ActorId==>'+pi[0].Workitems[0].ActorId);
+                    if(approvalMatrixMap.get(pi[0].Workitems[0].ActorId) != null && UserInfo.getUserId() == pi[0].Workitems[0].ActorId){
+                        if(camObj.Final_Decision__c == 'Approved' && camObj.Loan_Type__c.contains('LAP') && camObj.Combined_Exposure__c > approvalMatrixMap.get(pi[0].Workitems[0].ActorId).LAP__c) {
+                            //camObj.addError('You don\'t have permission to approve above ' + approvalMatrixMap.get(pi[0].LastActor.Id).LAP__c + ' LAP Loan Type amount');
+                            camObj.addError(Label.CAMSanctionAmountLimitValidation);
                         } 
-                        if((dmObj.Disb_Status__c == 'Send to CPU' || dmObj.Disb_Status__c == 'Payment Under Process' || dmObj.Disb_Status__c == 'Cancelled by PRE-CPU' || dmObj.Disb_Status__c == 'Cancelled by CPU') && dmToApplicationLoanTypeMap.containskey(dmObj.Id) && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Loan_Type__c.contains('Housing Loan') && dmToApplicationLoanTypeMap.get(dmObj.Id).Application__r.Sanctioned_Amont__c > dmApprovalMatrixMap.get(UserInfo.getUserName()).HL__c) {
-                            dmObj.addError(Label.DMAmountLimitValidation); 
+                        if(camObj.Final_Decision__c == 'Approved' && camObj.Loan_Type__c.contains('HL') && camObj.Combined_Exposure__c > approvalMatrixMap.get(pi[0].Workitems[0].ActorId).HL__c) {
+                            //camObj.addError('You don\'t have permission to approve above ' + approvalMatrixMap.get(pi[0].LastActor.Id).HL__c + ' HL Loan Type amount');
+                            camObj.addError(Label.CAMSanctionAmountLimitValidation); 
                         }
                     }
                     else{
-                        dmObj.addError('Sorry!! You don\'t have rights on the DM Approval Matrix'); 
+                        camObj.addError(Label.CAMSanctionAmountLimitValidation);
                     }
                 }
+                }
+                
             }
-        }
-        catch(Exception ex){
-            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. of = ' + ex.getLineNumber());        
+            
+            
         }
     }
 }
 
-and here is the test class im working on
+and here is its test class
+
 
 @isTest
-public class DMAmountLimitTest {
-    
-    public static Id getFakeId(Schema.SObjectType sObjectType) {
-        String prefix = sObjectType.getDescribe().getKeyPrefix();
-        return (Id)(prefix + '000000000001AAA');
-    }
-
-    @TestSetup
+public class CAMSanctionAmountLimitTest {
+   @isTest
     public static void setupTestData(){
         
         Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
@@ -74,9 +78,8 @@ public class DMAmountLimitTest {
         
         User u = new User(Alias = 'standt', Email='standarduser@testorg.com', 
                           EmailEncodingKey='UTF-8', LastName='Testing', LanguageLocaleKey='en_US', 
-                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0001',
+                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0007',
                           TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9078@testorg.com');
-        insert u;
         System.runAs(u){
             
             Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
@@ -96,14 +99,15 @@ public class DMAmountLimitTest {
             br.Finnone_Branch_Code__c='test6';
             insert br; 
             
-            DM_Approval_Matrix__c dmAprMat = new DM_Approval_Matrix__c();
-            dmAprMat.Name = 'sujeet';
-            dmAprMat.Amount__c = 876;
-            dmAprMat.HL__c = 87600;
-            dmAprMat.LAP__c = 97600;
-            dmAprMat.Recommended_For__c = u.Id;
-            dmAprMat.Status__c = 'Approved';
-            insert dmAprMat;
+            Approval_Matrix__c apro = new Approval_Matrix__c();
+            apro.Name='sujeet';
+            apro.Amount__c=876;
+            apro.HL__c=87600;
+            apro.LAP__c=87600;
+            apro.Recommended_For__c=u.Id;
+            apro.Status__c='Approved';
+            apro.Branch__c=br.Id;
+            insert apro;
             
             String recTypeId = [select Id from RecordType where (SobjectType='Account') and IsPersonType=True limit 1].Id;
             Account acc = new Account();
@@ -128,7 +132,7 @@ public class DMAmountLimitTest {
             customerObj.Mobile__c = '1234567890';
             customerObj.Customer_Type__c ='Normal' ;
             customerObj.Loan_Amount_Applied__c = 1234.45;
-            customerObj.Alternate_Mobile_No__c = '9987654321';
+            customerObj.Alternate_Mobile_No__c = '0987654321';
             customerObj.Address_Line_1__c = 'noida';
             customerObj.Comfortable_EMI__c = 300.99;
             customerObj.Is_Property_Identified__c ='Yes' ;
@@ -149,7 +153,7 @@ public class DMAmountLimitTest {
             customerObj.Pucca_House__c = 'yes';
             customerObj.Washing_Machine__c = 'yes';
             customerObj.Name_of_the_Neighbour__c = 'test2';
-            customerObj.Contact_number_of_Neighbour__c = '8888889999';
+            customerObj.Contact_number_of_Neighbour__c = '123456765';
             customerObj.Feedback__c = 'Positive';
             customerObj.Neighbour_Comments__c ='good';
             customerObj.Food__c = 234;
@@ -173,6 +177,7 @@ public class DMAmountLimitTest {
             customerObj.Customer_Name__c = 'xadf';
             customerObj.Mobile__c = '1234567898';
             //customerObj.LoanAppID__c = oppObj.Id;
+            customerObj.Contact_number_of_Neighbour__c = '9876543212';
             CustList.add(customerObj);
             insert CustList;
             
@@ -185,7 +190,7 @@ public class DMAmountLimitTest {
             
             Opportunity oppObj = new Opportunity();
             oppObj.Name = 'testT';
-            oppObj.Current_Mobile_Number__c = '9987654321';
+            oppObj.Current_Mobile_Number__c = '9112323432';
             //oppObj.Customer_Mobile__c = '12323432';
             oppObj.Household__c = customerObj.Id;
             oppObj.StageName = 'Active';
@@ -231,71 +236,102 @@ public class DMAmountLimitTest {
             oppObj.Description = 'hyyyy';
             oppObj.AccountId = acc.Id;
             oppObj.LM_Loan_Status__c = 'Sanctioned';
-            oppObj.DE_Done_By__c = 'By-Pass Penny Drop';
-            oppObj.ACH_Registration_Status__c = 'Pending';
-            oppObj.PennyDrop_Status__c = 'Failure';
-            oppObj.Sanctioned_Amont__c = 1000000;
-            oppObj.HLA_Sign_Date__c = Date.today();
             insert oppObj;
             
-        	Deviation__c dev = new Deviation__c(Opportunity__c=oppObj.Id,
-                                            Waiver__c='Search Fee Waiver',
-                                            Approval_Status__c='OTC Approved',
-                                           	Person_who_can_Approve__c='Nitin Singh',
-            								Type_of_Waiver__c='OTC',
-            								OTC_Submission_Date__c = Date.today().addDays(10));
-            
-    /*    	NEILON__File__c nc=new NEILON__File__c();
-			nc.Subcategory__c='Signed Home Loan Agreement';
- 	        nc.Name='zaxdjfh';
-    	    nc.NEILON__Opportunity__c=oppObj.Id;
-			insert nc;  
-      */      
+            CAM__c camObj = new CAM__c();
+            //Loan_Application__r.Household__c
+            camObj.Total_Number_of_Family_Members__c=12;
+            camObj.RHExpenses__c =123;
+            camObj.Radial_Low_Count__c=234;
+            camObj.Radial_Low__c=235;
+            camObj.Radial_High_Count__c=234; 
+            camObj.Radial_High__c=234; 
+            camObj.Proposed_Construction_Value__c=234; 
+            camObj.Proposed_Construction_area__c=456; 
+            camObj.Property_Location__c='Gram Panchayat Area'; 
+            camObj.Property_is_self_occupied_residential_pr__c=true;
+            camObj.Property_is_not_in_Negative_area__c=true; 
+            camObj.property_is_not_identified__c=true; 
+            camObj.PropArea_Units__c='sq meters'; 
+            camObj.Product__c='Home Extension'; 
+            camObj.No_Applicant_in_Caution_profile_list__c=false; 
+            camObj.NHB_Categories__c='Construction/purchase of new units'; 
+            camObj.Loan_Type__c='LAP'; 
+            //camObj.Loan_Product__r.Name
+            camObj.LnApp__c =12324;
+            camObj.LAP_End_use_Comment__c='eee'; 
+            camObj.LAP_End_use__c='Marriage'; 
+            camObj.Land_Value__c=231; 
+            camObj.Land_Area_Units__c='Sq meters'; 
+            camObj.Land_area_is_more_than_minimum_norms__c=false; 
+            camObj.Land_Area__c=5645; 
+            camObj.Is_DedupePositive__c=true; 
+            camObj.Income_Type__c ='Undocumented'; 
+            camObj.Income__c=668;
+            camObj.Income_2__c =668;
+            camObj.Income_3__c=668;
+            camObj.Income_4__c=668;
+            camObj.Income_5__c=668;
+            camObj.Income_6__c=234234;
+            camObj.House_Type__c='Independent'; 
+            camObj.HL_Tenor__c=55; 
+            camObj.HLROI__c=12; 
+            camObj.Exposure_Type__c='Individual'; 
+            camObj.Education__c='Post Graduate'; 
+            camObj.Education_2__c ='Graduate';
+            camObj.Education_3__c='12th Pass';
+            camObj.Education_4__c='10th Pass';
+            camObj.Doc_Value_of_Prop__c=123; 
+            camObj.Credit_PD__c='Field Visit'; 
+            camObj.ComEMI__c=23423;
+            camObj.Citizenship__c = 'Resident Indian';
+            camObj.Build_Up_Construction_Value__c=34234; 
+            camObj.Build_Up_Area_Units__c = 'sq meters';
+            camObj.Build_Up_Area__c=1234;
+            camObj.Approval_Date__c = system.today();         
+            camObj.Name_of_Account_Holder_1__c  = 'xzc'; 
+            camObj.Bank_name__c  = 'xzc'; 
+            camObj.Bank_Cheque_Bounces__c = 23423;
+            camObj.Name_of_Account_Holder_2__c  = 'xzc'; 
+            camObj.Bank_Name_2__c = 'xxxvv'; 
+           camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+            camObj.Bank_Cheque_Bounces_2__c=2342;  
+            camObj.Name_of_Account_Holder_3__c = 'xzc'; 
+            camObj.Bank_Name_3__c  ='xyz';
+            camObj.Bank_Cheque_Bounces_3__c =234;  
+            camObj.Name_of_Account_Holder_4__c = 'test';
+            camObj.Bank_Name_4__c = 'werwer';  
+            camObj.Bank_Cheque_Bounces_4__c = 7553; 
+            camObj.Saving_Method_1__c ='rerw';
+            camObj.Saving_Method_1_Amount__c = 2334;
+            camObj.Saving_Method_2__c = 'rtry'; 
+            camObj.Saving_Method_2_Amount__c = 234;
+            camObj.Saving_Method_3__c  = 'new';
+            camObj.Saving_Method_3_Amount__c = 12321;
+           
+            camObj.Highmark_Score_of_Main_applicant__c = '1234'; 
+            camObj.Branch_Name__c = 'Ajmer-1';
+            camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch_Manager_Name__c = 'Gaurav';
+              camObj.Purpose_of_Loan__c = 'Construction Loan';
+            camObj.Land_Area__c = 22;
+            camObj.Build_Up_Area__c = 44;
+            camObj.Final_Decision__c = 'Pending';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch__c = br.id;
+            camObj.Loan_Product__c = loan.Id;
+            camObj.UnderWriter__c = u.Id;
+           
+            insert camObj;
+            camObj.Final_Decision__c='Approved';
+            try{
+            update camObj;
+            }
+            catch(Exception e){
+                
+            }
         }
     }
-    public static testMethod void Util_1(){
-        User usr = [Select Id, username from User where Alias='standt' limit 1];
-        Contact cc = [Select Id from Contact limit 1];
-        Opportunity oppObj = [Select Id from Opportunity limit 1];
-        Profile p = [SELECT Id FROM Profile WHERE Name='Standard User']; 
-
-        User u1 = new User(Alias = 'standt1', Email='standarduser1@testorg.com', 
-                          EmailEncodingKey='UTF-8', LastName='Testing1', LanguageLocaleKey='en_US', 
-                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0002',
-                          TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9079@testorg.com');
-        System.runAs(u1){
-            
-        	Collection__c collec = new Collection__c(Id = getFakeId(Collection__c.SObjectType),
-                                                     Amount__c=6000, Collector__c=cc.Id,
-            	                                     Date_of_Deposit__c=System.today(),
-                	                                 SFDC_Customer__c=oppObj.Id, Deposited_In_bank__c=true,
-                    	                             Instrument__c='Cash', ClearenceStatus__c='Handover pending',
-                        	                         Status__c='Active', RMobile_No__c='1234567891',
-                            	                     Branch_Name__c='testBranch',
-                                	                 Nature_of_Collection__c='Other Administrative Charges');
-     	   //insert collec;
-            
-            Disbursement__c dis = new Disbursement__c();
-            dis.Date_of_Disbursement__c = System.today();
-            dis.Disbursement_Amount__c = 10065;
-            dis.Disb_Status__c = 'Send to PRE-CPU';
-            dis.Tranch_Details__c = 'First';
-            dis.Application__c = oppObj.Id;
-            dis.Disbursement_Mode__c = 'Cheque';
-            dis.Levels_Of_Tranch__c = 'First Tranche';
-            dis.Maker_CRD_Sign_Date__c=System.today();
-            dis.Checker_CRD_Sign_Date__c=System.today();
-            dis.CRD_Sign_Date__c=System.today();
-            insert dis;
-
-            Test.startTest();
-            //dis.Disb_Status__c = 'Send to CPU';
-            dis.Disbursement_Amount__c = 10085;
-            dis.UAlldocs__c = true;
-            update dis;
-            DMAmountLimit.doValidate(new List<Disbursement__c>{dis});
-            Test.stopTest();
-        	
-        }
-    }
+ 
 }
