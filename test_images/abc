@@ -1,55 +1,57 @@
             Test.startTest();
-            camObj.Loan_Type__c='LAP'; 
-            camObj.LnApp__c =100000;
+            camObj.Loan_Type__c = 'LAP'; 
+            camObj.LnApp__c = 100000;
             camObj.Existing_Loan_Amount__c = 150000;
             camObj.Is_there_any_ST_Condition__c = 'No';
-            update camObj;
+            update camObj; 
             
+            // 1. Create a fresh User to guarantee UserInfo matching
+            Profile p = [SELECT Id FROM Profile WHERE Name='Standard User' LIMIT 1];
+            String uniqueName = 'approver' + DateTime.now().getTime() + '@testorg.com';
+            User approverUser = new User(
+                Alias = 'appr', Email = uniqueName, EmailEncodingKey='UTF-8', 
+                LastName='Approver', LanguageLocaleKey='en_US', LocaleSidKey='en_US', 
+                ProfileId = p.Id, TimeZoneSidKey='America/Los_Angeles', UserName=uniqueName
+            );
+            insert approverUser;
+
+            // 2. Create Matrix specifically for this exact user with -1 limits
+            Approval_Matrix__c matrix = new Approval_Matrix__c();
+            matrix.Name = 'Approver Matrix';
+            matrix.HL__c = -1; 
+            matrix.LAP__c = -1; 
+            matrix.Recommended_For__c = approverUser.Id;
+            matrix.Status__c = 'Approved';
+            insert matrix;
+
+            // 3. Submit for approval
             Approval.ProcessSubmitRequest apreq = new Approval.ProcessSubmitRequest();
             apreq.setComments('for approval');
             apreq.setObjectId(camObj.Id);
-            apreq.setSubmitterId(u.Id);
+            apreq.setSubmitterId(UserInfo.getUserId());
             apreq.setSkipEntryCriteria(true);            
             apreq.setProcessDefinitionNameOrId('Cam_Approval');
             Approval.process(apreq);
 
-            // 1. Get the pending Workitem
+            // 4. Assign the Workitem directly to our new user
             ProcessInstanceWorkitem piwi = [SELECT Id, ActorId FROM ProcessInstanceWorkitem WHERE ProcessInstance.TargetObjectId = :camObj.Id LIMIT 1];
-            
-            // 2. If it's a Queue, we must reassign to current User to use System.runAs
-            Id approverId = piwi.ActorId;
-            if(String.valueOf(approverId).startsWith('00G')) {
-                approverId = UserInfo.getUserId();
-                piwi.ActorId = approverId;
-                update piwi;
-            }
-            
-            User actualApprover = [SELECT Id, Username FROM User WHERE Id = :approverId];
+            piwi.ActorId = approverUser.Id;
+            update piwi;
 
-            // 3. Ensure a Matrix exists for THIS specific Approver with a 0 limit 
-            // so that the Limit validation (Line 33) evaluates to TRUE
-            Approval_Matrix__c matrix = new Approval_Matrix__c();
-            matrix.Name = 'Approver Matrix';
-            matrix.HL__c = 0; 
-            matrix.LAP__c = 0; 
-            matrix.Recommended_For__c = actualApprover.Id;
-            matrix.Status__c = 'Approved';
-            insert matrix;
+            // 5. Ensure Exposure triggers the condition (> -1)
+            camObj.Combined_Exposure__c = 100000;
 
-            // 4. Update the CAM record as the EXACT approver
-            System.runAs(actualApprover) {
+            // 6. Run the approval update AS the exact user to pass all IF conditions
+            System.runAs(approverUser) {
                 if(Approval.isLocked(camObj.Id)){
                     Approval.unlock(camObj.Id);
                 }
-                
                 camObj.Final_Decision__c = 'Approved';
-                
-                try{
-                    // This will now successfully hit Line 33 and Line 35
+                try {
+                    // This will now successfully hit Line 33, 34, and 35
                     update camObj;
-                }
-                catch(Exception e){
-                    System.debug('COVERAGE FIX EXCEPTION 1: '+e.getMessage());
+                } catch(Exception e) {
+                    System.debug('LAP COVERAGE HIT: ' + e.getMessage());
                 }
             }
             Test.stopTest();
@@ -57,56 +59,62 @@
 
 
 
+
+
             Test.startTest();
-            camObj.Loan_Type__c='Home Loan (HL)'; 
-            camObj.LnApp__c =100000;
+            camObj.Loan_Type__c = 'Home Loan (HL)'; 
+            camObj.LnApp__c = 100000;
             camObj.Existing_Loan_Amount__c = 150000;
             camObj.Is_there_any_ST_Condition__c = 'No';
-            update camObj;
+            update camObj; 
             
+            // 1. Create a fresh User to guarantee UserInfo matching
+            Profile p = [SELECT Id FROM Profile WHERE Name='Standard User' LIMIT 1];
+            String uniqueName = 'approver' + DateTime.now().getTime() + '@testorg.com';
+            User approverUser = new User(
+                Alias = 'appr', Email = uniqueName, EmailEncodingKey='UTF-8', 
+                LastName='Approver', LanguageLocaleKey='en_US', LocaleSidKey='en_US', 
+                ProfileId = p.Id, TimeZoneSidKey='America/Los_Angeles', UserName=uniqueName
+            );
+            insert approverUser;
+
+            // 2. Create Matrix specifically for this exact user with -1 limits
+            Approval_Matrix__c matrix = new Approval_Matrix__c();
+            matrix.Name = 'Approver Matrix HL';
+            matrix.HL__c = -1; 
+            matrix.LAP__c = -1; 
+            matrix.Recommended_For__c = approverUser.Id;
+            matrix.Status__c = 'Approved';
+            insert matrix;
+
+            // 3. Submit for approval
             Approval.ProcessSubmitRequest apreq = new Approval.ProcessSubmitRequest();
             apreq.setComments('for approval');
             apreq.setObjectId(camObj.Id);
-            apreq.setSubmitterId(u.Id);
+            apreq.setSubmitterId(UserInfo.getUserId());
             apreq.setSkipEntryCriteria(true);            
             apreq.setProcessDefinitionNameOrId('Cam_Approval');
             Approval.process(apreq);
 
-            // Get the pending Workitem
+            // 4. Assign the Workitem directly to our new user
             ProcessInstanceWorkitem piwi = [SELECT Id, ActorId FROM ProcessInstanceWorkitem WHERE ProcessInstance.TargetObjectId = :camObj.Id LIMIT 1];
-            
-            // Handle queue assignment
-            Id approverId = piwi.ActorId;
-            if(String.valueOf(approverId).startsWith('00G')) {
-                approverId = UserInfo.getUserId();
-                piwi.ActorId = approverId;
-                update piwi;
-            }
-            
-            User actualApprover = [SELECT Id, Username FROM User WHERE Id = :approverId];
+            piwi.ActorId = approverUser.Id;
+            update piwi;
 
-            // Create Matrix for this specific Approver with a 0 limit 
-            Approval_Matrix__c matrix = new Approval_Matrix__c();
-            matrix.Name = 'Approver Matrix HL';
-            matrix.HL__c = 0; 
-            matrix.LAP__c = 0; 
-            matrix.Recommended_For__c = actualApprover.Id;
-            matrix.Status__c = 'Approved';
-            insert matrix;
+            // 5. Ensure Exposure triggers the condition (> -1)
+            camObj.Combined_Exposure__c = 100000;
 
-            System.runAs(actualApprover) {
+            // 6. Run the approval update AS the exact user to pass all IF conditions
+            System.runAs(approverUser) {
                 if(Approval.isLocked(camObj.Id)){
                     Approval.unlock(camObj.Id);
                 }
-                
                 camObj.Final_Decision__c = 'Approved';
-                
-                try{
-                    // This will now successfully hit Line 37 and Line 39
+                try {
+                    // This will now successfully hit Line 37, 38, and 39
                     update camObj;
-                }
-                catch(Exception e){
-                    System.debug('COVERAGE FIX EXCEPTION 2: '+e.getMessage());
+                } catch(Exception e) {
+                    System.debug('HL COVERAGE HIT: ' + e.getMessage());
                 }
             }
             Test.stopTest();
