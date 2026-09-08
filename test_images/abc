@@ -1,172 +1,102 @@
-i have some confusion with it take the trigeer code here and then tell acurately:
-
-
-/**
-* class to handle all the trigger events reated to Disbursement 
-* Modifield Trigger Developer Name : Ankit Tiwari
-* Created Date : 11/8/2022
-* Modification Description : Merge all the disbursement Triggers into one single trigger so that we can handle order of excution
-* Modification Date : 17/08/2026
-* Last modified by: Raghav Mehta 17-08-2026 
-*/
-trigger DisbursementTrigger on Disbursement__c ( before Insert, before Update, after insert, after update )
-{
-     public static Boolean isFirst = true;
-      public static Boolean istestFirst = true;
-    if(Trigger.isBefore && (Trigger.isInsert || Trigger.isUpdate))
-    {
+    public static void test2(){
+        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
+        tbObj.Name='WhatsappApplication';
+        tbObj.isActive__c=false;
+        insert tbObj;
         
-        if (RecursionHandler.beforeInsertUpdate) {
-            RecursionHandler.beforeInsertUpdate = false;
-            DisbursementUpdateHandler.compareEffectivePFWithDeviationPF(Trigger.new); /// Added by Rahul Kumar 20-08-2025
-            DisbursementNewValidation.validateTypeOfCase(Trigger.new); //Added by Raghav on 13-05-2026
-    
-             AutomatePFDisbursementHelper.automateHandlerMethod(Trigger.New,trigger.oldMap);
-            DMGenerationValidation.run(trigger.new,trigger.oldMap);
-           
-            DisbursementTriggerMergeHandler.DisbursementCreateUpdateMethod(Trigger.New);
-            DisbursementNewValidation.autoPopulateNucleus(Trigger.new,Trigger.oldMap); //Added by Raghav on 13-05-2026
-            ChequeSequenceNumberHelper.updateChequeSequenceNumber(Trigger.new);
-            docCheckListHelper.run(trigger.new,trigger.oldMap);
-            DmInsuranceValidation.run(trigger.new);
-            
-        }
-    }
-    
-    if(Trigger.isAfter && (Trigger.isInsert || Trigger.isUpdate))
-    {
-        if(RecursionHandler.beforeUpdateCheck1)
-        {
-            RecursionHandler.beforeUpdateCheck1=false;
-              DisbursementTriggerHelper.qcAssignmentWhenDisbursmentStatusChange(Trigger.new , Trigger.OldMap);
-        }
-        if (RecursionHandler.afterInsertUpdate) {
-            RecursionHandler.afterInsertUpdate = false;
-            System.debug('creationOfPDD');
-             DisbursementTriggerHelper.creationOfPDD(Trigger.new , Trigger.OldMap);
-            
-            ///for the creation of PDD Records when the Disbursement record having Tranch Details value First and Disbursement Status as Handed over customer
-           
-            //--Added By @Siddharth Gupta---On--09/02/2024---
-            //---This Method is used for Disbursement & Physical QC Assignment
-           
-            
-        }  
-    }
-    if(Trigger.isAfter && Trigger.isUpdate)
-    {
-        if (RecursionHandler.afterUpdate) {
-            RecursionHandler.afterUpdate = false;
-            DMRevamp.LockDmAfterPaymentUnderProcess(Trigger.New,Trigger.oldMap); //Added by Ankit Tiwari 25-06-2025 
-
-             DisbursementTriggerHelper.updateLoanStatus(Trigger.New,Trigger.oldMap);
-            DisbursementUpdateHandler.createPhysicalFilePddOnPaymentUnderProcess(Trigger.New, Trigger.oldMap);  ////
-           
-            DisbursementUpdateHandler.CommitmentChargeMethodUpdate(Trigger.New,Trigger.oldMap);
-            DisbursementUpdateHandler.onUpdateMethod(trigger.new, trigger.oldMap);
-            DisbursementTriggerHelper.calculateReKYC_DueDate(trigger.new, trigger.oldMap);			//Added By Siddharth (26-7-2024)
-        }
-    }
-    
-    if(Trigger.isBefore && Trigger.isInsert)
-    { 
+        Trigger_BYPass__c tbObj1 =new Trigger_BYPass__c();
+        tbObj1.Name='Deactivate';
+        tbObj1.isActive__c=false;
+        insert tbObj1;
         
-        //DisbursementTriggerHelper class changed 
-        if (RecursionHandler.beforeInsert) {
-            RecursionHandler.beforeInsert = false;
-            AutomatePFDisbursementHelper.automatePfTriggerValidation(Trigger.new);
-            DisbursementTriggerHelper.showErrorMessage(trigger.new);
-            DisbursementPFHelper.getEffectivePFPercanetage(Trigger.new);
-            DisbursementTriggerHelper.beforeInsertDMValidation(Trigger.New); 
-            PDDSecondRequest.CheckPDD(Trigger.new);
-            DisbursementNewValidation.validateHLAFileExists(Trigger.new); // Added new Validation by Raghav on 13-05-2026
-            DisbursementNewValidation.checkdmTranch(Trigger.new);  // Added new Validation by Raghav on 13-05-2026
-           
-            DisbursementLTVHandler.validateDisbursements(Trigger.New);
-             DisbursementLTVHandler.calculateDisbursementLTV(Trigger.New);
-           
-            DisbursementUpdateHandler.searchFeecollection(Trigger.New);
-            if(Boolean.valueof(label.EmailValidation))
-            {
-                DisbursementUpdateHandler.showEmailValidation(Trigger.New);
-            } 
-            DisbursementUpdateHandler.technicalCreditApprovalValidation(Trigger.New);
-           // DisbursementUpdateHandler.CommitmentChargeValidationOnInsert(Trigger.New);
-            DisbursementUpdateHandler.populateApprovers(Trigger.New);
-            DisbursementUpdateHandler.validateFirstTranchDM(Trigger.New);
-            DisbursementUpdateHandler.onInsertMethod(trigger.new);
-            DisbursementTriggerMergeHandler.disbursementTriggerMethod(Trigger.New);
-            
-            
-        }}
-    if(Trigger.isBefore && Trigger.isUpdate)
-    {  
+        Trigger_BYPass__c tbObj2 =new Trigger_BYPass__c();
+        tbObj2.Name='ProcessReceiptTrigger';
+        tbObj2.isActive__c=false;
+        insert tbObj2;
         
-        if (RecursionHandler.beforeUpdate) {
-            RecursionHandler.beforeUpdate = false;
-             DMRevamp.finnoneMovementDatePopulation(Trigger.New,Trigger.oldMap);//Added By Ankit Tiwari 25/06/2025
-            DMRevamp.CommitmentChargeUpdateonDM(Trigger.New,Trigger.oldMap); //Added by Ankit Tiwari 25-06-2025 
-            DisbursementLTVHandler.pennydropFunction(Trigger.New);
-            DisbursementValidation.validateDisbursementStatus(Trigger.New,Trigger.oldMap);
-            DisbursementPFHelper.validateCPU_ApprovalFromHS(Trigger.new, trigger.oldMap);
-            AutomatePFDisbursementHelper.automateHandlerUpdateMethod(Trigger.new,Trigger.oldMap);
-            DisbursementUpdateHandler.populateApprovers(Trigger.New);
-            DisbursementUpdateHandler.onIndusindAPICall(trigger.new, trigger.oldMap);
-            CreateCollectionfromDisbursement.CreateCollection(Trigger.new,Trigger.oldMap);
-            DisbursementUpdateHandler.validateSecondTranchDMForApproval(Trigger.new,Trigger.oldMap);
-            DisbursementUpdateHandler.CommitmentChargeValidation(Trigger.new,Trigger.oldMap);
-          // DisbursementNewValidation.checkDisbStatuswithst(Trigger.new,Trigger.oldMap); //Added by Raghav on 13-05-2026
-           DisbursementNewValidation.disbUpdateerror(Trigger.New,Trigger.oldMap);  //Added by Raghav on 13-05-2026
-           DisbursementNewValidation.checkrepaymenttranch(Trigger.new);       //Added by Raghav on 13-05-2026
-
-           
-            DisbursementTriggerMergeHandler.disbursementTriggerPostSanctionMethod(Trigger.New,Trigger.oldMap);
-            DisbursementTriggerMergeHandler.disbursementTriggerPostSanctionValidationMethod(Trigger.New,Trigger.oldMap);
-           
-            
-        }
-        if(RecursionHandler.dmValidator)
-        {
-            RecursionHandler.dmValidator=false;
-            //// condiional call by using label, By Rahul Kumar 27-01-2026
-            if(Label.DMValidatorMandatoryClassNew=='No')
-                DMValidatorMandatoryClass.validatorDM(Trigger.new,Trigger.oldMap);
-            else 
-                DMValidatorMandatoryClassNew.validatorDM(Trigger.new,Trigger.oldMap);
-            
-            if(RecursionHandler.DMAmountLimit == false) {
-    return; 
-}
-RecursionHandler.DMAmountLimit = false; 
-
-Boolean isDMAmountLimit = false;
-for(Disbursement__c dm : Trigger.new){
-    if((dm.Disb_Status__c == 'Send to CPU' || 
-        dm.Disb_Status__c == 'Payment Under Process' || 
-        dm.Disb_Status__c == 'Cancelled by PRE-CPU' || 
-        dm.Disb_Status__c == 'Cancelled by CPU') && 
-        dm.Disb_Status__c != Trigger.oldMap.get(dm.Id).Disb_Status__c){
-        isDMAmountLimit = true;
-    }
-}
-
-if(isDMAmountLimit){
-    DMAmountLimit.doValidate(trigger.new);
-}
-        }
+        Config__c cf = new Config__c();
+        cf.Name__c = 'Test Config';
+        cf.Value__c = '009870';
+        insert cf;
+    
         
-
-    }
-    
-    if(Trigger.isAfter && Trigger.isInsert)
-    { 
-        if (RecursionHandler.afterInsert) {
-            RecursionHandler.afterInsert = false;
-            DisbursementPostTechnicalChargesHelper.calculatePostTechnicalCharges(Trigger.new);
-            CamDisbursementValidation.pendingCamDisbursementValidation(Trigger.new);
-        }
+        String recordTypeId  = Schema.getGlobalDescribe().get('Vendor_Request__c').getDescribe().getRecordTypeInfosByName().get('APF').getRecordTypeId();
+        Account acc= new Account(
+          //RecordTypeID=recordTypeId ,
+          FirstName='Test FName',
+          LastName='Test LName',
+          PersonMailingStreet='test@yahoo.com',
+          PersonMailingPostalCode='12345',
+          PersonMailingCity='SFO',
+          PersonEmail='test@yahoo.com',
+          PersonHomePhone='1234567',
+          PersonMobilePhone='12345678' 
+        );
+ 		
+        insert acc;
         
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);
+        con.Vendor_Type__c = 'Technical';
+        insert con;
+        
+        Vendor_Rate__c ven = new Vendor_Rate__c();
+        ven.Vendor_Name__c=con.Id;
+        ven.Work_Name__c = '37-Vetting Report 1';
+        ven.From_Distance__c = 10;
+        ven.To_Distance__c = 120;
+        ven.Vendor_Name__c = con.Id;
+        insert ven;
+     
+        Opportunity opp = new Opportunity();
+        opp.Name = 'test';
+        opp.StageName = 'Prospecting';
+        opp.CloseDate = System.today();
+        opp.Loan_Disb_Date__c = System.today();
+        opp.LM_Loan_Status__c = 'New Login';
+        opp.ContactId=con.Id;
+        opp.AccountId=acc.Id;
+        insert opp;
+        
+        Vendor_Request__c VendorRequest = new Vendor_Request__c();
+        VendorRequest.RecordTypeId=recordTypeId;
+        VendorRequest.Vendor_Name__c = con.Id;
+        VendorRequest.Application__c = opp.id;
+        VendorRequest.Request_Type__c =  'Technical';
+        VendorRequest.Report_Type__c = '37-Vetting Report 1';
+        VendorRequest.Request_Cost__c=100;
+        insert VendorRequest;
+        
+        Trigger_Settings__c cust = new Trigger_Settings__c();
+        cust.Name = 'Trigger_Handler';
+        cust.TechnicalverificationTrig__c = True;
+        insert cust;
+        
+        List<Technical_Verification__c> ListTech = new List<Technical_Verification__c>();
+        for(integer i=0;i<3;i++){
+            Technical_Verification__c tech=new Technical_Verification__c();
+            tech.Property_Geotag__Latitude__s = 26.4499;
+            tech.Property_Geotag__Longitude__s = 74.6399;
+            tech.DistanceNew__c = 100;
+            tech.Visit_Done__c='12541';
+            tech.Application__c = opp.Id;
+            tech.Report_Type__c = '37-Vetting Report 1';
+            tech.Is_there_any_ST_Condition__c='Yes';
+            tech.Vendor_Request__c = VendorRequest.Id;
+            tech.Status__c='Accepted';
+            ListTech.add(tech);
+        }
+        if(!ListTech.isEmpty())
+        	insert ListTech;
+        
+        Test.startTest();
+        
+        VendorRequestUpdateVendorRequestCost Venobj = new VendorRequestUpdateVendorRequestCost();
+        VendorRequestUpdateVendorRequestCost.run(ListTech);
+        Test.stopTest();
     }
-    
-    
-}
