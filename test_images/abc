@@ -1,38 +1,63 @@
-public class JSON2APEXBRENEW {
+@isTest
+private class JSON2APEXBRENEW_Test {
     
-    public Integer statusCode;	//200
-	public Body body;
-    
-    
-	public class Body {
-		public List<LOANDETAILS> LOAN_DETAILS;
-		public List<PRESANCTIONBRE> PRE_SANCTION_BRE;
-		public List<POSTSANCTIONBRE> POST_SANCTION_BRE;
-		public List<SCORECARD> SCORECARD;
-	}
-    
-    
-	public class LOANDETAILS {
-		public String Rule_Value;	//AP-1709
-		public String Rule_Name;	//LoanNumber
-	}
-    
-    
-	public class PRESANCTIONBRE {
-		public String Rule_Value;	//AP-1709
-		public String Rule_Name;	//LoanNumber
-	}
-    
-    
-	public class POSTSANCTIONBRE {
-		public String Rule_Value;	//AP-1709
-		public String Rule_Name;	//LoanNumber
-	}
-    
-    
-	public class SCORECARD {
-		public String Score_Value;	//AP-1709
-		public String Score_type;	//LoanNumber
-	}
+    @isTest
+    static void testWrapperInstantiation() {
+        // 1. Test standard instantiation (This guarantees 100% code coverage)
+        JSON2APEXBRENEW wrapper = new JSON2APEXBRENEW();
+        wrapper.statusCode = 200;
         
+        // Instantiate inner classes
+        JSON2APEXBRENEW.LOANDETAILS loanDetail = new JSON2APEXBRENEW.LOANDETAILS();
+        loanDetail.Rule_Value = 'AP-1709';
+        loanDetail.Rule_Name = 'LoanNumber';
+        
+        JSON2APEXBRENEW.PRESANCTIONBRE preSanction = new JSON2APEXBRENEW.PRESANCTIONBRE();
+        preSanction.Rule_Value = 'AP-1709';
+        preSanction.Rule_Name = 'LoanNumber';
+        
+        JSON2APEXBRENEW.POSTSANCTIONBRE postSanction = new JSON2APEXBRENEW.POSTSANCTIONBRE();
+        postSanction.Rule_Value = 'AP-1709';
+        postSanction.Rule_Name = 'LoanNumber';
+        
+        JSON2APEXBRENEW.SCORECARD scorecard = new JSON2APEXBRENEW.SCORECARD();
+        scorecard.Score_Value = '850';
+        scorecard.Score_type = 'Credit';
+        
+        // Assemble the body
+        JSON2APEXBRENEW.Body bodyObj = new JSON2APEXBRENEW.Body();
+        bodyObj.LOAN_DETAILS = new List<JSON2APEXBRENEW.LOANDETAILS>{ loanDetail };
+        bodyObj.PRE_SANCTION_BRE = new List<JSON2APEXBRENEW.PRESANCTIONBRE>{ preSanction };
+        bodyObj.POST_SANCTION_BRE = new List<JSON2APEXBRENEW.POSTSANCTIONBRE>{ postSanction };
+        bodyObj.SCORECARD = new List<JSON2APEXBRENEW.SCORECARD>{ scorecard };
+        
+        wrapper.body = bodyObj;
+        
+        // Assertions to verify assignments
+        System.assertEquals(200, wrapper.statusCode, 'Status code should be 200');
+        System.assertEquals('AP-1709', wrapper.body.LOAN_DETAILS[0].Rule_Value, 'Rule Value should match');
+    }
+    
+    @isTest
+    static void testJSONDeserialization() {
+        // 2. Test JSON parsing (This ensures the structure actually works with real JSON)
+        String jsonString = '{' +
+            '\"statusCode\": 200,' +
+            '\"body\": {' +
+                '\"LOAN_DETAILS\": [{\"Rule_Value\": \"AP-1709\", \"Rule_Name\": \"LoanNumber\"}],' +
+                '\"PRE_SANCTION_BRE\": [{\"Rule_Value\": \"AP-1709\", \"Rule_Name\": \"LoanNumber\"}],' +
+                '\"POST_SANCTION_BRE\": [{\"Rule_Value\": \"AP-1709\", \"Rule_Name\": \"LoanNumber\"}],' +
+                '\"SCORECARD\": [{\"Score_Value\": \"850\", \"Score_type\": \"Credit\"}]' +
+            '}' +
+        '}';
+        
+        // Deserialize the JSON string into the wrapper class
+        JSON2APEXBRENEW parsedResult = (JSON2APEXBRENEW) JSON.deserialize(jsonString, JSON2APEXBRENEW.class);
+        
+        // Assertions to verify the JSON mapped correctly
+        System.assertNotEquals(null, parsedResult, 'Parsed result should not be null');
+        System.assertEquals(200, parsedResult.statusCode, 'Status code should parse correctly');
+        System.assertEquals(1, parsedResult.body.SCORECARD.size(), 'Scorecard list should contain 1 item');
+        System.assertEquals('850', parsedResult.body.SCORECARD[0].Score_Value, 'Score value should parse correctly');
+    }
 }
