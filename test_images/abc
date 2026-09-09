@@ -1,63 +1,190 @@
-@isTest
-private class JSON2APEXBRENEW_Test {
+public class LoanServiceWrapper{
     
-    @isTest
-    static void testWrapperInstantiation() {
-        // 1. Test standard instantiation (This guarantees 100% code coverage)
-        JSON2APEXBRENEW wrapper = new JSON2APEXBRENEW();
-        wrapper.statusCode = 200;
-        
-        // Instantiate inner classes
-        JSON2APEXBRENEW.LOANDETAILS loanDetail = new JSON2APEXBRENEW.LOANDETAILS();
-        loanDetail.Rule_Value = 'AP-1709';
-        loanDetail.Rule_Name = 'LoanNumber';
-        
-        JSON2APEXBRENEW.PRESANCTIONBRE preSanction = new JSON2APEXBRENEW.PRESANCTIONBRE();
-        preSanction.Rule_Value = 'AP-1709';
-        preSanction.Rule_Name = 'LoanNumber';
-        
-        JSON2APEXBRENEW.POSTSANCTIONBRE postSanction = new JSON2APEXBRENEW.POSTSANCTIONBRE();
-        postSanction.Rule_Value = 'AP-1709';
-        postSanction.Rule_Name = 'LoanNumber';
-        
-        JSON2APEXBRENEW.SCORECARD scorecard = new JSON2APEXBRENEW.SCORECARD();
-        scorecard.Score_Value = '850';
-        scorecard.Score_type = 'Credit';
-        
-        // Assemble the body
-        JSON2APEXBRENEW.Body bodyObj = new JSON2APEXBRENEW.Body();
-        bodyObj.LOAN_DETAILS = new List<JSON2APEXBRENEW.LOANDETAILS>{ loanDetail };
-        bodyObj.PRE_SANCTION_BRE = new List<JSON2APEXBRENEW.PRESANCTIONBRE>{ preSanction };
-        bodyObj.POST_SANCTION_BRE = new List<JSON2APEXBRENEW.POSTSANCTIONBRE>{ postSanction };
-        bodyObj.SCORECARD = new List<JSON2APEXBRENEW.SCORECARD>{ scorecard };
-        
-        wrapper.body = bodyObj;
-        
-        // Assertions to verify assignments
-        System.assertEquals(200, wrapper.statusCode, 'Status code should be 200');
-        System.assertEquals('AP-1709', wrapper.body.LOAN_DETAILS[0].Rule_Value, 'Rule Value should match');
+    public requestHeader requestHeader;
+    public loanBookingRequest loanBookingRequest;
+  	public class requestHeader {
+        public Integer tenantId;	
+        public userDetail userDetail;
+    }
+    public	class userDetail {
+        public String userCode;	
+        public Integer branchId;	
+    }
+    public	class loanBookingRequest {
+        public loanDetail loanDetail;
+        Public List<gurantorCoapplicantDetails> gurantorCoapplicantDetails;
+        Public List<collateralDetails> collateralDetails;
     }
     
-    @isTest
-    static void testJSONDeserialization() {
-        // 2. Test JSON parsing (This ensures the structure actually works with real JSON)
-        String jsonString = '{' +
-            '\"statusCode\": 200,' +
-            '\"body\": {' +
-                '\"LOAN_DETAILS\": [{\"Rule_Value\": \"AP-1709\", \"Rule_Name\": \"LoanNumber\"}],' +
-                '\"PRE_SANCTION_BRE\": [{\"Rule_Value\": \"AP-1709\", \"Rule_Name\": \"LoanNumber\"}],' +
-                '\"POST_SANCTION_BRE\": [{\"Rule_Value\": \"AP-1709\", \"Rule_Name\": \"LoanNumber\"}],' +
-                '\"SCORECARD\": [{\"Score_Value\": \"850\", \"Score_type\": \"Credit\"}]' +
-            '}' +
-        '}';
+     
+    
+   Public class gurantorCoapplicantDetails {
+        public string applicationFileNumber;
+		public String customerNumber;
+		public String relationshipType;	
+		public String partyRelationship;
+       
+	}
+    
+    Public class collateralDetails{
         
-        // Deserialize the JSON string into the wrapper class
-        JSON2APEXBRENEW parsedResult = (JSON2APEXBRENEW) JSON.deserialize(jsonString, JSON2APEXBRENEW.class);
+        public String collateralNumber;
+        public String collateralMappingType;
+        public String collateralTypeCode;
+        public String collateralSubTypeCode;
+        public String depreciationTenure;
+    }
+    
+    
+    public	class loanDetail {
+        public String tag;	
+        public String loanRefId;
         
-        // Assertions to verify the JSON mapped correctly
-        System.assertNotEquals(null, parsedResult, 'Parsed result should not be null');
-        System.assertEquals(200, parsedResult.statusCode, 'Status code should parse correctly');
-        System.assertEquals(1, parsedResult.body.SCORECARD.size(), 'Scorecard list should contain 1 item');
-        System.assertEquals('850', parsedResult.body.SCORECARD[0].Score_Value, 'Score value should parse correctly');
+        public String requestChannelCode;	
+        public String applicationTypeCode;	
+        public String branchCode;	
+        public String agreementDate;
+        public String applicationCreationDate;
+        public String productCode;	
+        public String schemeCode;	
+        public String currencyCode;	
+        public String applicationFileNumber;
+        public String applicationFormNumber;	
+        public String customerNo;
+        public String multipleDisbursalFlag;	
+        public Decimal netMarkup;
+        public Integer loanAssetCost;
+        public Decimal ltv;	
+        public String loanPurpose;	
+        public Integer loanAmountWithoutVAP;
+        public String loanAccountNumber;	
+        public String unitOfTenure;	
+        public String moratoriumTreatmentTypeCode;	
+        public String moratoriumPeriod;	
+        public linkingDetail linkingDetail;
+        public List<gstDetail> gstDetail;
+        public List<rateTierDetails> rateTierDetails;
+        public List<loanDisbursalDetails> loanDisbursalDetails;
+        public List<disbursalChargeDetails> disbursalChargeDetails;
+        public List<imdDetails> imdDetails;
+        public repaymentScheduleSpecificationDetail repaymentScheduleSpecificationDetail;
+    }
+
+	Public class linkingDetail {
+		public String applicationFileNumber;	
+		public String collateralNumber;	
+		public String loanAccountNumber;	
+		public String linkingReason;
+		public String linkingRemarks;
+        public List<loanDetails> loanDetails;
+	} 
+   
+    Public class loanDetails {
+		
+		public String loanAccountNumber;	
+		
+	} 
+    
+   
+    public	class gstDetail {
+        public String bpId;	
+        public String bpTypeId;	
+        public String branchStateCode;	
+        public String gSTINAddress;	
+        public String gSTINCustomerNo;	
+        public String gSTINNo;	
+        public String gSTStateCode;	
+        public String loanRefId;
+    }
+    
+    public	class rateTierDetails {
+        public String fromInstallmentNo;	
+        public String loanRefId;	
+        public Decimal netMarkup;	
+        public Decimal ratePercentage;	
+        public String rateTypeCode;	
+        public Integer toInstallmentNo;
+    }
+    
+    public	class loanDisbursalDetails {
+        public String tag;	
+         public String disbursalReferenceId;
+        public String loanRefId;	
+        public Integer disbursalNo;	
+        public String disbursalTransactionDate;	
+        public Integer disbursalAmount;	
+        public String disbursalDate;
+        public Integer principalRecoveryFlag;	
+        public String disbursalRemarks;	
+        public String disbursalTypeCode;
+        public String referenceLoanAccountNumber;	
+        public String disbursalAuthorName;
+        public List<disbursalBreakUpDetails> disbursalBreakUpDetails;
+    }
+    
+    public	class disbursalBreakUpDetails {
+        public String tag;	
+        public String loanRefId;	
+        public Integer disbursalAmount;	
+        public Double disbursalChargeAmount;
+        public List<disbursalPaymentDetails> disbursalPaymentDetails;
+    }
+    
+    public	class disbursalPaymentDetails {
+        public String tag;	
+        public String paymentModeCode;	
+        public String subPaymentModeCode;	
+        public Double paymentAmount;	
+        public String accountByName;
+        public String instrumentNumber;	
+        public String instrumentDate;
+        public String accountTypeCode;	
+        public String accountNumber;	
+        public String bankIdentificationType;	
+        public String bankIdentificationCode;	
+        public String bankBranchCode;	
+        public String payoutbankId;	
+        public String printingBranchCode;	
+        public Integer sourcePaymentReferenceNumber;
+    }
+    
+    public	class repaymentScheduleSpecificationDetail {
+        public String dueDay;	
+        public String repaymentPolicyCode;	
+        public String principalRecoveryStartDate;	
+        public String interestStartDate;
+        public String installmentTypeCode;	
+        public Decimal anchorRate;	
+        public Decimal interestRate;	
+        public Integer installmentAmount;	
+        public Integer tenure;	
+        public String anchorTypeCode;	
+        public Integer rateTypeCode;
+        public Integer numberOfAdvanceInstallments;	
+        public Integer brokenPeriodDays;	
+        public Integer interestFreeDays;	
+        public String gradedBasedOnCode;	
+       
+    }
+    
+       public	class disbursalChargeDetails {
+        public String chargeId;	
+        public String bpTypeCode;	
+        public String bpCode;	
+        public String transactionChargeDate;	
+        public String dueDate;	
+        public Decimal chargeAmount;	
+        public String adjustChargeAtDisbursement;	
+        public Decimal originalChargeAmount;	
+        public List<imdDetails> imdDetails;
+    }
+    public	class imdDetails {
+        public String receiptReference;	
+        public String refundAmount;	
+        public Set<imdAllocationDetails> imdAllocationDetails;
+    }
+    public	class imdAllocationDetails {
+        public Integer allocatedAmount;	
+        public String chargeId;	
     }
 }
