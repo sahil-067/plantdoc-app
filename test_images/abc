@@ -1,468 +1,54 @@
-here ia an apex class 
-
-public class PayPostAPIHelper {
-    public static  string sKey{get;set;}
-    public static  string sReferenceNumber{get;set;}
-    public static  string sProducte{get;set;}
-    public static  string sName{get;set;}
-    public static  string sLastName{get;set;}
-    public static  string sEmail{get;set;}
-    public static  string sAmount{get;set;}
-    public static  string sSolt{get;set;}
-    public static  string sHasKey{get;set;}
-    public static  string udf1{get;set;}
-    public static  string udf2{get;set;}
-    public static  string udf3{get;set;}
-    public static  string udf4{get;set;}
-    public static  string udf5{get;set;}
-    public static  string sUrl{get;set;}
-    public static  string sPhone{get;set;}
-    public static  string sResponseUrl{get;set;}
-    public static  string PayUId{get;set;}
-    public static  string sMode{get;set;}
-    public static  string sData{get;set;}
-    public static  string PaySlipId{get;set;}
-    
-    
-    @future(callout=true)
-    public static void fncSendPaymentLink(set<Id> SetPaySlipId, integer Amount){
-        List<PayU_Payment_Status__c> UpdatePayUPaymentStatus=New List<PayU_Payment_Status__c> ();
-        List<Pay_Slip__c> UpdatePaySlip=new  List<Pay_Slip__c> ();
+    @IsTest
+    static void testPayPostAPIHelperProperties() {
+        // Covers the static properties shown in 525d7b4d-7a2f-4602-9034-65c1047c9dad
+        PayPostAPIHelper.sKey = 'test';
+        PayPostAPIHelper.sReferenceNumber = 'test';
+        PayPostAPIHelper.sProducte = 'test';
+        PayPostAPIHelper.sName = 'test';
+        PayPostAPIHelper.sLastName = 'test';
+        PayPostAPIHelper.sEmail = 'test';
+        PayPostAPIHelper.sAmount = 'test';
+        PayPostAPIHelper.sSolt = 'test';
+        PayPostAPIHelper.sHasKey = 'test';
+        PayPostAPIHelper.udf1 = 'test';
+        PayPostAPIHelper.udf2 = 'test';
+        PayPostAPIHelper.udf3 = 'test';
+        PayPostAPIHelper.udf4 = 'test';
+        PayPostAPIHelper.udf5 = 'test';
+        PayPostAPIHelper.sUrl = 'test';
+        PayPostAPIHelper.sPhone = 'test';
+        PayPostAPIHelper.sResponseUrl = 'test';
+        PayPostAPIHelper.PayUId = 'test';
+        PayPostAPIHelper.sMode = 'test';
+        PayPostAPIHelper.sData = 'test';
+        PayPostAPIHelper.PaySlipId = 'test';
         
-        List<Pay_Slip__c> ListPaySlip = [Select Id,Name,Name_of_Customer__c,Depositor_Email__c,Deposited__c,Amount__c,Deposited_Amount__c,CustomerMobile__c,
-                                          Depositor_Phone_Number__c,
-                                         (select id from PayU_Payment_Status__r),
-                                         Application__r.Customer_Mobile__c,Application__r.Person_Email__c,CustomerAppID__c 
-                                         from Pay_Slip__c Where Id IN: SetPaySlipId];
-        string UniqueNumberForPayU='TRAN'+string.valueOf(Math.round((Math.random() * (900000) + 100000)));
-        if(ListPaySlip.size()>0){
-            string sMobileNumber;
-            if(ListPaySlip[0].Depositor_Phone_Number__c==null)
-                sMobileNumber=ListPaySlip[0].CustomerMobile__c;
-            else
-                sMobileNumber=ListPaySlip[0].Depositor_Phone_Number__c;
-            
-            if(sMobileNumber!=null){
-                PayU__c ObjPayU = PayU__c.getValues('MtQShL');
-                Wrapper objWrapper=New Wrapper();
-                objWrapper.amount= string.valueOf(Amount);
-                objWrapper.txnid='TRAN-'+string.valueOf(Math.round((Math.random() * (900000) + 100000)))+'-'+ListPaySlip[0].Name; 
-                objWrapper.productinfo='India Shelter HL';
-                objWrapper.firstname='Customer Name';
-                //commented on 10/8/2020 by tarun (devender)
-                //string.valueOf(ListPaySlip[0].Name_of_Customer__c);
-                objWrapper.email=string.valueOf(ListPaySlip[0].Depositor_Email__c);
-                objWrapper.phone=sMobileNumber;
-                objWrapper.address1='XZY';
-                objWrapper.city='Delhi';
-                objWrapper.state='Delhi';
-                objWrapper.country='India';
-                objWrapper.zipcode='110012';
-                objWrapper.template_id=ObjPayU.template_id__c;//1404
-                objWrapper.validation_period='2';
-                objWrapper.send_email_now='1';
-                objWrapper.send_sms='1';
-                objWrapper.udf1=string.valueOf(ListPaySlip[0].CustomerAppID__c);
-                objWrapper.udf2=string.valueOf(ListPaySlip[0].Name);
-                objWrapper.udf3=string.valueOf(ListPaySlip[0].Id);
-                objWrapper.udf4='iCollectionApp';
-                if(!string.isEmpty(string.valueOf(ObjPayU.SMS_Template_ID__c)))
-                    objWrapper.sms_template_id=string.valueOf(ObjPayU.SMS_Template_ID__c);
-                string sData=''+ObjPayU.sKey__c+'|create_invoice|'+JSON.serialize(objWrapper)+'|'+ObjPayU.sSolt__c+'';
-                Blob macBlob = Crypto.generateDigest('SHA512', Blob.valueOf(sData));
-                string sBody= 'key='+ObjPayU.sKey__c+'&command=create_invoice&var1='+JSON.serialize(objWrapper)+'&hash='+EncodingUtil.convertToHex(macBlob);
-                HttpRequest request = new HttpRequest(); 
-                request.setEndpoint(ObjPayU.SendLinkUrl__c); 
-                request.setMethod('POST'); 
-               // request.setHeader('Accept', 'application/x-www-form-urlencoded');
-                request.setHeader('Content-Type','application/x-www-form-urlencoded');  
-                request.setBody(sBody);
-                try{ 
-                    System.debug(' ** request ** : ' + request); 
-                    Http http = new Http();  
-                    HttpResponse response = new HttpResponse();
-                    if(!Test.isRunningTest()) {
-                    response = http.send(request); 
-                    
-                    System.debug(' ** response ** : ' + response.getStatusCode()); 
-                        if (response.getStatusCode() == 200 ) {               
-                            System.debug(' ** wrapper 12 ** : ' +response); 
-                            System.debug(' ** wrapper ** : ' +response.getBody()); 
-                        } else { 
-                            System.debug(' Response ' + response.getBody() ); 
-                            throw new CalloutException( response.getBody() ); 
-                        } 
-                    }
-                    
-                    for(ID iID: SetPaySlipId){
-                        
-                        Pay_Slip__c paySlip = new Pay_Slip__c();
-                        paySlip.id=iID;
-                        paySlip.Transcation_Id__c=objWrapper.txnid;
-                        paySlip.UniqueNumberForPayU__c=UniqueNumberForPayU;
-                        PayU_Payment_Status__c obj=new PayU_Payment_Status__c();
-                        obj.Status__c='Requested';
-                        obj.Pay_Slip__c=iID;
-                        obj.Resquest__c=string.valueOf(sData);
-                        obj.Transaction_Id__c=objWrapper.txnid;
-                        obj.Response__c=response.getBody();
-                        UpdatePayUPaymentStatus.add(obj) ;
-                        UpdatePaySlip.add(paySlip);
-                    }
-                    if(UpdatePayUPaymentStatus.size()>0){
-                        insert UpdatePayUPaymentStatus;
-                    }
-                    if(UpdatePaySlip.size()>0){
-                        update UpdatePaySlip;
-                    }
-                    
-                }catch( System.Exception e) { 
-                    System.debug('ERROR: '+ e); 
-                    throw e; 
-                }
-            }
-        }
-    }
-    @future(callout=true)
-    public static void fncSendPayOnLink(set<Id> SetPaySlipId, integer Amount){
-        List<PayU_Payment_Status__c> UpdatePayUPaymentStatus=New List<PayU_Payment_Status__c> ();
-        List<Pay_Slip__c> ListPaySlip = [Select Id,Name,Name_of_Customer__c,Deposited__c,Amount__c,Deposited_Amount__c,CustomerMobile__c,
-                                         (select id from PayU_Payment_Status__r),
-                                         Application__r.Customer_Mobile__c,Application__r.Person_Email__c,CustomerAppID__c 
-                                         from Pay_Slip__c Where Id IN: SetPaySlipId];
-        if(ListPaySlip.size()>0){
-                for(ID iID: SetPaySlipId){
-                    PayU_Payment_Status__c obj=new PayU_Payment_Status__c();
-                    obj.Status__c='Requested';
-                    obj.Pay_Slip__c=iID;
-                    obj.Resquest__c=string.valueOf(sData);
-                    //obj.Transaction_Id__c=objWrapper.txnid;
-                    obj.Response__c=sData;
-                    UpdatePayUPaymentStatus.add(obj) ;
-                }
-                if(UpdatePayUPaymentStatus.size()>0){
-                    insert UpdatePayUPaymentStatus;
-                } 
-        }
-    }
-    public class Wrapper{
-        public string amount{get;set;}
-        public string txnid{get;set;}
-        public string productinfo{get;set;}
-        public string firstname{get;set;}
-        public string email{get;set;}
-        public string phone{get;set;}
-        public string address1{get;set;}
-        public string city{get;set;}
-        public string state{get;set;}
-        public string country{get;set;}
-        public string zipcode{get;set;}
-        public string template_id{get;set;}
-        public string validation_period{get;set;}
-        public string send_email_now{get;set;}
-        public string send_sms{get;set;}
-        public string udf1{get;set;}
-        public string udf2{get;set;}
-        public string udf3{get;set;}
-        public string udf4{get;set;}
-        public string sms_template_id{get;set;}
-        
-    }
-}
-
-
-
-here is test class
-
-
-@IsTest
-
-public class PayPostAPIHelperTest {
-    
-    public class ResponseClass {
-        public String ResponseCode;
-        public String status;
-        public String message;
-        public String sUrl;
-    }
-    public class ModelRequest {
-        public Integer Amount;
-        public String purpose;
-        public String DepositorPhone;
-        public String Mode;
-        public String AppId;
-        public String EMPCode;
-        public String Source;
-        public String CouponId;
-        public String u_latitude;
-        public String u_longitude;
-    }
-    
-    @testSetup
-    static void setupData() {
-        
-        insert new Trigger_BYPass__c(
-            Name = 'WhatsappApplication',
-            isActive__c = false
-        );
-        
-        insert new Config__c(
-            Name__c = 'Test Config',
-            Value__c = '99009870'
-        );
-        
-        insert new Contact(
-            LastName = 'Kumar',
-            Empl_Code__c = 'ISFC1949'
-        );
-        
-        Opportunity opp = new Opportunity(
-            Name = 'Test Opportunity',
-            StageName = 'Prospecting',
-            CloseDate = Date.today(),
-            Loan_Number__c = 'AP-99009871',
-            Phone_No__c = '9999999999',
-            Loan_Product_Type__c = 'HL',
-            Loan_Amount_Required__c = 100000
-        );
-        insert opp;
-        
-        insert new PayU__c(
-            Name = 'MtQShL',
-            sKey__c = 'key',
-            sSolt__c = 'salt',
-            command__c = 'create_invoice',
-            command_2__c = 'verify_payment',
-            ICollectUrl__c = 'https://test',
-            sResponseUrl__c = 'https://test',
-            Url2__c = 'https://test',
-            SendLinkUrl__c = 'https://test',
-            template_id__c = '1409',
-            SMS_Template_ID__c = '1404'
-        );
-        
-        insert new Coupon__c(
-            Coupon_Name__c = 'TEST_COUPON_001'
-        );
-        
+        // Assert one to ensure the assignment registered properly
+        System.assertEquals('test', PayPostAPIHelper.sKey);
     }
     
     @IsTest
-    static void testSuccessICollect() {
-        RestContext.request = buildRequest('ICollectApp', 'PayByOnline', 'AP-99009871');
-        RestContext.response = new RestResponse();
+    static void testFncSendPayOnLinkDirect() {
+        // Covers the inner block of fncSendPayOnLink shown in d6b09c02-f2ee-4fa0-9f9c-7cccda02645b
+        Opportunity opp = [SELECT Id FROM Opportunity WHERE Loan_Number__c = 'AP-99009871' LIMIT 1];
+        
+        Pay_Slip__c testPaySlip = new Pay_Slip__c();
+        testPaySlip.Amount__c = 1000;
+        testPaySlip.Application__c = opp.Id;
+        testPaySlip.PaySlip_Status__c = 'Active';
+        testPaySlip.Instrument__c = 'Electronic payment';
+        insert testPaySlip;
+        
+        Set<Id> paySlipIds = new Set<Id>{testPaySlip.Id};
         
         Test.startTest();
-        PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
+        // Wrapping the future method inside startTest/stopTest forces it to execute synchronously
+        PayPostAPIHelper.sData = 'testData'; 
+        PayPostAPIHelper.fncSendPayOnLink(paySlipIds, 1000);
         Test.stopTest();
         
+        // Optional: Verify the PayU_Payment_Status__c was actually inserted
+        List<PayU_Payment_Status__c> statusList = [SELECT Id, Status__c FROM PayU_Payment_Status__c WHERE Pay_Slip__c = :testPaySlip.Id];
+        System.assertEquals(1, statusList.size(), 'A PayU_Payment_Status__c record should have been created.');
+        System.assertEquals('Requested', statusList[0].Status__c, 'Status should be Requested.');
     }
-    
-	@IsTest
-    static void opperror() {
-        RestContext.request = buildRequest('ICollectApp', 'PayByOnline', 'AP-99009871');
-        RestContext.response = new RestResponse();
-        
-        delete [Select Id from Opportunity];
-        
-        try {
-            Test.startTest();
-        	PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
-        	Test.stopTest();
-        } catch (Exception e) {}
-    }    
-    @IsTest
-    static void testPayByLink() {
-        RestContext.request = buildRequest('ICollectApp', 'PayByLink', 'AP-99009871');
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testfncSendPaymentLink() {
-        RestContext.request = buildRequest('ICollectApp', 'PayByLink', 'AP-99009871');
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        Savepoint sp = Database.setSavepoint();
-        ResponseClass objRes=New ResponseClass();
-        string sMode='';
-        Integer totalAmount=0;
-        Integer Amount=0;
-        string sId='';
-        Set<Id> SetPaySlipId=new Set<Id>();
-        List<Pay_Slip__c> LstRecordsPaySlip=New List<Pay_Slip__c>();
-        Map<String,Id> couponNameAndID = new Map<String,Id>();
-		List<Coupon__c> copIdList = new List<Coupon__c>();     
-        
-            RestRequest req = RestContext.request;
-            List<ModelRequest> RequestClass = (List<ModelRequest>) JSON.deserialize(req.requestBody.tostring(), List<ModelRequest>.class);
-
-                sMode=RequestClass[0].Mode;
-                List<Contact> lstContact=[SELECT Id, Empl_Code__c FROM Contact where Empl_Code__c =:RequestClass[0].EMPCode];
-                Opportunity oppList=[SELECT id,Loan_Number__c,Branch__c,Loan_Product_Type__c,Installment_Amount__c,Balance_Collectable__c,branch__r.Name,Loan_Amount_Required__c FROM Opportunity
-                                     WHERE Loan_Number__c=:RequestClass[0].AppId limit 1]; 
-                    integer icount=0;
-                    String tmpSource='';
-                    Decimal tmpAmount=0;
-                    string UniqueNumberForPayU='TRAN-'+string.valueOf(Math.round((Math.random() * (900000) + 100000)));
-                   
-                    for(ModelRequest MR:RequestClass){
-                        Pay_Slip__c objPaySlip=New Pay_Slip__c();
-                        objPaySlip.ICollect_Request__c=req.requestBody.tostring();
-                        if(string.isNotEmpty(string.valueOf(MR.Source))){
-                            tmpSource=string.valueOf(MR.Source).toLowercase();
-                            if(string.valueOf(MR.Source).toLowercase()==string.valueOf('ICollectApp').toLowercase())
-                                objPaySlip.Source__c='ICollect App';
-                        }
-                        objPaySlip.Purpose__c=MR.purpose;
-                        objPaySlip.Depositor_Phone_Number__c=MR.DepositorPhone;
-                        objPaySlip.U_latitude__c = MR.u_latitude;
-                        objPaySlip.U_longitude__c = MR.u_longitude;
-                        
-                        
-                        objPaySlip.UniqueNumberForPayU__c=UniqueNumberForPayU;
-                        tmpAmount=decimal.valueOf(MR.Amount);
-                        objPaySlip.Amount__c=decimal.valueOf(MR.Amount);
-                        totalAmount=Integer.valueOf(MR.Amount);
-                        Amount=Amount+totalAmount;
-                        objPaySlip.IsIcollectApp__c=true;
-                        
-                        objPaySlip.Date__c=system.today();
-                        objPaySlip.PaySlip_Status__c='Active';
-                        objPaySlip.Instrument__c='Electronic payment';
-                        objPaySlip.Application__c=oppList.id;
-                        objPaySlip.Pay_Slip_Collector__c=lstContact[0].id;
-                        if(sMode.containsIgnoreCase('PayByOnline'))
-                            objPaySlip.IsIcollectForPayByOnline__c=true;
-                        objPaySlip.RecordTypeId=Schema.SobjectType.Pay_Slip__c.getRecordTypeInfosByName().get('Online payment').getRecordTypeId();
-                        LstRecordsPaySlip.add(objPaySlip);
-                        icount=icount+1;
-                    }
-
-                    List<Branch_Not_Eligible_for_Coupon__mdt> threatMappings = [SELECT Id,Branch_Name__c FROM Branch_Not_Eligible_for_Coupon__mdt];
-                    List<String> branchlst=new List<String>();
-                    for(Branch_Not_Eligible_for_Coupon__mdt mdt:threatMappings)
-                    {
-                        branchlst.add(mdt.Branch_Name__c);
-                    }
-                    
-                        Database.SaveResult[] srList = Database.insert(LstRecordsPaySlip, false);
-                        integer iCon=1;
-                        for (Database.SaveResult sr : srList) {
-                            if (sr.isSuccess()) {
-                                System.debug('Successfully inserted account. Account ID: ' + sr.getId());
-                                SetPaySlipId.add(sr.getId());
-                                sId='?id'+iCon+'='+sr.getId();
-                                objRes.sUrl= label.ICollectionURLForPayByLink + sId;//'http://isfctest-indiashelter.cs59.force.com/PayUForICollection'+sId;
-                                objRes.ResponseCode='200';
-                                objRes.status='Success';
-                                objRes.message='Pay Slip is created Successfully.'; 
-                            }
-                        }
-                                PayPostAPIHelper.fncSendPayOnLink(SetPaySlipId,Amount);
-        
-        
-        /*ModelRequest MR = RequestClass[0];
-        Pay_Slip__c objPaySlip=New Pay_Slip__c();
-        objPaySlip.ICollect_Request__c=req.requestBody.tostring();
-        objPaySlip.Source__c='ICollect App';
-        objPaySlip.Purpose__c=MR.purpose;
-        objPaySlip.Depositor_Phone_Number__c=MR.DepositorPhone;
-        objPaySlip.U_latitude__c = MR.u_latitude;
-        objPaySlip.U_longitude__c = MR.u_longitude;
-        objPaySlip.UniqueNumberForPayU__c=UniqueNumberForPayU;
-        objPaySlip.Amount__c=decimal.valueOf(MR.Amount);
- 		objPaySlip.IsIcollectApp__c=true;
-		objPaySlip.Date__c=system.today();
-        objPaySlip.PaySlip_Status__c='Active';
-        objPaySlip.Instrument__c='Electronic payment';
-        objPaySlip.Application__c=oppList.id;
-        objPaySlip.Pay_Slip_Collector__c=lstContact[0].id;
-        objPaySlip.IsIcollectForPayByOnline__c=true;
-        objPaySlip.RecordTypeId=Schema.SobjectType.Pay_Slip__c.getRecordTypeInfosByName().get('Online payment').getRecordTypeId();
-
-        insert objPaySlip;
-        PayPostAPIHelper.fncSendPayOnLink(new set<Id> {objPaySlip.Id}, MR.amount);*/
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testSalesAppFlow() {
-        RestContext.request = buildRequest('SalesApp', 'PayByOnline', 'AP-99009871');
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testInvalidLoan() {
-        RestContext.request = buildRequest('ICollectApp', 'PayByOnline', 'INVALID_LOAN');
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testEmptyRequest() {
-        RestRequest req = new RestRequest();
-        req.requestURI = '/services/apexrest/PayFunction';
-        req.httpMethod = 'POST';
-        req.requestBody = Blob.valueOf('[]');
-        
-        RestContext.request = req;
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testExceptionPath() {
-        // EMPCode not found → lstContact[0] causes exception
-        RestRequest req = new RestRequest();
-        req.requestURI = '/services/apexrest/PayFunction';
-        req.httpMethod = 'POST';
-        req.requestBody = Blob.valueOf(
-            '[{"EMPCode":"UNKNOWN","Amount":"1000","purpose":"Pre-EMI",' +
-            '"Source":"ICollectApp","DepositorPhone":"9999999999",' +
-            '"Mode":"PayByOnline","AppId":"AP-99009871"}]'
-        );
-        
-        RestContext.request = req;
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        PayPostAPI.ResponseClass res = PayPostAPI.doPayPost();
-        Test.stopTest();
-        
-    }
-    
-    private static RestRequest buildRequest(String source, String mode, String appId) {
-        RestRequest req = new RestRequest();
-        req.requestURI = '/services/apexrest/PayFunction';
-        req.httpMethod = 'POST';
-        req.requestBody = Blob.valueOf(
-            '[{"EMPCode":"ISFC1949","Amount":"1000","purpose":"Pre-EMI",' +
-            '"Source":"' + source + '","DepositorPhone":"9999999999",' +
-            '"Mode":"' + mode + '","AppId":"' + appId + '"}]'
-        );
-        return req;
-    }
-    
-    
-    
-}
