@@ -1,111 +1,175 @@
-public class SubseqLoanServiceWrapper {
-
-	public String curtailmentFlag;
-	public List<disbursalDetails> disbursalDetails;
-	public String loanAccountNumber;	    //HLHLSVLONS000005175520
-	public loanDisbursalStatus loanDisbursalStatus;
-	public requestHeader requestHeader;
-	public Integer scheduleProvided;	    //0
-	
-	public class disbursalDetails {
-		public Integer disbursalAmount;	    //211300
-		public String disbursalAuthorName;
-		public List<disbursalBreakUpDetail> disbursalBreakUpDetail;
-		public List<disbursalChargeDetail> disbursalChargeDetail;
-		public String disbursalDate;	    //07/07/2025
-		public Integer disbursalNo;	    //2
-		public Integer disbursalReference;	    //359548
-		public String disbursalRemarks;	    //Second
-		public String interestStartDate;	    //07/07/2025
-		public loanDisbursalType loanDisbursalType;
-		public Integer moratoriumPeriod;	    //0
-		public moratoriumTreatmentType moratoriumTreatmentType;
-		public String principalRecoveryFlag;	    //Y
-	}
-
-	
-
-	public class disbursalBreakUpDetail {
-		public Integer disbursalAmount;	    //211300
-		public Integer disbursalChargeAmount;	    //3202
-		public List<disbursalPaymentDetail> disbursalPaymentDetail;
-		public Integer duesAdjustmentAmount;	    //0
-		public Integer netDisbursalAmount;	    //208098
-	}
-
-	public class disbursalPaymentDetail {
-		public String accountByName;	    //
-		public String accountNumber;	    //26910100000474
-		public accountType accountType;
-		public String bankIdentificationCode;	    //YESB0000172
-		public String bankIdentificationType;	    //IFSC_CODE_KEY
-		public String instrumentDate;	    //
-		public Integer instrumentNumber;	    //552527
-		public Integer paymentAmount;	    //208098
-		public paymentMode paymentMode;
-		public Integer payoutbankId;	    //5000080
-		public printingBranch printingBranch;
-		public Integer sourcePaymentReferenceNumber;	    //552527
-		public subPaymentMode subPaymentMode;
-	}
-
-	public class accountType {
-		public String key;	    //SavingAccount
-		public String value;	    //String
-	}
-
-	public class paymentMode {
-		public String key;	    //ELECTRONIC_FUND_TRANSFER
-		public String value;	    //String
-	}
-
-	public class printingBranch {
-	}
-
-	public class subPaymentMode {
-		public String key;	    //NEFT
-		public String value;	    //String
-	}
-
-	Public class disbursalChargeDetail {
-		public String adjustChargeAtDisbursement;	    //Y
-		public Decimal applicableChargeAmount;	    //2494
-		public businessPartner businessPartner;
-		public Decimal chargeAmount;	    //2494
-		public Integer chargeId;	    //5002300
-		public Integer chargeReferenceId;	    //10411969
-		public String dueDate;	    //07/07/2025
-		public Decimal effectiveChargeAmount;	    //2494
-		public Integer originalChargeAmount;	    //2494
-	}
-
-	public class businessPartner {
-		public String key;	    //2890
-		public String value;	    //Long
-	}
-
-	public class loanDisbursalType {
-		public String key;	    //Normal
-		public String value;	    //String
-	}
-
-	 public	class moratoriumTreatmentType {
-        public String key;	
-        public String value;	
+@isTest
+private class SubseqLoanServiceWrapper_Test {
+    
+    @isTest
+    static void testWrapperInstantiation() {
+        // 1. Instantiate the main wrapper
+        SubseqLoanServiceWrapper wrapper = new SubseqLoanServiceWrapper();
+        wrapper.curtailmentFlag = 'Y';
+        wrapper.loanAccountNumber = 'HLHLSVLONS000005175520';
+        wrapper.scheduleProvided = 0;
+        
+        // 2. Instantiate requestHeader and userDetail
+        wrapper.requestHeader = new SubseqLoanServiceWrapper.requestHeader();
+        wrapper.requestHeader.tenantId = '505';
+        
+        wrapper.requestHeader.userDetail = new SubseqLoanServiceWrapper.userDetail();
+        wrapper.requestHeader.userDetail.branchId = 5000042;
+        wrapper.requestHeader.userDetail.userCode = 'krishna';
+        
+        // 3. Instantiate loanDisbursalStatus
+        wrapper.loanDisbursalStatus = new SubseqLoanServiceWrapper.loanDisbursalStatus();
+        wrapper.loanDisbursalStatus.key = '2';
+        wrapper.loanDisbursalStatus.value = 'String';
+        
+        // 4. Instantiate inner key-value pair classes
+        SubseqLoanServiceWrapper.loanDisbursalType disbursalType = new SubseqLoanServiceWrapper.loanDisbursalType();
+        disbursalType.key = 'Normal';
+        disbursalType.value = 'String';
+        
+        SubseqLoanServiceWrapper.moratoriumTreatmentType moratType = new SubseqLoanServiceWrapper.moratoriumTreatmentType();
+        moratType.key = 'Standard';
+        moratType.value = 'String';
+        
+        SubseqLoanServiceWrapper.accountType accType = new SubseqLoanServiceWrapper.accountType();
+        accType.key = 'SavingAccount';
+        accType.value = 'String';
+        
+        SubseqLoanServiceWrapper.paymentMode payMode = new SubseqLoanServiceWrapper.paymentMode();
+        payMode.key = 'ELECTRONIC_FUND_TRANSFER';
+        payMode.value = 'String';
+        
+        SubseqLoanServiceWrapper.subPaymentMode subPayMode = new SubseqLoanServiceWrapper.subPaymentMode();
+        subPayMode.key = 'NEFT';
+        subPayMode.value = 'String';
+        
+        SubseqLoanServiceWrapper.businessPartner bp = new SubseqLoanServiceWrapper.businessPartner();
+        bp.key = '2890';
+        bp.value = 'Long';
+        
+        // Even empty classes need to be instantiated for coverage
+        SubseqLoanServiceWrapper.printingBranch pBranch = new SubseqLoanServiceWrapper.printingBranch();
+        
+        // 5. Instantiate disbursalPaymentDetail
+        SubseqLoanServiceWrapper.disbursalPaymentDetail paymentDetail = new SubseqLoanServiceWrapper.disbursalPaymentDetail();
+        paymentDetail.accountByName = 'John Doe';
+        paymentDetail.accountNumber = '26910100000474';
+        paymentDetail.accountType = accType;
+        paymentDetail.bankIdentificationCode = 'YESB0000172';
+        paymentDetail.bankIdentificationType = 'IFSC_CODE_KEY';
+        paymentDetail.instrumentDate = '07/07/2025';
+        paymentDetail.instrumentNumber = 552527;
+        paymentDetail.paymentAmount = 208098;
+        paymentDetail.paymentMode = payMode;
+        paymentDetail.payoutbankId = 5000080;
+        paymentDetail.printingBranch = pBranch;
+        paymentDetail.sourcePaymentReferenceNumber = 552527;
+        paymentDetail.subPaymentMode = subPayMode;
+        
+        // 6. Instantiate disbursalBreakUpDetail
+        SubseqLoanServiceWrapper.disbursalBreakUpDetail breakUp = new SubseqLoanServiceWrapper.disbursalBreakUpDetail();
+        breakUp.disbursalAmount = 211300;
+        breakUp.disbursalChargeAmount = 3202;
+        breakUp.duesAdjustmentAmount = 0;
+        breakUp.netDisbursalAmount = 208098;
+        breakUp.disbursalPaymentDetail = new List<SubseqLoanServiceWrapper.disbursalPaymentDetail>{ paymentDetail };
+        
+        // 7. Instantiate disbursalChargeDetail
+        SubseqLoanServiceWrapper.disbursalChargeDetail charge = new SubseqLoanServiceWrapper.disbursalChargeDetail();
+        charge.adjustChargeAtDisbursement = 'Y';
+        charge.applicableChargeAmount = 2494.0;
+        charge.businessPartner = bp;
+        charge.chargeAmount = 2494.0;
+        charge.chargeId = 5002300;
+        charge.chargeReferenceId = 10411969;
+        charge.dueDate = '07/07/2025';
+        charge.effectiveChargeAmount = 2494.0;
+        charge.originalChargeAmount = 2494;
+        
+        // 8. Instantiate disbursalDetails and attach everything
+        SubseqLoanServiceWrapper.disbursalDetails detail = new SubseqLoanServiceWrapper.disbursalDetails();
+        detail.disbursalAmount = 211300;
+        detail.disbursalAuthorName = 'System';
+        detail.disbursalBreakUpDetail = new List<SubseqLoanServiceWrapper.disbursalBreakUpDetail>{ breakUp };
+        detail.disbursalChargeDetail = new List<SubseqLoanServiceWrapper.disbursalChargeDetail>{ charge };
+        detail.disbursalDate = '07/07/2025';
+        detail.disbursalNo = 2;
+        detail.disbursalReference = 359548;
+        detail.disbursalRemarks = 'Second';
+        detail.interestStartDate = '07/07/2025';
+        detail.loanDisbursalType = disbursalType;
+        detail.moratoriumPeriod = 0;
+        detail.moratoriumTreatmentType = moratType;
+        detail.principalRecoveryFlag = 'Y';
+        
+        wrapper.disbursalDetails = new List<SubseqLoanServiceWrapper.disbursalDetails>{ detail };
+        
+        // Assertions
+        System.assertEquals('HLHLSVLONS000005175520', wrapper.loanAccountNumber, 'Loan account number should match');
+        System.assertEquals('505', wrapper.requestHeader.tenantId, 'Tenant ID should match');
+        System.assertEquals(1, wrapper.disbursalDetails.size(), 'Disbursal details list should contain 1 item');
     }
-
-	public class loanDisbursalStatus {
-		public String key;	    //2
-		public String value;	    //String
-	}
-
-	public class requestHeader {
-		public String tenantId;	    //505
-		public userDetail userDetail;
-	}
-
-	public class userDetail {
-		public Integer branchId;	    //5000042
-		public String userCode;	    //krishna
-	}
+    
+    @isTest
+    static void testJSONDeserialization() {
+        // A JSON string mapped to the class structure to test JSON.deserialize
+        String jsonString = '{' +
+            '\"curtailmentFlag\": \"Y\",' +
+            '\"loanAccountNumber\": \"HLHLSVLONS000005175520\",' +
+            '\"scheduleProvided\": 0,' +
+            '\"requestHeader\": {' +
+                '\"tenantId\": \"505\",' +
+                '\"userDetail\": {' +
+                    '\"branchId\": 5000042,' +
+                    '\"userCode\": \"krishna\"' +
+                '}' +
+            '},' +
+            '\"loanDisbursalStatus\": {' +
+                '\"key\": \"2\",' +
+                '\"value\": \"String\"' +
+            '},' +
+            '\"disbursalDetails\": [' +
+                '{' +
+                    '\"disbursalAmount\": 211300,' +
+                    '\"disbursalNo\": 2,' +
+                    '\"loanDisbursalType\": {' +
+                        '\"key\": \"Normal\",' +
+                        '\"value\": \"String\"' +
+                    '},' +
+                    '\"disbursalBreakUpDetail\": [' +
+                        '{' +
+                            '\"netDisbursalAmount\": 208098,' +
+                            '\"disbursalPaymentDetail\": [' +
+                                '{' +
+                                    '\"accountNumber\": \"26910100000474\",' +
+                                    '\"accountType\": {' +
+                                        '\"key\": \"SavingAccount\",' +
+                                        '\"value\": \"String\"' +
+                                    '}' +
+                                '}' +
+                            ']' +
+                        '}' +
+                    '],' +
+                    '\"disbursalChargeDetail\": [' +
+                        '{' +
+                            '\"chargeAmount\": 2494.0,' +
+                            '\"businessPartner\": {' +
+                                '\"key\": \"2890\",' +
+                                '\"value\": \"Long\"' +
+                            '}' +
+                        '}' +
+                    ']' +
+                '}' +
+            ']' +
+        '}';
+        
+        SubseqLoanServiceWrapper parsedResult = (SubseqLoanServiceWrapper) JSON.deserialize(jsonString, SubseqLoanServiceWrapper.class);
+        
+        // Assertions to verify the JSON mapped correctly
+        System.assertNotEquals(null, parsedResult, 'Parsed result should not be null');
+        System.assertEquals('HLHLSVLONS000005175520', parsedResult.loanAccountNumber, 'Loan account number should parse correctly');
+        System.assertEquals('krishna', parsedResult.requestHeader.userDetail.userCode, 'User code should parse correctly');
+        System.assertEquals(211300, parsedResult.disbursalDetails[0].disbursalAmount, 'Disbursal amount should parse correctly');
+        System.assertEquals('SavingAccount', parsedResult.disbursalDetails[0].disbursalBreakUpDetail[0].disbursalPaymentDetail[0].accountType.key, 'Deeply nested account type key should parse correctly');
+    }
 }
