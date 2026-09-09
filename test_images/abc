@@ -1,190 +1,229 @@
-public class LoanServiceWrapper{
+@isTest
+private class LoanServiceWrapper_Test {
     
-    public requestHeader requestHeader;
-    public loanBookingRequest loanBookingRequest;
-  	public class requestHeader {
-        public Integer tenantId;	
-        public userDetail userDetail;
-    }
-    public	class userDetail {
-        public String userCode;	
-        public Integer branchId;	
-    }
-    public	class loanBookingRequest {
-        public loanDetail loanDetail;
-        Public List<gurantorCoapplicantDetails> gurantorCoapplicantDetails;
-        Public List<collateralDetails> collateralDetails;
-    }
-    
-     
-    
-   Public class gurantorCoapplicantDetails {
-        public string applicationFileNumber;
-		public String customerNumber;
-		public String relationshipType;	
-		public String partyRelationship;
-       
-	}
-    
-    Public class collateralDetails{
+    @isTest
+    static void testWrapperInstantiation() {
+        // 1. Instantiate the main wrapper
+        LoanServiceWrapper wrapper = new LoanServiceWrapper();
         
-        public String collateralNumber;
-        public String collateralMappingType;
-        public String collateralTypeCode;
-        public String collateralSubTypeCode;
-        public String depreciationTenure;
-    }
-    
-    
-    public	class loanDetail {
-        public String tag;	
-        public String loanRefId;
+        // 2. Instantiate requestHeader and userDetail
+        wrapper.requestHeader = new LoanServiceWrapper.requestHeader();
+        wrapper.requestHeader.tenantId = 123;
         
-        public String requestChannelCode;	
-        public String applicationTypeCode;	
-        public String branchCode;	
-        public String agreementDate;
-        public String applicationCreationDate;
-        public String productCode;	
-        public String schemeCode;	
-        public String currencyCode;	
-        public String applicationFileNumber;
-        public String applicationFormNumber;	
-        public String customerNo;
-        public String multipleDisbursalFlag;	
-        public Decimal netMarkup;
-        public Integer loanAssetCost;
-        public Decimal ltv;	
-        public String loanPurpose;	
-        public Integer loanAmountWithoutVAP;
-        public String loanAccountNumber;	
-        public String unitOfTenure;	
-        public String moratoriumTreatmentTypeCode;	
-        public String moratoriumPeriod;	
-        public linkingDetail linkingDetail;
-        public List<gstDetail> gstDetail;
-        public List<rateTierDetails> rateTierDetails;
-        public List<loanDisbursalDetails> loanDisbursalDetails;
-        public List<disbursalChargeDetails> disbursalChargeDetails;
-        public List<imdDetails> imdDetails;
-        public repaymentScheduleSpecificationDetail repaymentScheduleSpecificationDetail;
+        wrapper.requestHeader.userDetail = new LoanServiceWrapper.userDetail();
+        wrapper.requestHeader.userDetail.userCode = 'USR-001';
+        wrapper.requestHeader.userDetail.branchId = 1001;
+        
+        // 3. Instantiate loanBookingRequest
+        wrapper.loanBookingRequest = new LoanServiceWrapper.loanBookingRequest();
+        
+        // 4. Instantiate gurantorCoapplicantDetails
+        LoanServiceWrapper.gurantorCoapplicantDetails guarantor = new LoanServiceWrapper.gurantorCoapplicantDetails();
+        guarantor.applicationFileNumber = 'APP-12345';
+        guarantor.customerNumber = 'CUST-987';
+        guarantor.relationshipType = 'Co-Applicant';
+        guarantor.partyRelationship = 'Spouse';
+        wrapper.loanBookingRequest.gurantorCoapplicantDetails = new List<LoanServiceWrapper.gurantorCoapplicantDetails>{ guarantor };
+        
+        // 5. Instantiate collateralDetails
+        LoanServiceWrapper.collateralDetails collateral = new LoanServiceWrapper.collateralDetails();
+        collateral.collateralNumber = 'COL-001';
+        collateral.collateralMappingType = 'Primary';
+        collateral.collateralTypeCode = 'Property';
+        collateral.collateralSubTypeCode = 'Commercial';
+        collateral.depreciationTenure = '15';
+        wrapper.loanBookingRequest.collateralDetails = new List<LoanServiceWrapper.collateralDetails>{ collateral };
+        
+        // 6. Instantiate loanDetail and its direct properties
+        wrapper.loanBookingRequest.loanDetail = new LoanServiceWrapper.loanDetail();
+        wrapper.loanBookingRequest.loanDetail.tag = 'LoanDetails';
+        wrapper.loanBookingRequest.loanDetail.loanRefId = 'REF-555';
+        wrapper.loanBookingRequest.loanDetail.requestChannelCode = 'WEB';
+        wrapper.loanBookingRequest.loanDetail.applicationTypeCode = 'NEW';
+        wrapper.loanBookingRequest.loanDetail.branchCode = 'BR-01';
+        wrapper.loanBookingRequest.loanDetail.agreementDate = '2026-09-09';
+        wrapper.loanBookingRequest.loanDetail.applicationCreationDate = '2026-09-01';
+        wrapper.loanBookingRequest.loanDetail.productCode = 'PL';
+        wrapper.loanBookingRequest.loanDetail.schemeCode = 'SCH-01';
+        wrapper.loanBookingRequest.loanDetail.currencyCode = 'INR';
+        wrapper.loanBookingRequest.loanDetail.applicationFileNumber = 'APP-12345';
+        wrapper.loanBookingRequest.loanDetail.applicationFormNumber = 'FRM-123';
+        wrapper.loanBookingRequest.loanDetail.customerNo = 'CUST-987';
+        wrapper.loanBookingRequest.loanDetail.multipleDisbursalFlag = 'Y';
+        wrapper.loanBookingRequest.loanDetail.netMarkup = 10.5;
+        wrapper.loanBookingRequest.loanDetail.loanAssetCost = 500000;
+        wrapper.loanBookingRequest.loanDetail.ltv = 80.5;
+        wrapper.loanBookingRequest.loanDetail.loanPurpose = 'Business Expansion';
+        wrapper.loanBookingRequest.loanDetail.loanAmountWithoutVAP = 400000;
+        wrapper.loanBookingRequest.loanDetail.loanAccountNumber = 'ACC-9999';
+        wrapper.loanBookingRequest.loanDetail.unitOfTenure = 'Months';
+        wrapper.loanBookingRequest.loanDetail.moratoriumTreatmentTypeCode = 'Standard';
+        wrapper.loanBookingRequest.loanDetail.moratoriumPeriod = '6';
+        
+        // 7. Instantiate linkingDetail & inner loanDetails
+        LoanServiceWrapper.linkingDetail linkDetails = new LoanServiceWrapper.linkingDetail();
+        linkDetails.applicationFileNumber = 'APP-12345';
+        linkDetails.collateralNumber = 'COL-001';
+        linkDetails.loanAccountNumber = 'ACC-9999';
+        linkDetails.linkingReason = 'Top-up';
+        linkDetails.linkingRemarks = 'Approved';
+        
+        LoanServiceWrapper.loanDetails innerLoanDetail = new LoanServiceWrapper.loanDetails();
+        innerLoanDetail.loanAccountNumber = 'ACC-8888';
+        linkDetails.loanDetails = new List<LoanServiceWrapper.loanDetails>{ innerLoanDetail };
+        wrapper.loanBookingRequest.loanDetail.linkingDetail = linkDetails;
+        
+        // 8. Instantiate gstDetail
+        LoanServiceWrapper.gstDetail gst = new LoanServiceWrapper.gstDetail();
+        gst.bpId = 'BP-01';
+        gst.bpTypeId = 'TypeA';
+        gst.branchStateCode = 'HR';
+        gst.gSTINAddress = 'Gurugram';
+        gst.gSTINCustomerNo = 'CUST-987';
+        gst.gSTINNo = '06AAAAA1234A1Z5';
+        gst.gSTStateCode = '06';
+        gst.loanRefId = 'REF-555';
+        wrapper.loanBookingRequest.loanDetail.gstDetail = new List<LoanServiceWrapper.gstDetail>{ gst };
+        
+        // 9. Instantiate rateTierDetails
+        LoanServiceWrapper.rateTierDetails rateTier = new LoanServiceWrapper.rateTierDetails();
+        rateTier.fromInstallmentNo = '1';
+        rateTier.loanRefId = 'REF-555';
+        rateTier.netMarkup = 2.0;
+        rateTier.ratePercentage = 12.5;
+        rateTier.rateTypeCode = 'Fixed';
+        rateTier.toInstallmentNo = 24;
+        wrapper.loanBookingRequest.loanDetail.rateTierDetails = new List<LoanServiceWrapper.rateTierDetails>{ rateTier };
+        
+        // 10. Instantiate disbursalPaymentDetails, BreakUp, and loanDisbursal
+        LoanServiceWrapper.disbursalPaymentDetails paymentDetail = new LoanServiceWrapper.disbursalPaymentDetails();
+        paymentDetail.tag = 'Payment';
+        paymentDetail.paymentModeCode = 'NEFT';
+        paymentDetail.subPaymentModeCode = 'Online';
+        paymentDetail.paymentAmount = 400000.0;
+        paymentDetail.accountByName = 'John Doe';
+        paymentDetail.instrumentNumber = 'INST-111';
+        paymentDetail.instrumentDate = '2026-09-09';
+        paymentDetail.accountTypeCode = 'Savings';
+        paymentDetail.accountNumber = 'AC-123456';
+        paymentDetail.bankIdentificationType = 'IFSC';
+        paymentDetail.bankIdentificationCode = 'HDFC0001234';
+        paymentDetail.bankBranchCode = 'BR-99';
+        paymentDetail.payoutbankId = 'PB-01';
+        paymentDetail.printingBranchCode = 'PR-01';
+        paymentDetail.sourcePaymentReferenceNumber = 123456789;
+        
+        LoanServiceWrapper.disbursalBreakUpDetails breakUp = new LoanServiceWrapper.disbursalBreakUpDetails();
+        breakUp.tag = 'BreakUp';
+        breakUp.loanRefId = 'REF-555';
+        breakUp.disbursalAmount = 400000;
+        breakUp.disbursalChargeAmount = 5000.0;
+        breakUp.disbursalPaymentDetails = new List<LoanServiceWrapper.disbursalPaymentDetails>{ paymentDetail };
+        
+        LoanServiceWrapper.loanDisbursalDetails disbursalDetail = new LoanServiceWrapper.loanDisbursalDetails();
+        disbursalDetail.tag = 'Disbursal';
+        disbursalDetail.disbursalReferenceId = 'DREF-001';
+        disbursalDetail.loanRefId = 'REF-555';
+        disbursalDetail.disbursalNo = 1;
+        disbursalDetail.disbursalTransactionDate = '2026-09-09';
+        disbursalDetail.disbursalAmount = 400000;
+        disbursalDetail.disbursalDate = '2026-09-10';
+        disbursalDetail.principalRecoveryFlag = 1;
+        disbursalDetail.disbursalRemarks = 'Processed';
+        disbursalDetail.disbursalTypeCode = 'Full';
+        disbursalDetail.referenceLoanAccountNumber = 'ACC-9999';
+        disbursalDetail.disbursalAuthorName = 'System';
+        disbursalDetail.disbursalBreakUpDetails = new List<LoanServiceWrapper.disbursalBreakUpDetails>{ breakUp };
+        
+        wrapper.loanBookingRequest.loanDetail.loanDisbursalDetails = new List<LoanServiceWrapper.loanDisbursalDetails>{ disbursalDetail };
+        
+        // 11. Instantiate imdAllocationDetails & imdDetails
+        LoanServiceWrapper.imdAllocationDetails imdAlloc = new LoanServiceWrapper.imdAllocationDetails();
+        imdAlloc.allocatedAmount = 1000;
+        imdAlloc.chargeId = 'CHG-999';
+        
+        LoanServiceWrapper.imdDetails imd = new LoanServiceWrapper.imdDetails();
+        imd.receiptReference = 'REC-111';
+        imd.refundAmount = '0';
+        imd.imdAllocationDetails = new Set<LoanServiceWrapper.imdAllocationDetails>{ imdAlloc };
+        wrapper.loanBookingRequest.loanDetail.imdDetails = new List<LoanServiceWrapper.imdDetails>{ imd };
+        
+        // 12. Instantiate disbursalChargeDetails
+        LoanServiceWrapper.disbursalChargeDetails chargeDetail = new LoanServiceWrapper.disbursalChargeDetails();
+        chargeDetail.chargeId = 'CHG-999';
+        chargeDetail.bpTypeCode = 'TypeB';
+        chargeDetail.bpCode = 'BP-02';
+        chargeDetail.transactionChargeDate = '2026-09-09';
+        chargeDetail.dueDate = '2026-10-09';
+        chargeDetail.chargeAmount = 5000.0;
+        chargeDetail.adjustChargeAtDisbursement = 'Y';
+        chargeDetail.originalChargeAmount = 5000.0;
+        chargeDetail.imdDetails = new List<LoanServiceWrapper.imdDetails>{ imd };
+        wrapper.loanBookingRequest.loanDetail.disbursalChargeDetails = new List<LoanServiceWrapper.disbursalChargeDetails>{ chargeDetail };
+        
+        // 13. Instantiate repaymentScheduleSpecificationDetail
+        LoanServiceWrapper.repaymentScheduleSpecificationDetail repayment = new LoanServiceWrapper.repaymentScheduleSpecificationDetail();
+        repayment.dueDay = '5';
+        repayment.repaymentPolicyCode = 'POL-01';
+        repayment.principalRecoveryStartDate = '2026-10-05';
+        repayment.interestStartDate = '2026-09-05';
+        repayment.installmentTypeCode = 'Equated';
+        repayment.anchorRate = 8.5;
+        repayment.interestRate = 12.5;
+        repayment.installmentAmount = 15000;
+        repayment.tenure = 36;
+        repayment.anchorTypeCode = 'Base';
+        repayment.rateTypeCode = 1;
+        repayment.numberOfAdvanceInstallments = 0;
+        repayment.brokenPeriodDays = 0;
+        repayment.interestFreeDays = 0;
+        repayment.gradedBasedOnCode = 'None';
+        wrapper.loanBookingRequest.loanDetail.repaymentScheduleSpecificationDetail = repayment;
+        
+        // Assertions to ensure standard instantiation worked
+        System.assertNotEquals(null, wrapper.requestHeader, 'requestHeader should be instantiated');
+        System.assertEquals(123, wrapper.requestHeader.tenantId, 'tenantId should match');
+        System.assertEquals('USR-001', wrapper.requestHeader.userDetail.userCode, 'userCode should match');
+        System.assertEquals(1, wrapper.loanBookingRequest.loanDetail.loanDisbursalDetails.size(), 'List should have 1 item');
     }
-
-	Public class linkingDetail {
-		public String applicationFileNumber;	
-		public String collateralNumber;	
-		public String loanAccountNumber;	
-		public String linkingReason;
-		public String linkingRemarks;
-        public List<loanDetails> loanDetails;
-	} 
-   
-    Public class loanDetails {
-		
-		public String loanAccountNumber;	
-		
-	} 
     
-   
-    public	class gstDetail {
-        public String bpId;	
-        public String bpTypeId;	
-        public String branchStateCode;	
-        public String gSTINAddress;	
-        public String gSTINCustomerNo;	
-        public String gSTINNo;	
-        public String gSTStateCode;	
-        public String loanRefId;
-    }
-    
-    public	class rateTierDetails {
-        public String fromInstallmentNo;	
-        public String loanRefId;	
-        public Decimal netMarkup;	
-        public Decimal ratePercentage;	
-        public String rateTypeCode;	
-        public Integer toInstallmentNo;
-    }
-    
-    public	class loanDisbursalDetails {
-        public String tag;	
-         public String disbursalReferenceId;
-        public String loanRefId;	
-        public Integer disbursalNo;	
-        public String disbursalTransactionDate;	
-        public Integer disbursalAmount;	
-        public String disbursalDate;
-        public Integer principalRecoveryFlag;	
-        public String disbursalRemarks;	
-        public String disbursalTypeCode;
-        public String referenceLoanAccountNumber;	
-        public String disbursalAuthorName;
-        public List<disbursalBreakUpDetails> disbursalBreakUpDetails;
-    }
-    
-    public	class disbursalBreakUpDetails {
-        public String tag;	
-        public String loanRefId;	
-        public Integer disbursalAmount;	
-        public Double disbursalChargeAmount;
-        public List<disbursalPaymentDetails> disbursalPaymentDetails;
-    }
-    
-    public	class disbursalPaymentDetails {
-        public String tag;	
-        public String paymentModeCode;	
-        public String subPaymentModeCode;	
-        public Double paymentAmount;	
-        public String accountByName;
-        public String instrumentNumber;	
-        public String instrumentDate;
-        public String accountTypeCode;	
-        public String accountNumber;	
-        public String bankIdentificationType;	
-        public String bankIdentificationCode;	
-        public String bankBranchCode;	
-        public String payoutbankId;	
-        public String printingBranchCode;	
-        public Integer sourcePaymentReferenceNumber;
-    }
-    
-    public	class repaymentScheduleSpecificationDetail {
-        public String dueDay;	
-        public String repaymentPolicyCode;	
-        public String principalRecoveryStartDate;	
-        public String interestStartDate;
-        public String installmentTypeCode;	
-        public Decimal anchorRate;	
-        public Decimal interestRate;	
-        public Integer installmentAmount;	
-        public Integer tenure;	
-        public String anchorTypeCode;	
-        public Integer rateTypeCode;
-        public Integer numberOfAdvanceInstallments;	
-        public Integer brokenPeriodDays;	
-        public Integer interestFreeDays;	
-        public String gradedBasedOnCode;	
-       
-    }
-    
-       public	class disbursalChargeDetails {
-        public String chargeId;	
-        public String bpTypeCode;	
-        public String bpCode;	
-        public String transactionChargeDate;	
-        public String dueDate;	
-        public Decimal chargeAmount;	
-        public String adjustChargeAtDisbursement;	
-        public Decimal originalChargeAmount;	
-        public List<imdDetails> imdDetails;
-    }
-    public	class imdDetails {
-        public String receiptReference;	
-        public String refundAmount;	
-        public Set<imdAllocationDetails> imdAllocationDetails;
-    }
-    public	class imdAllocationDetails {
-        public Integer allocatedAmount;	
-        public String chargeId;	
+    @isTest
+    static void testJSONDeserialization() {
+        // A condensed JSON string that hits key points in the hierarchy to test JSON.deserialize
+        String jsonString = '{' +
+            '\"requestHeader\": {' +
+                '\"tenantId\": 123,' +
+                '\"userDetail\": {' +
+                    '\"userCode\": \"USR-001\",' +
+                    '\"branchId\": 1001' +
+                '}' +
+            '},' +
+            '\"loanBookingRequest\": {' +
+                '\"loanDetail\": {' +
+                    '\"loanRefId\": \"REF-555\",' +
+                    '\"netMarkup\": 10.5,' +
+                    '\"loanDisbursalDetails\": [' +
+                        '{' +
+                            '\"disbursalAmount\": 400000,' +
+                            '\"disbursalBreakUpDetails\": [' +
+                                '{' +
+                                    '\"disbursalChargeAmount\": 5000.0' +
+                                '}' +
+                            ']' +
+                        '}' +
+                    ']' +
+                '}' +
+            '}' +
+        '}';
+        
+        LoanServiceWrapper parsedResult = (LoanServiceWrapper) JSON.deserialize(jsonString, LoanServiceWrapper.class);
+        
+        // Assertions to verify the JSON mapped correctly
+        System.assertNotEquals(null, parsedResult, 'Parsed result should not be null');
+        System.assertEquals(123, parsedResult.requestHeader.tenantId, 'tenantId should parse correctly');
+        System.assertEquals('USR-001', parsedResult.requestHeader.userDetail.userCode, 'userCode should parse correctly');
+        System.assertEquals('REF-555', parsedResult.loanBookingRequest.loanDetail.loanRefId, 'loanRefId should parse correctly');
+        System.assertEquals(10.5, parsedResult.loanBookingRequest.loanDetail.netMarkup, 'netMarkup should parse correctly');
+        System.assertEquals(400000, parsedResult.loanBookingRequest.loanDetail.loanDisbursalDetails[0].disbursalAmount, 'disbursalAmount should parse correctly');
     }
 }
