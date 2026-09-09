@@ -1,54 +1,38 @@
-    @IsTest
-    static void testPayPostAPIHelperProperties() {
-        // Covers the static properties shown in 525d7b4d-7a2f-4602-9034-65c1047c9dad
-        PayPostAPIHelper.sKey = 'test';
-        PayPostAPIHelper.sReferenceNumber = 'test';
-        PayPostAPIHelper.sProducte = 'test';
-        PayPostAPIHelper.sName = 'test';
-        PayPostAPIHelper.sLastName = 'test';
-        PayPostAPIHelper.sEmail = 'test';
-        PayPostAPIHelper.sAmount = 'test';
-        PayPostAPIHelper.sSolt = 'test';
-        PayPostAPIHelper.sHasKey = 'test';
-        PayPostAPIHelper.udf1 = 'test';
-        PayPostAPIHelper.udf2 = 'test';
-        PayPostAPIHelper.udf3 = 'test';
-        PayPostAPIHelper.udf4 = 'test';
-        PayPostAPIHelper.udf5 = 'test';
-        PayPostAPIHelper.sUrl = 'test';
-        PayPostAPIHelper.sPhone = 'test';
-        PayPostAPIHelper.sResponseUrl = 'test';
-        PayPostAPIHelper.PayUId = 'test';
-        PayPostAPIHelper.sMode = 'test';
-        PayPostAPIHelper.sData = 'test';
-        PayPostAPIHelper.PaySlipId = 'test';
-        
-        // Assert one to ensure the assignment registered properly
-        System.assertEquals('test', PayPostAPIHelper.sKey);
-    }
+public class JSON2APEXBRENEW {
     
-    @IsTest
-    static void testFncSendPayOnLinkDirect() {
-        // Covers the inner block of fncSendPayOnLink shown in d6b09c02-f2ee-4fa0-9f9c-7cccda02645b
-        Opportunity opp = [SELECT Id FROM Opportunity WHERE Loan_Number__c = 'AP-99009871' LIMIT 1];
+    public Integer statusCode;	//200
+	public Body body;
+    
+    
+	public class Body {
+		public List<LOANDETAILS> LOAN_DETAILS;
+		public List<PRESANCTIONBRE> PRE_SANCTION_BRE;
+		public List<POSTSANCTIONBRE> POST_SANCTION_BRE;
+		public List<SCORECARD> SCORECARD;
+	}
+    
+    
+	public class LOANDETAILS {
+		public String Rule_Value;	//AP-1709
+		public String Rule_Name;	//LoanNumber
+	}
+    
+    
+	public class PRESANCTIONBRE {
+		public String Rule_Value;	//AP-1709
+		public String Rule_Name;	//LoanNumber
+	}
+    
+    
+	public class POSTSANCTIONBRE {
+		public String Rule_Value;	//AP-1709
+		public String Rule_Name;	//LoanNumber
+	}
+    
+    
+	public class SCORECARD {
+		public String Score_Value;	//AP-1709
+		public String Score_type;	//LoanNumber
+	}
         
-        Pay_Slip__c testPaySlip = new Pay_Slip__c();
-        testPaySlip.Amount__c = 1000;
-        testPaySlip.Application__c = opp.Id;
-        testPaySlip.PaySlip_Status__c = 'Active';
-        testPaySlip.Instrument__c = 'Electronic payment';
-        insert testPaySlip;
-        
-        Set<Id> paySlipIds = new Set<Id>{testPaySlip.Id};
-        
-        Test.startTest();
-        // Wrapping the future method inside startTest/stopTest forces it to execute synchronously
-        PayPostAPIHelper.sData = 'testData'; 
-        PayPostAPIHelper.fncSendPayOnLink(paySlipIds, 1000);
-        Test.stopTest();
-        
-        // Optional: Verify the PayU_Payment_Status__c was actually inserted
-        List<PayU_Payment_Status__c> statusList = [SELECT Id, Status__c FROM PayU_Payment_Status__c WHERE Pay_Slip__c = :testPaySlip.Id];
-        System.assertEquals(1, statusList.size(), 'A PayU_Payment_Status__c record should have been created.');
-        System.assertEquals('Requested', statusList[0].Status__c, 'Status should be Requested.');
-    }
+}
