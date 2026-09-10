@@ -1,175 +1,606 @@
+here is an apex class
+
+/*
+* Author: Umair Ahmad
+* Date: 12-05-22
+*/
+public class WebmergeDocForAccFormstack {
+    public List<Account> accObj {get; set;}
+    public List<Formstack_Document__c> fsObj {get; set;}
+    public Id appId {get; set;}
+    public Boolean checkButton {get; set;}
+    public string filename{get;set;}
+    public List<String> selectedValues{get;set;}
+    public String attid{get; set;}
+    public webmergeDocForAccFormstack(ApexPages.StandardController controller){
+        fsObj = new List<Formstack_Document__c>();
+        appId = ApexPages.currentPage().getParameters().get('Id');
+        system.debug('Apppp IDdd'+appId);
+        if(appId == null){
+            ApexPages.addMessage(new ApexPages.message(ApexPages.Severity.Error,('No account Selected')));
+        }
+        else{
+            if(appId!= null){
+                accObj = [Select ID,Select_Docs_To_Generate__pc From Account where ID =: appId];
+                system.debug('acc ID'+accObj);
+            }
+            if(!accObj.isEmpty()){
+                fsObj = [SELECT Name,Select_Docs_To_Generate__c,Application__c, Loan_Number__c From Formstack_Document__c WHERE Account__c = :accObj[0].ID order by CreatedDate desc limit 1];
+                system.debug('fsObj ID'+fsObj);
+            }
+        }
+        if(fsObj.size()>0 && fsObj[0].Loan_Number__c!= null && fsObj[0].name!= null){
+            filename = fsObj[0].Loan_Number__c +'='+ fsObj[0].name;
+        }
+        if(!accObj.isEmpty() && accObj[0].Select_Docs_To_Generate__pc != null){
+            selectedValues = accObj[0].Select_Docs_To_Generate__pc.split(';');
+        }
+    }
+    public  void createFSRecord(){
+        try {
+            Formstack_Document__c myNewContact = new Formstack_Document__c();
+            myNewContact.Account__c = appId;
+            Insert myNewContact;
+            system.debug('new sf record '+myNewContact);
+        } catch (DMLException e) {
+            System.debug('Exception occured : ' + e.getMessage());
+        }
+    }
+    public PageReference mulDocument(){
+        checkButton = true;
+        fsObj = new List<Formstack_Document__c>();
+        if (appId != null) {
+            List < webm__Webmerge_Mapping__c > mappingQuery = [SELECT Id, name FROM webm__Webmerge_Mapping__c WHERE Name = 'Account Mapping Formstack' LIMIT 1];
+            system.debug('mapping query '+mappingQuery);
+            webm__Webmerge_Mapping__c mapping = new webm__Webmerge_Mapping__c();
+            if(mappingQuery.size()>0){
+                mapping = mappingQuery[0];
+                System.debug('@@@@@@--------->' + mapping);
+            }
+            accObj = [Select ID, Add_On_Proof__pc, Identity_Proof__pc, Select_Docs_To_Generate__pc From Account where ID =: appId];
+            if(!accObj.isEmpty()){
+                fsObj = [SELECT Name, Select_Docs_To_Generate__c, Loan_Number__c, Add_On_Proof__c, Identity_Proof__c From Formstack_Document__c WHERE Account__c = :accObj[0].ID order by CreatedDate desc limit 1];
+                System.debug('opp '+accObj+'  fsss '+fsObj);
+            }
+            List < Attachment > generatedAttachments = new List < Attachment >();
+            if(!Test.isRunningTest()){
+                generatedAttachments = webm.WebmergeGenerator.generateDocumentGetAttachments(
+                    mapping.Id,
+                    fsObj[0].Id,
+                    'Formstack_Document__c'
+                );
+            }
+            else
+                if(Test.isRunningTest()){
+                    system.debug('inside test ');
+                    generatedAttachments = [Select Id, ParentID From Attachment Limit 1];
+                    system.debug('gen reata '+generatedAttachments);
+                }
+            //system.debug('gen mapping '+mapping.Id+'fsobj ' +fsObj[0].Id+' Formstack_Document__c');
+            system.debug('generatedAttachments '+generatedAttachments);
+            for (attachment att: generatedAttachments) {
+                if (att != null &&  !accObj.isEmpty()) {
+                    if(!Test.isRunningTest()) {
+                        if(accObj[0].Select_Docs_To_Generate__pc == 'Form 60'){
+                            att.Description = 'Form 60';
+                        }
+                        else{
+                            att.Description = 'Illetrate Certificate';
+                        }
+                        att.ParentID = accObj[0].Id;
+                        attid = att.Id;
+                        insert att;
+                        
+                        Account acc = new Account();
+                        acc.Id = accObj[0].Id;
+                        if(accObj[0].Select_Docs_To_Generate__pc == 'Form 60'){
+                            acc.is_Form_60_Generated__c = true;
+                        }
+                        else{
+                            acc.is_Illetrate_Certificate_Generated__c = true;
+                        }
+                        update acc;
+                        
+                        if(accObj[0].Select_Docs_To_Generate__pc == 'Form 60'){
+                            fsObj[0].Add_On_Proof__c = accObj[0].Add_On_Proof__pc;
+                            fsObj[0].Identity_Proof__c = accObj[0].Identity_Proof__pc;
+                        }
+                        update fsObj;
+                    }
+                    String redirect = '/servlet/servlet.FileDownload?file=' + att.Id;
+                    PageReference ref = new PageReference(redirect);
+                    ref.setRedirect(true);
+                    return ref;
+                }
+            }
+        }
+        else {
+            ApexPages.addMessage(new ApexPages.message(ApexPages.Severity.error, 'Application Not Found'));
+        }
+        return null;
+    }
+    @AuraEnabled
+    public static Account getAccountDetails(String recordId){
+        try{
+            List<Account> accList = [Select Id, Father_s_Name__pc, Add_On_Proof__pc, Identity_Proof__pc, Select_Docs_To_Generate__pc, Form_60_61__c, Pan_Card_No__pc from Account where Id =: recordId];
+            System.debug('accList==>'+accList);
+            if(accList.size() > 0){
+                return accList[0];
+            }
+            else{
+                return NULL;
+            }
+        }
+        catch(Exception ex){
+            System.debug(ex.getLineNumber()+'=========='+ex.getMessage());
+        }
+        return NULL;
+    }
+    @AuraEnabled
+    public static void saveFormStackDocument(String recordId, String nameAsPerPANCard, String nameAsPerVoterCard, String nameAsPerPassport, String nameAsPerDrivingLicense, String nameAsPerAadharCard, String dobAsPerPANCard, String dobAsPerVoterCard, String dobAsPerPassport, String dobAsPerDrivingLicense, String dobAsPerAadharCard, String signAsPerPANCard, String signAsPerPassport, String correctDocument){
+        try{
+            Account acc = getAccountDetails(recordId);
+            Map<Id, Date> accIdToHLASignDateMap = new Map<Id, Date>();
+            for(OpportunityContactRole ocr : [Select Id, Contact.Account.Id, OpportunityId, Opportunity.HLA_Sign_Date__c FROM OpportunityContactRole where Contact.Account.Id =: recordId]){
+                accIdToHLASignDateMap.put(ocr.Contact.Account.Id, ocr.Opportunity.HLA_Sign_Date__c);
+            }
+            Formstack_Document__c formStackDoc = new Formstack_Document__c();
+            formStackDoc.Account__c = recordId;
+            formStackDoc.Father_s_Name__c = acc.Father_s_Name__pc;
+            formStackDoc.Name_as_per_PAN_Card__c = nameAsPerPANCard != '' ? nameAsPerPANCard : 'N/A';
+            formStackDoc.Name_as_per_Voter_Card__c = nameAsPerVoterCard != '' ? nameAsPerVoterCard : 'N/A';
+            formStackDoc.Name_as_per_Passport__c = nameAsPerPassport != '' ? nameAsPerPassport : 'N/A';
+            formStackDoc.Name_as_per_Driving_License__c = nameAsPerDrivingLicense != '' ? nameAsPerDrivingLicense : 'N/A';
+            formStackDoc.Name_as_per_Aadhar_Card__c = nameAsPerAadharCard != '' ? nameAsPerAadharCard : 'N/A';
+            formStackDoc.DOB_as_per_PAN_Card__c = dobAsPerPANCard != '' ? changeDateFormat(dobAsPerPANCard) : 'N/A';
+            formStackDoc.DOB_as_per_Voter_Card__c = dobAsPerVoterCard != '' ? changeDateFormat(dobAsPerVoterCard) : 'N/A';
+            formStackDoc.DOB_as_per_Passport__c = dobAsPerPassport != '' ? changeDateFormat(dobAsPerPassport) : 'N/A';
+            formStackDoc.DOB_as_per_Driving_License__c = dobAsPerDrivingLicense != '' ? changeDateFormat(dobAsPerDrivingLicense) : 'N/A';
+            formStackDoc.DOB_as_per_Aadhar_Card__c = dobAsPerAadharCard != '' ? changeDateFormat(dobAsPerAadharCard) : 'N/A';
+            formStackDoc.Sign_as_per_PAN_Card__c = signAsPerPANCard;
+            formStackDoc.Sign_as_per_Passport__c = signAsPerPassport;
+            formStackDoc.HLA_Signed_Date__c = accIdToHLASignDateMap.get(recordId);
+            if(correctDocument == 'PAN Card'){
+                formStackDoc.Correct_Document_Name__c = correctDocument;
+                formStackDoc.Correct_Date_of_Birth__c = dobAsPerPANCard;
+            }
+            if(correctDocument == 'Voter Card'){
+                formStackDoc.Correct_Document_Name__c = correctDocument;
+                formStackDoc.Correct_Date_of_Birth__c = dobAsPerVoterCard;
+            }
+            if(correctDocument == 'Passport'){
+                formStackDoc.Correct_Document_Name__c = correctDocument;
+                formStackDoc.Correct_Date_of_Birth__c = dobAsPerPassport;
+            }
+            if(correctDocument == 'Driving License'){
+                formStackDoc.Correct_Document_Name__c = correctDocument;
+                formStackDoc.Correct_Date_of_Birth__c = dobAsPerDrivingLicense;
+            }
+            if(correctDocument == 'Aadhar Card'){
+                formStackDoc.Correct_Document_Name__c = correctDocument;
+                formStackDoc.Correct_Date_of_Birth__c = dobAsPerAadharCard;
+            }
+            insert formStackDoc;
+        }
+        catch(Exception ex){
+            System.debug(ex.getLineNumber()+'=========='+ex.getMessage());
+        }
+    }
+    
+    public static String changeDateFormat(String dateStr){
+        Date d = Date.valueOf(dateStr);
+        String dt = DateTime.newInstance(d.year(),d.month(),d.day()).format('d-MM-YYYY');
+        System.debug(dt);
+        return dt;
+    }
+    
+    @AuraEnabled
+    public static void singleAffidavitGenerateDocuments(String recordId){
+        String attid;
+        List<Formstack_Document__c> fsObj = new List<Formstack_Document__c>();
+        if(recordId != null){
+            List<webm__Webmerge_Mapping__c> mappingQuery = [SELECT Id, name FROM webm__Webmerge_Mapping__c WHERE Name = 'Account Mapping Formstack' LIMIT 1];
+            system.debug('mapping query '+mappingQuery);
+            webm__Webmerge_Mapping__c mapping = new webm__Webmerge_Mapping__c();
+            if(mappingQuery.size()>0){
+                mapping = mappingQuery[0];
+                System.debug('@@@@@@--------->' + mapping);
+            }
+            List<Account> accObj = [Select ID, Select_Docs_To_Generate__pc From Account where ID =: recordId];
+            if(!accObj.isEmpty()){
+                fsObj = [SELECT Name,Select_Docs_To_Generate__c, Loan_Number__c From Formstack_Document__c WHERE Account__c = :accObj[0].ID order by CreatedDate desc limit 1];
+                System.debug('opp '+accObj+'  fsss '+fsObj);
+            }
+            List<Attachment> generatedAttachments = new List <Attachment>();
+            if(!Test.isRunningTest()){
+                generatedAttachments = webm.WebmergeGenerator.generateDocumentGetAttachments(
+                    mapping.Id,
+                    fsObj[0].Id,
+                    'Formstack_Document__c'
+                );
+            }
+            else
+                if(Test.isRunningTest()){
+                    system.debug('inside test ');
+                    generatedAttachments = [Select Id, ParentID From Attachment Limit 1];
+                    system.debug('gen reata '+generatedAttachments);
+                }
+            //system.debug('gen mapping '+mapping.Id+'fsobj ' +fsObj[0].Id+' Formstack_Document__c');
+            system.debug('generatedAttachments '+generatedAttachments);
+            for (attachment att: generatedAttachments) {
+                if (att != null &&  !accObj.isEmpty()) {
+                    if(!Test.isRunningTest()) {
+                        att.Description = 'Single Affidavit';
+                        att.ParentID = accObj[0].Id;
+                        attid = att.Id;
+                        insert att;
+                        
+                        Account acc = new Account();
+                        acc.Id = recordId;
+                        acc.is_Single_Affidavit_Generated__c = true;
+                        update acc;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+and here is the test class
+
+
 @isTest
-private class SubseqLoanServiceWrapper_Test {
+public class WebmergeDocForAccFormstackTest {
     
     @isTest
-    static void testWrapperInstantiation() {
-        // 1. Instantiate the main wrapper
-        SubseqLoanServiceWrapper wrapper = new SubseqLoanServiceWrapper();
-        wrapper.curtailmentFlag = 'Y';
-        wrapper.loanAccountNumber = 'HLHLSVLONS000005175520';
-        wrapper.scheduleProvided = 0;
+    public static void testMethod1() {
+        Config__c conf  = new Config__c(Name__c ='test',value__c='1');
+        insert conf;
         
-        // 2. Instantiate requestHeader and userDetail
-        wrapper.requestHeader = new SubseqLoanServiceWrapper.requestHeader();
-        wrapper.requestHeader.tenantId = '505';
+        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
+        tbypass.isActive__c=true;
+        tbypass.Name='Deactivate';
+        insert tbypass;
         
-        wrapper.requestHeader.userDetail = new SubseqLoanServiceWrapper.userDetail();
-        wrapper.requestHeader.userDetail.branchId = 5000042;
-        wrapper.requestHeader.userDetail.userCode = 'krishna';
+        Trigger_BYPass__c tbypass2= new Trigger_BYPass__c();
+        tbypass2.isActive__c=true;
+        tbypass2.Name='WhatsappApplication';
+        insert tbypass2;
         
-        // 3. Instantiate loanDisbursalStatus
-        wrapper.loanDisbursalStatus = new SubseqLoanServiceWrapper.loanDisbursalStatus();
-        wrapper.loanDisbursalStatus.key = '2';
-        wrapper.loanDisbursalStatus.value = 'String';
+        System.debug('SSSSSSSSSSSS');
         
-        // 4. Instantiate inner key-value pair classes
-        SubseqLoanServiceWrapper.loanDisbursalType disbursalType = new SubseqLoanServiceWrapper.loanDisbursalType();
-        disbursalType.key = 'Normal';
-        disbursalType.value = 'String';
         
-        SubseqLoanServiceWrapper.moratoriumTreatmentType moratType = new SubseqLoanServiceWrapper.moratoriumTreatmentType();
-        moratType.key = 'Standard';
-        moratType.value = 'String';
+        Customer__c cus = new Customer__c();
+        cus.Name='Test';
+        cus.Address_Proof__c = 'Aadhar';
+        cus.Loan_Amount_Applied__c = 6780;
+        cus.LnApp__c = 56788;
+        cus.Customer_Status__c = 'Pending';
+        insert cus;
+
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opportunity',
+            StageName = 'Posted',
+            CloseDate = Date.today(),
+            Sanctioned_Amont__c = 100000,
+            Sanctioned_Tenure__c = 12,
+            Sanctioned_ROI__c = 10,
+            Household__c = cus.Id
+        );
+        insert opp;
         
-        SubseqLoanServiceWrapper.accountType accType = new SubseqLoanServiceWrapper.accountType();
-        accType.key = 'SavingAccount';
-        accType.value = 'String';
+        String recTypeId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
         
-        SubseqLoanServiceWrapper.paymentMode payMode = new SubseqLoanServiceWrapper.paymentMode();
-        payMode.key = 'ELECTRONIC_FUND_TRANSFER';
-        payMode.value = 'String';
+        Account acc = new Account();
+        acc.FirstName='Test';
+        acc.LastName='Account';
+        //acc.Branch__c = branch.Id;
+        acc.Select_Docs_To_Generate__pc = 'Illetrate Certificate';
+        acc.Mobile__pc = '1234567897';
+        acc.Is_this_WhatsApp_Number__pc=true;
+        acc.Education_Professional_Training__pc = 'Below Matric';
+        acc.Select_Docs_To_Generate__pc = 'Form 60';
+        acc.RecordTypeId = recTypeId;
+        acc.Household__c = cus.Id;
+        insert acc;
         
-        SubseqLoanServiceWrapper.subPaymentMode subPayMode = new SubseqLoanServiceWrapper.subPaymentMode();
-        subPayMode.key = 'NEFT';
-        subPayMode.value = 'String';
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);//, AccountId=acc.Id);
+        insert con;
         
-        SubseqLoanServiceWrapper.businessPartner bp = new SubseqLoanServiceWrapper.businessPartner();
-        bp.key = '2890';
-        bp.value = 'Long';
+        List<Formstack_Document__c> formstackRecords = new List<Formstack_Document__c>();
+     
         
-        // Even empty classes need to be instantiated for coverage
-        SubseqLoanServiceWrapper.printingBranch pBranch = new SubseqLoanServiceWrapper.printingBranch();
+        formstackRecords.add(new Formstack_Document__c(
+            Sanctioned_Amount__c = null,
+            Sanctioned_Tenure_App__c = null,
+            Sanctioned_ROI__c = 9.0,
+            Application__c = opp.Id,
+            Account__c = acc.Id,
+            CERSAI_and_other_Service_Charge__c = 0,
+            Insurance_Charges_Without__c = '9',
+            Search_Fees__c = 90,
+            Valuation_Fees__c=8
+        ));
         
-        // 5. Instantiate disbursalPaymentDetail
-        SubseqLoanServiceWrapper.disbursalPaymentDetail paymentDetail = new SubseqLoanServiceWrapper.disbursalPaymentDetail();
-        paymentDetail.accountByName = 'John Doe';
-        paymentDetail.accountNumber = '26910100000474';
-        paymentDetail.accountType = accType;
-        paymentDetail.bankIdentificationCode = 'YESB0000172';
-        paymentDetail.bankIdentificationType = 'IFSC_CODE_KEY';
-        paymentDetail.instrumentDate = '07/07/2025';
-        paymentDetail.instrumentNumber = 552527;
-        paymentDetail.paymentAmount = 208098;
-        paymentDetail.paymentMode = payMode;
-        paymentDetail.payoutbankId = 5000080;
-        paymentDetail.printingBranch = pBranch;
-        paymentDetail.sourcePaymentReferenceNumber = 552527;
-        paymentDetail.subPaymentMode = subPayMode;
+        insert formstackRecords;
         
-        // 6. Instantiate disbursalBreakUpDetail
-        SubseqLoanServiceWrapper.disbursalBreakUpDetail breakUp = new SubseqLoanServiceWrapper.disbursalBreakUpDetail();
-        breakUp.disbursalAmount = 211300;
-        breakUp.disbursalChargeAmount = 3202;
-        breakUp.duesAdjustmentAmount = 0;
-        breakUp.netDisbursalAmount = 208098;
-        breakUp.disbursalPaymentDetail = new List<SubseqLoanServiceWrapper.disbursalPaymentDetail>{ paymentDetail };
+        Attachment attach=new Attachment();       
+        attach.Name='HLA.pdf';
+        Blob bodyBlob=Blob.valueOf('Unit Test Attachment Body');
+        attach.body=bodyBlob;
+        attach.parentId=acc.id;
+        insert attach;
         
-        // 7. Instantiate disbursalChargeDetail
-        SubseqLoanServiceWrapper.disbursalChargeDetail charge = new SubseqLoanServiceWrapper.disbursalChargeDetail();
-        charge.adjustChargeAtDisbursement = 'Y';
-        charge.applicableChargeAmount = 2494.0;
-        charge.businessPartner = bp;
-        charge.chargeAmount = 2494.0;
-        charge.chargeId = 5002300;
-        charge.chargeReferenceId = 10411969;
-        charge.dueDate = '07/07/2025';
-        charge.effectiveChargeAmount = 2494.0;
-        charge.originalChargeAmount = 2494;
         
-        // 8. Instantiate disbursalDetails and attach everything
-        SubseqLoanServiceWrapper.disbursalDetails detail = new SubseqLoanServiceWrapper.disbursalDetails();
-        detail.disbursalAmount = 211300;
-        detail.disbursalAuthorName = 'System';
-        detail.disbursalBreakUpDetail = new List<SubseqLoanServiceWrapper.disbursalBreakUpDetail>{ breakUp };
-        detail.disbursalChargeDetail = new List<SubseqLoanServiceWrapper.disbursalChargeDetail>{ charge };
-        detail.disbursalDate = '07/07/2025';
-        detail.disbursalNo = 2;
-        detail.disbursalReference = 359548;
-        detail.disbursalRemarks = 'Second';
-        detail.interestStartDate = '07/07/2025';
-        detail.loanDisbursalType = disbursalType;
-        detail.moratoriumPeriod = 0;
-        detail.moratoriumTreatmentType = moratType;
-        detail.principalRecoveryFlag = 'Y';
+        webm__Webmerge_Mapping__c wwm= new webm__Webmerge_Mapping__c();
+        wwm.Name='Account Mapping Formstack';
+        wwm.webm__Salesforce_Object_Name__c='test';
+        insert wwm;
         
-        wrapper.disbursalDetails = new List<SubseqLoanServiceWrapper.disbursalDetails>{ detail };
         
-        // Assertions
-        System.assertEquals('HLHLSVLONS000005175520', wrapper.loanAccountNumber, 'Loan account number should match');
-        System.assertEquals('505', wrapper.requestHeader.tenantId, 'Tenant ID should match');
-        System.assertEquals(1, wrapper.disbursalDetails.size(), 'Disbursal details list should contain 1 item');
+        ApexPages.currentPage().getParameters().put('id',String.valueOf(acc.Id));
+        
+        ApexPages.StandardController sc = new ApexPages.StandardController(acc); 
+        
+        webmergeDocForAccFormStack obj = new webmergeDocForAccFormStack(sc);  
+        
+        webm__Webmerge_Mapping__c mapp =new webm__Webmerge_Mapping__c(Name='ForeClosure Document Mapping');
+        
+        OpportunityContactRole opc=new  OpportunityContactRole();
+        opc.OpportunityId=opp.id;
+        opc.ContactId=con.id;
+        insert opc;
+     
+        PageReference pgr = obj.mulDocument();
+        obj.createFSRecord();
+        WebmergeDocForAccFormstack.getAccountDetails(acc.Id);
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'PAN Card');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Voter Card');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Passport');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Driving License');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Aadhar Card');
+        WebmergeDocForAccFormstack.singleAffidavitGenerateDocuments(acc.Id);
+        
     }
     
     @isTest
-    static void testJSONDeserialization() {
-        // A JSON string mapped to the class structure to test JSON.deserialize
-        String jsonString = '{' +
-            '\"curtailmentFlag\": \"Y\",' +
-            '\"loanAccountNumber\": \"HLHLSVLONS000005175520\",' +
-            '\"scheduleProvided\": 0,' +
-            '\"requestHeader\": {' +
-                '\"tenantId\": \"505\",' +
-                '\"userDetail\": {' +
-                    '\"branchId\": 5000042,' +
-                    '\"userCode\": \"krishna\"' +
-                '}' +
-            '},' +
-            '\"loanDisbursalStatus\": {' +
-                '\"key\": \"2\",' +
-                '\"value\": \"String\"' +
-            '},' +
-            '\"disbursalDetails\": [' +
-                '{' +
-                    '\"disbursalAmount\": 211300,' +
-                    '\"disbursalNo\": 2,' +
-                    '\"loanDisbursalType\": {' +
-                        '\"key\": \"Normal\",' +
-                        '\"value\": \"String\"' +
-                    '},' +
-                    '\"disbursalBreakUpDetail\": [' +
-                        '{' +
-                            '\"netDisbursalAmount\": 208098,' +
-                            '\"disbursalPaymentDetail\": [' +
-                                '{' +
-                                    '\"accountNumber\": \"26910100000474\",' +
-                                    '\"accountType\": {' +
-                                        '\"key\": \"SavingAccount\",' +
-                                        '\"value\": \"String\"' +
-                                    '}' +
-                                '}' +
-                            ']' +
-                        '}' +
-                    '],' +
-                    '\"disbursalChargeDetail\": [' +
-                        '{' +
-                            '\"chargeAmount\": 2494.0,' +
-                            '\"businessPartner\": {' +
-                                '\"key\": \"2890\",' +
-                                '\"value\": \"Long\"' +
-                            '}' +
-                        '}' +
-                    ']' +
-                '}' +
-            ']' +
-        '}';
+    public static void testMethod11() {
+        Config__c conf  = new Config__c(Name__c ='test',value__c='1');
+        insert conf;
         
-        SubseqLoanServiceWrapper parsedResult = (SubseqLoanServiceWrapper) JSON.deserialize(jsonString, SubseqLoanServiceWrapper.class);
+        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
+        tbypass.isActive__c=true;
+        tbypass.Name='Deactivate';
+        insert tbypass;
         
-        // Assertions to verify the JSON mapped correctly
-        System.assertNotEquals(null, parsedResult, 'Parsed result should not be null');
-        System.assertEquals('HLHLSVLONS000005175520', parsedResult.loanAccountNumber, 'Loan account number should parse correctly');
-        System.assertEquals('krishna', parsedResult.requestHeader.userDetail.userCode, 'User code should parse correctly');
-        System.assertEquals(211300, parsedResult.disbursalDetails[0].disbursalAmount, 'Disbursal amount should parse correctly');
-        System.assertEquals('SavingAccount', parsedResult.disbursalDetails[0].disbursalBreakUpDetail[0].disbursalPaymentDetail[0].accountType.key, 'Deeply nested account type key should parse correctly');
+        Trigger_BYPass__c tbypass2= new Trigger_BYPass__c();
+        tbypass2.isActive__c=true;
+        tbypass2.Name='WhatsappApplication';
+        insert tbypass2;
+        
+        System.debug('SSSSSSSSSSSS');
+        
+        
+        Customer__c cus = new Customer__c();
+        cus.Name='Test';
+        cus.Address_Proof__c = 'Aadhar';
+        cus.Loan_Amount_Applied__c = 6780;
+        cus.LnApp__c = 56788;
+        cus.Customer_Status__c = 'Pending';
+        insert cus;
+
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opportunity',
+            StageName = 'Posted',
+            CloseDate = Date.today(),
+            Sanctioned_Amont__c = 100000,
+            Sanctioned_Tenure__c = 12,
+            Sanctioned_ROI__c = 10,
+            Household__c = cus.Id
+        );
+        insert opp;
+        
+        String recTypeId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
+        
+        Account acc = new Account();
+        acc.FirstName='Test';
+        acc.LastName='Account';
+        //acc.Branch__c = branch.Id;
+        acc.Select_Docs_To_Generate__pc = 'Illetrate Certificate';
+        acc.Mobile__pc = '1234567897';
+        acc.Is_this_WhatsApp_Number__pc=true;
+        acc.Education_Professional_Training__pc = 'Below Matric';
+        acc.Select_Docs_To_Generate__pc = 'Form 60';
+        acc.RecordTypeId = recTypeId;
+        acc.Household__c = cus.Id;
+        insert acc;
+        
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);//, AccountId=acc.Id);
+        insert con;
+        
+        List<Formstack_Document__c> formstackRecords = new List<Formstack_Document__c>();
+     
+        
+        formstackRecords.add(new Formstack_Document__c(
+            Sanctioned_Amount__c = null,
+            Sanctioned_Tenure_App__c = null,
+            Sanctioned_ROI__c = 9.0,
+            Application__c = opp.Id,
+            Account__c = acc.Id,
+            CERSAI_and_other_Service_Charge__c = 0,
+            Insurance_Charges_Without__c = '9',
+            Search_Fees__c = 90,
+            Valuation_Fees__c=8
+        ));
+        
+        insert formstackRecords;
+        
+        Attachment attach=new Attachment();       
+        attach.Name='HLA.pdf';
+        Blob bodyBlob=Blob.valueOf('Unit Test Attachment Body');
+        attach.body=bodyBlob;
+        attach.parentId=acc.id;
+        insert attach;
+        
+        
+        webm__Webmerge_Mapping__c wwm= new webm__Webmerge_Mapping__c();
+        wwm.Name='Account Mapping Formstack';
+        wwm.webm__Salesforce_Object_Name__c='test';
+        insert wwm;
+        
+        
+        ApexPages.currentPage().getParameters().put('id',String.valueOf(acc.Id));
+        
+        ApexPages.StandardController sc = new ApexPages.StandardController(acc); 
+        
+        webmergeDocForAccFormStack obj = new webmergeDocForAccFormStack(sc);  
+        
+        webm__Webmerge_Mapping__c mapp =new webm__Webmerge_Mapping__c(Name='ForeClosure Document Mapping');
+        
+        OpportunityContactRole opc=new  OpportunityContactRole();
+        opc.OpportunityId=opp.id;
+        opc.ContactId=con.id;
+        insert opc;
+     
+        delete [Select Id from Opportunity];
+        PageReference pgr = obj.mulDocument();
+        obj.createFSRecord();
+        WebmergeDocForAccFormstack.getAccountDetails(acc.Id);
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'PAN Card');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Voter Card');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Passport');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Driving License');
+        WebmergeDocForAccFormstack.saveFormStackDocument(acc.Id, 'nameAsPerPANCard', 'nameAsPerVoterCard', 'nameAsPerPassport', 'nameAsPerDrivingLicense', 
+                                                         'nameAsPerAadharCard', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', '2015-12-31', 
+                                                         'signAsPerPANCard', 'signAsPerPassport', 'Aadhar Card');
+        WebmergeDocForAccFormstack.singleAffidavitGenerateDocuments(acc.Id);
+        
     }
+    
+     /*@isTest
+    public static void testMethod2() {
+        Config__c conf  = new Config__c(Name__c ='test',value__c='1');
+        insert conf;
+        
+        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
+        tbypass.isActive__c=true;
+        tbypass.Name='Deactivate';
+        insert tbypass;
+        
+        Trigger_BYPass__c tbypass2= new Trigger_BYPass__c();
+        tbypass2.isActive__c=true;
+        tbypass2.Name='WhatsappApplication';
+        insert tbypass2;
+        
+        System.debug('SSSSSSSSSSSS');
+        
+        Customer__c cus = new Customer__c();
+        cus.Name='Test';
+        cus.Address_Proof__c = 'Aadhar';
+        cus.Loan_Amount_Applied__c = 6780;
+        cus.LnApp__c = 56788;
+        cus.Customer_Status__c = 'Pending';
+        insert cus;
+        
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opportunity',
+            StageName = 'Posted',
+            CloseDate = Date.today(),
+            Sanctioned_Amont__c = 100000,
+            Sanctioned_Tenure__c = 12,
+            Sanctioned_ROI__c = 10,
+            Household__c = cus.Id
+        );
+        insert opp;
+        
+        String recTypeId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
+        
+        Account acc = new Account();
+        acc.FirstName='Test';
+        acc.LastName='Account';
+        //acc.Branch__c = branch.Id;
+        acc.Select_Docs_To_Generate__pc = 'Illetrate Certificate';
+        acc.Mobile__pc = '1234567897';
+        acc.Is_this_WhatsApp_Number__pc=true;
+        acc.Education_Professional_Training__pc = 'Below Matric';
+        acc.Select_Docs_To_Generate__pc = 'Form 60';
+        acc.RecordTypeId = recTypeId;
+        
+        insert acc;
+        
+        Attachment attach=new Attachment();       
+        attach.Name='HLA.pdf';
+        Blob bodyBlob=Blob.valueOf('Unit Test Attachment Body');
+        attach.body=bodyBlob;
+        attach.parentId=acc.id;
+        insert attach;
+        
+        List<Formstack_Document__c> formstackRecords = new List<Formstack_Document__c>();
+        formstackRecords.add(new Formstack_Document__c(
+            Sanctioned_Amount__c = null,
+            Sanctioned_Tenure_App__c = null,
+            Sanctioned_ROI__c = 9.0,
+            Application__c = opp.Id,
+            Account__c = acc.Id,
+            CERSAI_and_other_Service_Charge__c = 0,
+            Insurance_Charges_Without__c = '9',
+            Search_Fees__c = 90,
+            Valuation_Fees__c=8
+        ));
+        
+        insert formstackRecords;
+        
+        
+        webm__Webmerge_Mapping__c wwm= new webm__Webmerge_Mapping__c();
+        wwm.Name='Account Mapping Formstack';
+        wwm.webm__Salesforce_Object_Name__c='test';
+        insert wwm;
+        
+        
+       ApexPages.currentPage().getParameters().put('id',String.valueOf(formstackRecords[0].Id));
+        
+        ApexPages.StandardController sc = new ApexPages.StandardController(formstackRecords[0]); 
+        
+        webmergeDocForAccFormStack obj = new webmergeDocForAccFormStack(sc);  
+        
+        webm__Webmerge_Mapping__c mapp =new webm__Webmerge_Mapping__c(Name='Account Mapping Formstack');
+        
+        
+     
+        PageReference pgr = obj.mulDocument();
+        obj.createFSRecord();
+        
+    }*/
+    
 }
