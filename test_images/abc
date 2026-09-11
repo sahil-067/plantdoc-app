@@ -1,299 +1,3 @@
-here is an apex class
-
-
-/* @File Name         : AttendanceTrackerMapController (iCollect)
-* @Description        : this the the controller method for iCollect Attendence Tracker Map 
-* @Author             : Siddharth Gupta
-* @Group              : Techmatrix
-* @Last Modified By   : Siddharth Gupta
-* @Last Modified On   : 6-10-2025
-* @Modification Log   :
-*==============================================================================
-* Ver         Date                     Author                 Modification
-*==============================================================================
-* 1.0      25-03-2025               Siddharth Gupta           Initial Version  
-*/
-public with sharing class AttendanceTrackerMapController {
-    @AuraEnabled
-    public static RecordLocationWrapper getCurrentUserDetails() {
-        try{
-            List<User> userList = new List<User>();
-            RecordLocationWrapper rlw = new RecordLocationWrapper();
-            String currentUserId = UserInfo.getUserId();
-            User u = [SELECT Id, Name, Profile.Name,Base_Location__c FROM User WHERE Id = :currentUserId LIMIT 1];
-            rlw.baseLocation = u.Base_Location__c;
-            if(u.Base_Location__c == 'Branch'){
-                return AttendanceTrackerMapController.loadAttendance(currentUserId, null, false);
-            }
-            else{
-                List<String> profileList = System.Label.AttendanceTrackerMapProfiles.split(',');
-                userList = [SELECT Id, Name,Username, Designation__c FROM User  WHERE IsActive = true AND Profile.Name IN : profileList AND Base_Location__c = 'Branch' AND (Designation__c = 'RCM' OR Designation__c = 'ZCM' OR Designation__c = 'ACM') ORDER BY Name];
-                rlw.userList = userList;
-                rlw.isHO = true;
-            }
-            return rlw;
-        }
-        catch(Exception e){
-            System.debug('Error:: '+e.getMessage()+' LineNumber: '+e.getLineNUmber());
-            return null;
-        }
-    }
-    
-    @AuraEnabled(cacheable=true)
-    public static List<String> getUserState(String selectedUserId) {
-        System.debug('selectedUserId: '+selectedUserId);
-        try{
-            if(String.isNotBlank(selectedUserId)){
-                Set<String> stateSet = new Set<String>();
-                for(Branch__c br : [SELECT Id, Name, Branch_State__c FROM Branch__c WHERE Zonal_Collection_Manager__c =: selectedUserId OR Branch_Regional_Collection__c =: selectedUserId OR Branch_Area_Collection__c =: selectedUserId ORDER BY Name]){
-                    stateSet.add(br.Branch_State__c);
-                }
-                return new List<String>(stateSet);
-            }
-            return null;
-        }
-        catch(Exception e){
-            System.debug('Error:: '+e.getMessage()+' LineNumber: '+e.getLineNUmber());
-            return null;
-        }
-    }
-    
-    @AuraEnabled
-    public Static List<LocationWrapper> toggleBranchView(String selectedUserId, String selectedState, Boolean isPanIndia) {
-        System.debug('selectedUserId: '+selectedUserId+' selectedBranchId: '+selectedState+ ' isPanIndia: '+isPanIndia);
-        List<LocationWrapper> locationWrapperLst = new List<LocationWrapper>();
-        if(isPanIndia == false && String.isBlank(selectedUserId)){
-            selectedUserId = UserInfo.getUserId();
-        }
-        if(String.isNotBlank(selectedUserId) || isPanIndia){
-            List<Branch__c> branchList = new List<Branch__c>();
-            if(isPanIndia){
-                branchList = [SELECT Id, Name,Branch_PinCode__c,Branch_State__c, Branch_Regional_Collection__c, Zonal_Collection_Manager__c, Geo_tag_for_Technical__Latitude__s, Geo_tag_for_Technical__Longitude__s 
-                              FROM Branch__c WHERE Geo_tag_for_Technical__Latitude__s != null AND Geo_tag_for_Technical__Longitude__s != null];
-            }
-            else{
-                branchList = [SELECT Id, Name,Branch_PinCode__c,Branch_State__c, Branch_Regional_Collection__c, Zonal_Collection_Manager__c, Geo_tag_for_Technical__Latitude__s, Geo_tag_for_Technical__Longitude__s 
-                              FROM Branch__c
-                              WHERE (Branch_Area_Collection__c =: selectedUserId OR Branch_Regional_Collection__c =: selectedUserId OR Zonal_Collection_Manager__c =: selectedUserId)];
-            }
-            for(Branch__c br : branchList){
-                LocationWrapper lw = new LocationWrapper();
-                if(String.isBlank(selectedState) || (br.Branch_State__c == selectedState)){
-                    lw.id = br.id;
-                    lw.status = 'Branch';
-                    lw.latitude = br.Geo_tag_for_Technical__Latitude__s;
-                    lw.longitude = br.Geo_tag_for_Technical__Longitude__s;
-                    lw.title = br.Name +' | '+ br.Branch_PinCode__c;
-                    locationWrapperLst.add(lw);
-                }
-            }
-            System.debug('userBranchList: '+locationWrapperLst.size());
-        }  
-        return locationWrapperLst;
-    }
-    
-    @AuraEnabled
-    public static RecordLocationWrapper loadAttendance(String selectedUserId, String selectedState, Boolean isHO) {
-        try {
-            System.debug('selectedUserId: '+selectedUserId+' selectedBranchId: '+selectedState+ ' isHO: '+isHO);
-            
-            Integer activeCount = 0;
-            Integer inActiveCount = 0;
-            RecordLocationWrapper recordWrp = new RecordLocationWrapper();
-            recordWrp.selectedUserId = selectedUserId;
-            recordWrp.isHO = isHO;
-               
-            if((String.isNotBlank(selectedUserId) && String.isNotBlank(selectedState)) || isHO == false){
-                List<Attendance__c> attList = new List<Attendance__c>();
-                user u = [SELECT Id,EmployeeNumber, Name, Branch__c FROM User WHERE Id =: selectedUserId LIMIT 1];
-                Id employeeRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByName().get('ISFCL - Employee').getRecordTypeId();
-                List<Account> acc = [SELECT Id, Name, RecordTypeId, branch__r.Branch_Location__Latitude__s,branch__r.Branch_Location__Longitude__s,Designation__pc  
-                                     FROM Account 
-                                     WHERE RecordTypeId =: employeeRecordTypeId AND Empl_Code__pc =: u.EmployeeNumber LIMIT 1];
-                System.debug(acc);
-                if(!acc.isEmpty()){
-                    recordWrp.currentlat = acc[0].branch__r.Branch_Location__Latitude__s;
-                    recordWrp.currentlong = acc[0].branch__r.Branch_Location__Longitude__s;
-                }
-                String recordType = Schema.sObjectType.Attendance__c.getRecordTypeInfosByName().get('iCollect').getRecordTypeId();
-                if(attList.isEmpty()){
-                    attList = [SELECT Id,Active__c, Name,Employee_ID__c,Account__c,Account__r.Name, Branch__c, Branch__r.Branch_State__c,Branch__r.Area_Technical_Manager__c, Current_Location__Latitude__s, Current_Location__Longitude__s,Designation__c,CreatedDate 
-                               FROM Attendance__c 
-                               WHERE RecordTypeId =:recordType 
-                               AND Current_Location__Latitude__s != null 
-                               AND Current_Location__Longitude__s != null 
-                               AND (Branch__r.Branch_Area_Collection__c =: selectedUserId OR Branch__r.Branch_Regional_Collection__c =: selectedUserId OR Branch__r.Zonal_Collection_Manager__c =: selectedUserId)  
-                               AND CreatedDate = TODAY 
-                               AND Account__r.Resigned__pc = false 
-                               AND (Account__r.Designation__pc = 'C.O' OR Account__r.Designation__pc = 'BCM-Collections')
-                               AND Account__r.PersonDepartment = 'Collections' Order by CreatedDate];
-                    System.debug('Q1 '+attList.Size());
-                }                
-                System.debug(attList.size());
-                Map<Id, Attendance__c> atendanceMap = new  Map<Id, Attendance__c>();
-                
-                for(Attendance__c att : attList){
-                    if(!atendanceMap.containsKey(att.Id)){
-                        atendanceMap.put(att.Account__c, att);
-                    }
-                }
-                System.debug(atendanceMap.size());
-                List<LocationWrapper> locations = new List<LocationWrapper>();
-                LocationWrapper current = new LocationWrapper();
-                current.id = acc[0].id;
-                current.latitude = acc[0].branch__r.Branch_Location__Latitude__s;
-                current.longitude = acc[0].branch__r.Branch_Location__Longitude__s;
-                current.title = acc[0].Name +' | '+ acc[0].Designation__pc;
-                locations.add(current);
-                for(String key : atendanceMap.keySet()){
-                    DateTime gmtNow = DateTime.now();
-                    //System.debug('Key '+key);
-                    //System.debug('Acive '+atendanceMap.get(key).Active__c+ ' :: '+atendanceMap.get(key).Branch__c +' :: '+ selectedState);
-                    LocationWrapper rec = new LocationWrapper();
-                    rec.id = key;
-                    rec.latitude = atendanceMap.get(key).Current_Location__Latitude__s;
-                    rec.longitude = atendanceMap.get(key).Current_Location__Longitude__s;
-                    rec.title = atendanceMap.get(key).Account__r.Name +' | '+ atendanceMap.get(key).Employee_ID__c;
-                    rec.description = '';
-                    if(atendanceMap.get(key).CreatedDate.addMinutes(45) < gmtNow){
-                        if((isHO && atendanceMap.get(key).Branch__r.Branch_State__c == selectedState) || !isHO){
-                            System.debug('1st If');
-                            inActiveCount++;
-                            rec.status = 'Inactive';
-                            locations.add(rec);
-                        }
-                    }
-                    else if(atendanceMap.get(key).Active__c == true){
-                        if((isHO && atendanceMap.get(key).Branch__r.Branch_State__c == selectedState) || !isHO){
-                            System.debug('2nd If');
-                            activeCount++;
-                            rec.status = 'Active';
-                            locations.add(rec);
-                        }
-                    }
-                    else if(atendanceMap.get(key).Active__c == false){
-                        if((isHO && atendanceMap.get(key).Branch__r.Branch_State__c == selectedState) || !isHO){
-                            System.debug('3rd If');
-                            inActiveCount++;
-                            rec.status = 'Inactive';
-                            locations.add(rec);
-                        }
-                    }
-                }
-                
-                recordWrp.totalInActive = inActiveCount;
-                recordWrp.totalActive	= activeCount;
-                recordWrp.locationWrapperList = locations;
-                
-                System.debug(recordWrp.locationWrapperList.size()+' recordWrp:');
-            }
-            return recordWrp;
-            
-        } catch(Exception e){
-            System.debug('Error: ' + e.getMessage() + ' Line: ' + e.getLineNumber());
-            return null;
-        }
-    }
-    
-    @AuraEnabled
-    public static RecordLocationWrapper loadAttendancePanIndia(Boolean isPanIndia) {
-        System.debug('isPanIndia: '+isPanIndia);
-        try{
-            Integer activeCount = 0;
-            Integer inActiveCount = 0;
-            RecordLocationWrapper recordWrp = new RecordLocationWrapper();
-            
-            String recordType = Schema.sObjectType.Attendance__c.getRecordTypeInfosByName().get('iCollect').getRecordTypeId();
-            
-            List<Attendance__c> attList = [SELECT Id,Active__c, Name,Employee_ID__c,Account__c,Account__r.Name, Branch__c, Branch__r.Branch_State__c,Branch__r.Area_Technical_Manager__c, Current_Location__Latitude__s, Current_Location__Longitude__s,Designation__c,CreatedDate 
-                                           FROM Attendance__c 
-                                           WHERE RecordTypeId =:recordType 
-                                           AND Current_Location__Latitude__s != null 
-                                           AND Current_Location__Longitude__s != null 
-                                           AND CreatedDate = TODAY 
-                                           AND Account__r.Resigned__pc = false 
-                                           AND (Account__r.Designation__pc = 'C.O' OR Account__r.Designation__pc = 'BCM-Collections')
-                                           AND Account__r.PersonDepartment = 'Collections' Order by CreatedDate];
-            System.debug('Q1 '+attList.Size());
-            
-            System.debug(attList.size());
-            Map<Id, Attendance__c> atendanceMap = new  Map<Id, Attendance__c>();
-            
-            for(Attendance__c att : attList){
-                if(!atendanceMap.containsKey(att.Id)){
-                    atendanceMap.put(att.Account__c, att);
-                }
-            }
-            System.debug(atendanceMap.size());
-            List<LocationWrapper> locations = new List<LocationWrapper>();
-            LocationWrapper current = new LocationWrapper();
-            for(String key : atendanceMap.keySet()){
-                DateTime gmtNow = DateTime.now();
-                System.debug('Key '+key);
-                LocationWrapper rec = new LocationWrapper();
-                rec.id = key;
-                rec.latitude = atendanceMap.get(key).Current_Location__Latitude__s;
-                rec.longitude = atendanceMap.get(key).Current_Location__Longitude__s;
-                rec.title = atendanceMap.get(key).Account__r.Name +' | '+ atendanceMap.get(key).Employee_ID__c;
-                rec.description = '';
-                if(atendanceMap.get(key).CreatedDate.addMinutes(45) < gmtNow){
-                    inActiveCount++;
-                    rec.status = 'Inactive';
-                    locations.add(rec);
-                }
-                else if(atendanceMap.get(key).Active__c == true){
-                    activeCount++;
-                    rec.status = 'Active';
-                    locations.add(rec);
-                }
-                else if(atendanceMap.get(key).Active__c == false){
-                    inActiveCount++;
-                    rec.status = 'Inactive';
-                    locations.add(rec);
-                }
-            }
-            
-            recordWrp.totalInActive = inActiveCount;
-            recordWrp.totalActive	= activeCount;
-            recordWrp.locationWrapperList = locations;
-            return recordWrp;
-        }
-        catch(Exception e){
-            System.debug('Error: ' + e.getMessage() + ' Line: ' + e.getLineNumber());
-            return null;
-        }
-    }
-    
-    
-    public class RecordLocationWrapper {
-        @AuraEnabled public Id selectedUserId;
-        @AuraEnabled public String baseLocation;
-        @AuraEnabled public Boolean isHO;
-        @AuraEnabled public Double currentlat;
-        @AuraEnabled public Double currentlong;
-        @AuraEnabled public Integer totalActive;
-        @AuraEnabled public Integer totalInActive;
-        @AuraEnabled public List<User> userList;
-        @AuraEnabled public List<LocationWrapper> locationWrapperList;
-    }
-    
-    public class LocationWrapper {
-        @AuraEnabled public String id;
-        @AuraEnabled public Double latitude;
-        @AuraEnabled public Double longitude;
-        @AuraEnabled public String title;
-        @AuraEnabled public String description;
-        @AuraEnabled public String status;
-    }
-}
-
-
-
-
-and here is its class
-
-
-
 @isTest
 public class AttendanceTrackerMapControllerTest {
 
@@ -308,8 +12,8 @@ public class AttendanceTrackerMapControllerTest {
             Branch_State__c = 'Delhi',
             Branch_PinCode__c = '110001',
             Branch_User__c = UserInfo.getUserId(),
-            Branch_Location__Latitude__s=28.6139,
-            Branch_Location__Longitude__s=77.2090,
+            Branch_Location__Latitude__s = 28.6139,
+            Branch_Location__Longitude__s = 77.2090,
             Geo_tag_for_Technical__Latitude__s = 28.6139,
             Geo_tag_for_Technical__Longitude__s = 77.2090
         );
@@ -354,15 +58,12 @@ public class AttendanceTrackerMapControllerTest {
             employeeRecordTypeId = [SELECT Id FROM RecordType WHERE SObjectType='Account' LIMIT 1].Id;
         }
         
-        Account empAcc = new Account(
-            LastName = 'Employee One',
-            RecordTypeId = employeeRecordTypeId,
-            Empl_Code__pc = branchUser.EmployeeNumber,
-            Designation__pc = 'CO',
-            PersonDepartment = 'Collections',
-            Branch__c = branch.Id
-        );
-        insert empAcc;
+        // MODIFICATION: Created 3 Accounts to cover all IF/ELSE conditions. 
+        // Fixed Designation__pc from 'CO' to 'C.O' so it matches the Controller's SOQL query.
+        Account empAcc1 = new Account(LastName = 'Employee One', RecordTypeId = employeeRecordTypeId, Empl_Code__pc = branchUser.EmployeeNumber, Designation__pc = 'C.O', PersonDepartment = 'Collections', Branch__c = branch.Id);
+        Account empAcc2 = new Account(LastName = 'Employee Two', RecordTypeId = employeeRecordTypeId, Empl_Code__pc = 'E002', Designation__pc = 'C.O', PersonDepartment = 'Collections', Branch__c = branch.Id);
+        Account empAcc3 = new Account(LastName = 'Employee Three', RecordTypeId = employeeRecordTypeId, Empl_Code__pc = 'E003', Designation__pc = 'C.O', PersonDepartment = 'Collections', Branch__c = branch.Id);
+        insert new List<Account>{ empAcc1, empAcc2, empAcc3 };
         
         // Update branch relationships
         branch.Zonal_Collection_Manager__c = branchUser.Id;
@@ -378,17 +79,14 @@ public class AttendanceTrackerMapControllerTest {
             attRecordTypeId = [SELECT Id FROM RecordType WHERE SObjectType='Attendance__c' LIMIT 1].Id;
         }
         
-        // Create Attendance Record
-        Attendance__c att = new Attendance__c(
-            RecordTypeId = attRecordTypeId,
-            Active__c = true,
-            Account__c = empAcc.Id,
-            Branch__c = branch.Id,
-            Employee_ID__c = 'E001',
-            Current_Location__Latitude__s = 28.7041,
-            Current_Location__Longitude__s = 77.1025
-        );
-        insert att;
+        // MODIFICATION: Created 3 distinct Attendance records (Active, Inactive, and Time-Lapsed)
+        Attendance__c att1 = new Attendance__c(RecordTypeId = attRecordTypeId, Active__c = true, Account__c = empAcc1.Id, Branch__c = branch.Id, Employee_ID__c = 'E001', Current_Location__Latitude__s = 28.7041, Current_Location__Longitude__s = 77.1025);
+        Attendance__c att2 = new Attendance__c(RecordTypeId = attRecordTypeId, Active__c = false, Account__c = empAcc2.Id, Branch__c = branch.Id, Employee_ID__c = 'E002', Current_Location__Latitude__s = 28.7041, Current_Location__Longitude__s = 77.1025);
+        Attendance__c att3 = new Attendance__c(RecordTypeId = attRecordTypeId, Active__c = true, Account__c = empAcc3.Id, Branch__c = branch.Id, Employee_ID__c = 'E003', Current_Location__Latitude__s = 28.7041, Current_Location__Longitude__s = 77.1025);
+        insert new List<Attendance__c>{ att1, att2, att3 };
+            
+        // MODIFICATION: Push att3's CreatedDate back >45 mins to test the "45 minutes elapsed" inactive branch
+        Test.setCreatedDate(att3.Id, DateTime.now().addMinutes(-60));
     }
     
     // ----------------------------------------------------
@@ -399,9 +97,9 @@ public class AttendanceTrackerMapControllerTest {
         User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
         System.runAs(branchUser) {
             Test.startTest();
-            AttendanceTrackerMapController.RecordLocationWrapper result =
-                AttendanceTrackerMapController.getCurrentUserDetails();
+            AttendanceTrackerMapController.RecordLocationWrapper result = AttendanceTrackerMapController.getCurrentUserDetails();
             Test.stopTest();
+            System.assertNotEquals(null, result);
         }
     }
     
@@ -413,9 +111,9 @@ public class AttendanceTrackerMapControllerTest {
         User hoUser = [SELECT Id FROM User WHERE Base_Location__c = 'HO' LIMIT 1];
         System.runAs(hoUser) {
             Test.startTest();
-            AttendanceTrackerMapController.RecordLocationWrapper result =
-                AttendanceTrackerMapController.getCurrentUserDetails();
+            AttendanceTrackerMapController.RecordLocationWrapper result = AttendanceTrackerMapController.getCurrentUserDetails();
             Test.stopTest();
+            System.assertNotEquals(null, result);
         }
     }
     
@@ -427,7 +125,9 @@ public class AttendanceTrackerMapControllerTest {
         User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
         Test.startTest();
         List<String> states = AttendanceTrackerMapController.getUserState(branchUser.Id);
+        List<String> nullStates = AttendanceTrackerMapController.getUserState(''); // MODIFICATION: covers String.isNotBlank else block
         Test.stopTest();
+        System.assertNotEquals(null, states);
     }
     
     // ----------------------------------------------------
@@ -437,10 +137,9 @@ public class AttendanceTrackerMapControllerTest {
     static void testToggleBranchView() {
         User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
         Test.startTest();
-        List<AttendanceTrackerMapController.LocationWrapper> locs1 =
-            AttendanceTrackerMapController.toggleBranchView(branchUser.Id, 'Delhi', false);
-        List<AttendanceTrackerMapController.LocationWrapper> locs2 =
-            AttendanceTrackerMapController.toggleBranchView(branchUser.Id, null, true); // Pan India
+        List<AttendanceTrackerMapController.LocationWrapper> locs1 = AttendanceTrackerMapController.toggleBranchView(branchUser.Id, 'Delhi', false);
+        List<AttendanceTrackerMapController.LocationWrapper> locs2 = AttendanceTrackerMapController.toggleBranchView(branchUser.Id, null, true); // Pan India
+        List<AttendanceTrackerMapController.LocationWrapper> locs3 = AttendanceTrackerMapController.toggleBranchView('', 'Delhi', false); // MODIFICATION: covers String.isBlank(selectedUserId)
         Test.stopTest();
     }
     
@@ -451,8 +150,8 @@ public class AttendanceTrackerMapControllerTest {
     static void testLoadAttendance() {
         User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
         Test.startTest();
-        AttendanceTrackerMapController.RecordLocationWrapper wrapper =
-            AttendanceTrackerMapController.loadAttendance(branchUser.Id, 'Delhi', false);
+        AttendanceTrackerMapController.RecordLocationWrapper wrapper1 = AttendanceTrackerMapController.loadAttendance(branchUser.Id, 'Delhi', false);
+        AttendanceTrackerMapController.RecordLocationWrapper wrapper2 = AttendanceTrackerMapController.loadAttendance(branchUser.Id, 'Delhi', true); // MODIFICATION: covers the isHO branches
         Test.stopTest();
     }
     
@@ -462,8 +161,22 @@ public class AttendanceTrackerMapControllerTest {
     @isTest
     static void testLoadAttendancePanIndia() {
         Test.startTest();
-        AttendanceTrackerMapController.RecordLocationWrapper wrapper =
-            AttendanceTrackerMapController.loadAttendancePanIndia(true);
+        AttendanceTrackerMapController.RecordLocationWrapper wrapper = AttendanceTrackerMapController.loadAttendancePanIndia(true);
+        Test.stopTest();
+    }
+    
+    // ----------------------------------------------------
+    // MODIFICATION: New Test to cover Catch Blocks
+    // ----------------------------------------------------
+    @isTest
+    static void testExceptionBlocks() {
+        Test.startTest();
+        // Force errors by passing a deliberately invalid Id to hit the Catch statements
+        AttendanceTrackerMapController.RecordLocationWrapper ex1 = AttendanceTrackerMapController.loadAttendance('invalid_id', 'Delhi', false);
+        List<String> ex2 = AttendanceTrackerMapController.getUserState('invalid_id');
+        
+        System.assertEquals(null, ex1);
+        System.assertEquals(null, ex2);
         Test.stopTest();
     }
 }
