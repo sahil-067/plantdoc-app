@@ -1,182 +1,750 @@
-@isTest
-public class AttendanceTrackerMapControllerTest {
+here ia an apex class 
 
+/*
+@Author: Shivam Agarwal
+@Description: This API is used to perform Add Applicants for PWALO.
+ModifiedDate : 16/05/2024
+*/
+@RestResource(urlMapping='/AddApplicantAPIPWA/*')
+global with sharing class AddApplicantAPIPWA {
+    @HttpPOST
+    global static ModelClass doPost() {  
+        Savepoint sp = Database.setSavepoint();
+        try {
+            RestRequest req = RestContext.request;
+            RestResponse res = RestContext.response;
+            System.debug('>>>>>>>>>>req.requestBody.tostring()'+req.requestBody.tostring());
+            AddApplicantAPIPWALOWrapper pwaloApplicantWrap = (AddApplicantAPIPWALOWrapper)JSON.deserialize(req.requestBody.tostring(), AddApplicantAPIPWALOWrapper.class);
+            System.debug('pwaloApplicantWrap---------->' +pwaloApplicantWrap);
+            
+            List<Login_Session__c> loginSessionList = new List<Login_Session__c>();
+            List<Contact> listContact = new List<Contact>();
+            if(pwaloApplicantWrap.Token1 != NULL && pwaloApplicantWrap.Token1.length() > 0) { 
+                loginSessionList = [SELECT Id, Employee_Id__c, Last_Hit_Time__c, Account__c, Account__r.Branch__c, Account__r.Branch__r.Name, 
+                                    Session_Time__c FROM Login_Session__c WHERE Token__c =: pwaloApplicantWrap.Token1 and PWA_Logged_IN__c = true];
+            }
+            else {
+                ModelClass modelClassObj = new ModelClass('Error', 'Token1 should not be Blank or Null.');
+                return modelClassObj;
+            }
+            
+            if(pwaloApplicantWrap.Token2 == NULL || pwaloApplicantWrap.Token2.length() == 0) {
+                ModelClass modelClassObj = new ModelClass('Error', 'Token2 should not be Blank or Null.');
+                return modelClassObj;
+            }
+            
+            if(loginSessionList.size() == 0) {
+                ModelClass modelClassObj = new ModelClass('Error', 'Token1 is not Found.');
+                return modelClassObj;    
+            }
+            else {
+                System.debug('Account--->'+loginSessionList[0].Account__c);
+                loginSessionList[0].Last_Hit_Time__c = System.Now();
+                loginSessionList[0].Session_Time__c = (System.now()).addMinutes(Integer.valueOf(System.Label.SalesApp_Session_Time));
+                update loginSessionList;
+                
+                System.debug('pwaloWrap.ApplicantData---------->' +pwaloApplicantWrap.ApplicantData);
+                
+                if(pwaloApplicantWrap.Application_Id == NULL || pwaloApplicantWrap.Application_Id.length() == 0){
+                    ModelClass modelClassObj = new ModelClass('Error', 'Application_Id should not be Blank or Null.');
+                    return modelClassObj;
+                }
+                
+                if(pwaloApplicantWrap.PWALO_OPP_Id == NULL || pwaloApplicantWrap.PWALO_OPP_Id.length() == 0){
+                    ModelClass modelClassObj = new ModelClass('Error', 'PWALO_OPP_Id should not be Blank or Null.');
+                    return modelClassObj;
+                }
+                
+                List<PWALO_OPP__c> pwaloOPPList = new List<PWALO_OPP__c>();
+                pwaloOPPList = [Select Id, Name, Application_Id__c from PWALO_OPP__c where Id =: pwaloApplicantWrap.PWALO_OPP_Id AND 
+                                Application_Id__c =: pwaloApplicantWrap.Application_Id];
+                System.debug('pwaloOPPList===>>>'+pwaloOPPList.size());
+                
+                if(!Test.isRunningTest() && pwaloOPPList.size() == 0){
+                    ModelClass modelClassObj = new ModelClass('Error', 'Please enter correct Application_Id and PWALO_OPP_Id.');
+                    return modelClassObj;
+                }
+                
+                List<CAM__c> camList = [Select Id, Name, Loan_Application__c, Loan_Application__r.Loan_Number__c, Final_Decision__c from CAM__c where Loan_Application__r.Loan_Number__c =: pwaloApplicantWrap.Application_Id LIMIT 1];
+                System.debug('camList.size()===>>'+camList.size());
+                if(camList.size() > 0 && camList[0].Final_Decision__c == 'Approved'){
+                    ModelClass modelClassObj = new ModelClass('Error', 'Applicant addition not allowed post sanction. Please unlock CAM and do the needful.');
+                    return modelClassObj;
+                }
+                
+                System.debug(pwaloApplicantWrap.Applicant_Type.equals('C'));
+                System.debug(pwaloApplicantWrap.Applicant_Type.equals('G'));
+                if(pwaloApplicantWrap.Applicant_Type != NULL && !pwaloApplicantWrap.Applicant_Type.equals('C') && !pwaloApplicantWrap.Applicant_Type.equals('G')){
+                    ModelClass modelClassObj = new ModelClass('Error', 'Please enter correct Applicant_Type.');
+                    return modelClassObj;
+                }
+                
+                PWALO_Applicant__c pwaloApplicant = new PWALO_Applicant__c();
+                if(pwaloApplicantWrap.ApplicantData != NULL){
+                    pwaloApplicant.PWALO_OPP__c = pwaloApplicantWrap.PWALO_OPP_Id;
+                    pwaloApplicant.iTrust_Applicant_Id__c = pwaloApplicantWrap.ApplicantData.iTrust_Applicant_Id;
+                    pwaloApplicant.Aadhar_Data__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data;
+                    
+                    //Aadhar Details
+                    if(pwaloApplicantWrap.ApplicantData.Aadhar_Data == 'Yes'){
+                        pwaloApplicant.Aadhar_Data_Details__c = String.valueOf(pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details);
+                        pwaloApplicant.AD_Name__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Name;
+                        pwaloApplicant.AD_Date_Of_Birth__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Date_Of_Birth;
+                        pwaloApplicant.AD_Email__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Email;
+                        pwaloApplicant.AD_Gender__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Gender;       
+                        pwaloApplicant.AD_Phone__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Phone;
+                        pwaloApplicant.AD_CO__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.CO;
+                        pwaloApplicant.AD_District__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.District;
+                        pwaloApplicant.AD_House__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.House;
+                        pwaloApplicant.AD_LC__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.LC;
+                        pwaloApplicant.AD_LM__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.LM;
+                        pwaloApplicant.AD_PC__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.PC;
+                        pwaloApplicant.AD_PO__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.PO;
+                        pwaloApplicant.AD_State__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.State;
+                        pwaloApplicant.AD_Sub_District__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Sub_District;
+                        pwaloApplicant.AD_VTC__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.VTC;
+                        pwaloApplicant.AD_Street__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Street;
+                        pwaloApplicant.AD_Country__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.Country;
+                        pwaloApplicant.AD_PHTPATH__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.PHTPATH;
+                        pwaloApplicant.AD_UID__c = pwaloApplicantWrap.ApplicantData.Aadhar_Data_Details.UID;
+                    }
+                    
+                    //Personal Information Details
+                    pwaloApplicant.Personal_Information_Details__c = String.valueOf(pwaloApplicantWrap.ApplicantData.Personal_Information);
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.salutation != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.salutation.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Salutation').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.salutation)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Salutation parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Salutation__c = pwaloApplicantWrap.ApplicantData.Personal_Information.salutation;
+                    }
+                    pwaloApplicant.PI_Customer_First_Name__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Customer_First_Name;
+                    pwaloApplicant.PI_Customer_Last_Name__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Customer_Last_Name;
+                    pwaloApplicant.PI_Org_Name__c = pwaloApplicantWrap.ApplicantData.Personal_Information.org_name;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.entity_type != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.entity_type.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'type_of_ownership__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.entity_type)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Entity_Type parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Entity_Type__c = pwaloApplicantWrap.ApplicantData.Personal_Information.entity_type;
+                    }
+                    pwaloApplicant.PI_Aadhar_Number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Aadhar_Number;
+                    pwaloApplicant.PI_Father_Name__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Father_Name;
+                    pwaloApplicant.PI_Spouse_Name__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Spouse_Name;
+                    pwaloApplicant.PI_Mother_Name__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Mother_Name;
+                    pwaloApplicant.PI_Date_Of_Birth__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Date_Of_Birth;
+                    pwaloApplicant.PI_Email_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Email_Address;
+                    pwaloApplicant.PI_Current_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Current_Address;
+                    pwaloApplicant.PI_Additional_Address_same_as_above__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Additional_Address_same_as_above;
+                    pwaloApplicant.PI_Additional_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Additional_Address;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Additional_Address_Type != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Additional_Address_Type.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Address_Type__c').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Additional_Address_Type)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Additional Address Type parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Additional_Address_Type__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Additional_Address_Type;
+                    }
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Gender != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Gender.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Sex__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Gender)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Gender parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Gender__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Gender;
+                    }
+                    pwaloApplicant.PI_Qualification__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Qualification;
+                    
+                    List<PWALO_Applicant__c> pwaloApplicantList = new List<PWALO_Applicant__c>();
+                    pwaloApplicantList = [Select Id, Name, PI_Mobile_Number__c, PWALO_OPP__r.Application_Id__c from PWALO_Applicant__c where PWALO_OPP__c != NULL AND 
+                                          PWALO_OPP__r.Application_Id__c =: pwaloApplicantWrap.Application_Id AND 
+                                          PI_Mobile_Number__c =: pwaloApplicantWrap.ApplicantData.Personal_Information.Mobile_Number];
+                    System.debug('pwaloApplicantList===>>>'+pwaloApplicantList.size());
+                    if(pwaloApplicantList.size() > 0){
+                        ModelClass modelClassObj = new ModelClass('Error', 'Mobile Number Already Exists.');
+                        return modelClassObj;
+                    }
+                    else{
+                    	pwaloApplicant.PI_Mobile_Number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Mobile_Number;
+                    }
+                    
+                    pwaloApplicant.PI_OTP__c = pwaloApplicantWrap.ApplicantData.Personal_Information.OTP;
+                    pwaloApplicant.PI_Line1_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Line1_Address;
+                    pwaloApplicant.PI_Line2_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Line2_Address;
+                    pwaloApplicant.PI_Line3_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Line3_Address;
+                    /*if(pwaloApplicantWrap.ApplicantData.Personal_Information.City_Address != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.City_Address.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'City__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.City_Address)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for City_Address parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{*/
+                        pwaloApplicant.PI_City_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.City_Address;
+                    /*}
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.State_Address != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.State_Address.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'State__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.State_Address)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for State_Address parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{*/
+                        pwaloApplicant.PI_State_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.State_Address;
+                    //}
+                    pwaloApplicant.PI_State_Code__c = pwaloApplicantWrap.ApplicantData.Personal_Information.State_Code;
+                    pwaloApplicant.PI_Pin_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Pin_Address;
+                    pwaloApplicant.PI_Sub_District_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Sub_District_Address;
+                    pwaloApplicant.PI_District_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.District_Address;
+                    pwaloApplicant.PI_Area_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Area_Address;
+                    pwaloApplicant.PI_pr_Line1_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Line1_Address;
+                    pwaloApplicant.PI_pr_Line2_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Line2_Address;
+                    pwaloApplicant.PI_pr_Line3_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Line3_Address;
+                    pwaloApplicant.PI_pr_City_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_City_Address;
+                    pwaloApplicant.PI_pr_City_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.City_Address;
+                    pwaloApplicant.PI_pr_State_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_State_Address;
+                    pwaloApplicant.PI_pr_State_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.State_Address;
+                    pwaloApplicant.PI_pr_Pin_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Pin_Address;
+                    pwaloApplicant.PI_pr_District_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_District_Address;
+                    pwaloApplicant.PI_pr_Sub_District__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Sub_District;
+                    pwaloApplicant.PI_pr_Area__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Area;
+                    pwaloApplicant.PI_Phone_Number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Phone_Number;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Marital_Status != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Marital_Status.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Marital_Status__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Marital_Status)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Marital_Status parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Marital_Status__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Marital_Status;
+                    }
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Religion != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Religion.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Relegion__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Religion)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Religion parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Religion__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Religion;
+                    }
+                    pwaloApplicant.PI_Preferred_Language__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Preferred_Language;
+                    pwaloApplicant.PI_Disability__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Disability;
+                    pwaloApplicant.PI_Add_On_Proof__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Add_On_Proof;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Relation_With_Main_Applicant != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Relation_With_Main_Applicant.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Relation_with_Main_Applicant__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Relation_With_Main_Applicant)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Relation_With_Main_Applicant parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Relation_With_Main_Applicant__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Relation_With_Main_Applicant;
+                    }
+                    pwaloApplicant.PI_PAN__c = pwaloApplicantWrap.ApplicantData.Personal_Information.PAN;
+                    String val = pwaloApplicantWrap.ApplicantData.Personal_Information.isPanVerified;
+                    if(val == 'true' || val == 'false' || val == null || val == ''){
+                        pwaloApplicant.PI_isPanVerified__c = pwaloApplicantWrap.ApplicantData.Personal_Information.isPanVerified; 
+                    }
+                    else{
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct boolean value [true ,false] for isPanVerified parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    String val1 = pwaloApplicantWrap.ApplicantData.Personal_Information.Form_60;
+                    if(val1 == 'true' || val1 == 'false' || val1 == null || val1 == ''){
+                        pwaloApplicant.PI_Form_60__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Form_60; 
+                    }
+                    else{
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct boolean value [true ,false] for Form_60 parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    String val2 = pwaloApplicantWrap.ApplicantData.Personal_Information.is_Whatsapp_Mobile_Number;
+                    if(val2 == 'true' || val2 == 'false' || val2 == null || val2 == ''){
+                        pwaloApplicant.PI_is_Whatsapp_Mobile_Number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.is_Whatsapp_Mobile_Number;
+                    }
+                    else{
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct boolean value [true ,false] for is_Whatsapp_Mobile_Number parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    pwaloApplicant.PI_Applicant_Flag__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Applicant_Flag;
+                    pwaloApplicant.PI_Driving_LC__c = pwaloApplicantWrap.ApplicantData.Personal_Information.driving_LC;
+                    pwaloApplicant.PI_VoterID__c = pwaloApplicantWrap.ApplicantData.Personal_Information.voterID;
+                    pwaloApplicant.PI_Passport__c = pwaloApplicantWrap.ApplicantData.Personal_Information.passport;
+                    pwaloApplicant.PI_RationCard__c = pwaloApplicantWrap.ApplicantData.Personal_Information.rationCard;
+                    pwaloApplicant.PI_CKYC_Number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.CKYC_Number;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Constitution != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Constitution.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Type_of_Constitution__c').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Constitution)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Type_of_Constitution parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Type_of_Constitution__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Constitution;
+                    }
+                    pwaloApplicant.PI_Non_Individual_ref_no__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Non_Individual_ref_no;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Address_for_Correspondence != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Address_for_Correspondence.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Address_for_Correspondence__c').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Address_for_Correspondence)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Address_for_Correspondence parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Address_for_Correspondence__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Address_for_Correspondence;
+                    }
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Nationality_Residential_Status != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Nationality_Residential_Status.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Nationality_Residential_Status__c').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Nationality_Residential_Status)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Nationality_Residential_Status parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Nationality_Residential_Status__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Nationality_Residential_Status;
+                    }
+                    pwaloApplicant.PI_Number_of_Dependents__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Number_of_Dependents;
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Applicant != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Applicant.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Type_of_Applicant__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Applicant)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Type_of_Applicant parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Type_of_Applicant__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Applicant;
+                    }
+                    if(pwaloApplicantWrap.ApplicantData.Personal_Information.Verification_Flag != NULL && pwaloApplicantWrap.ApplicantData.Personal_Information.Verification_Flag.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Verification_Flag__pc').contains(pwaloApplicantWrap.ApplicantData.Personal_Information.Verification_Flag)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Verification_Flag parameter under Personal_Information.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.PI_Verification_Flag__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Verification_Flag;
+                    }
+                    pwaloApplicant.PI_How_would_you_like_to_proceed__c = pwaloApplicantWrap.ApplicantData.Personal_Information.How_would_you_like_to_proceed;
+                    pwaloApplicant.PI_Select_ID_Type__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Select_ID_Type;
+                    pwaloApplicant.PI_Enter_ID_number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Enter_ID_number;
+                    pwaloApplicant.PI_Select_Address_Proof__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Select_Address_Proof;
+                    pwaloApplicant.PI_Enter_Address_Proof_Number__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Enter_Address_Proof_Number;
+                    pwaloApplicant.PI_Email_Verified__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Email_Verified;
+                    pwaloApplicant.PI_Email_Verified_TimeStamp__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Email_Verified_TimeStamp;
+                    pwaloApplicant.PI_Mobile_Number_Verified__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Mobile_Number_Verified;
+                    pwaloApplicant.PI_Mobile_Verified_TimeStamp__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Mobile_Verified_TimeStamp;
+                    pwaloApplicant.PI_Existing_Customer__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Existing_Customer;
+                    pwaloApplicant.PI_Existing_Customer_PreApproved_Limit__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Existing_Customer_PreApproved_Limit;
+                    pwaloApplicant.PI_Current_Address_Same_As_Above__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Current_Address_Same_As_Above;
+                    pwaloApplicant.PI_Type_of_Residence__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Type_of_Residence;
+                    pwaloApplicant.PI_Number_of_Years_Residing__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Number_of_Years_Residing;
+                    pwaloApplicant.PI_Communication_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Communication_Address;
+                    pwaloApplicant.PI_pr_Type_of_Residence__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Type_of_Residence;
+                    pwaloApplicant.PI_pr_Number_of_Years_Residing__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Number_of_Years_Residing;
+                    pwaloApplicant.PI_pr_Communication_Address__c = pwaloApplicantWrap.ApplicantData.Personal_Information.pr_Communication_Address;
+                    pwaloApplicant.PI_Test_Field_1__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Test_Field_1;
+                    pwaloApplicant.PI_Test_Field_2__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Test_Field_2;
+                    pwaloApplicant.PI_Test_Field_3__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Test_Field_3;
+                    pwaloApplicant.PI_Test_Field_4__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Test_Field_4;
+                    pwaloApplicant.PI_Test_Field_5__c = pwaloApplicantWrap.ApplicantData.Personal_Information.Test_Field_5;
+                    
+                    //Employment Profile Details
+                    pwaloApplicant.Employment_Profile_Details__c = String.valueOf(pwaloApplicantWrap.ApplicantData.Employment_Profile);
+                    if(pwaloApplicantWrap.ApplicantData.Employment_Profile.Applicant_Profile != NULL && pwaloApplicantWrap.ApplicantData.Employment_Profile.Applicant_Profile.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Designation_Occupation__pc').contains(pwaloApplicantWrap.ApplicantData.Employment_Profile.Applicant_Profile)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Applicant_Profile parameter under Employment_Profile.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.ED_Applicant_Profile__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Applicant_Profile;
+                    }
+                    pwaloApplicant.ED_Company_Name__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Company_Name;
+                    if(pwaloApplicantWrap.ApplicantData.Employment_Profile.Profile != NULL && pwaloApplicantWrap.ApplicantData.Employment_Profile.Profile.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Profile__pc').contains(pwaloApplicantWrap.ApplicantData.Employment_Profile.Profile)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Profile parameter under Employment_Profile.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.ED_Profile__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Profile;
+                    }
+                    pwaloApplicant.ED_Working_Since__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Working_Since;
+                    pwaloApplicant.ED_Number_Of_People_In_Business__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Number_Of_People_In_Business;
+                    /*if(pwaloApplicantWrap.ApplicantData.Employment_Profile.State != NULL && pwaloApplicantWrap.ApplicantData.Employment_Profile.State.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'State_Office__pc').contains(pwaloApplicantWrap.ApplicantData.Employment_Profile.State)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for State parameter under Employment_Profile.');
+                        return modelClassObj;
+                    }
+                    else{*/
+                        pwaloApplicant.ED_State__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.State;
+                    //}
+                    pwaloApplicant.ED_District__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.District;
+                    /*if(pwaloApplicantWrap.ApplicantData.Employment_Profile.City != NULL && pwaloApplicantWrap.ApplicantData.Employment_Profile.City.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'City_Office__pc').contains(pwaloApplicantWrap.ApplicantData.Employment_Profile.City)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for City parameter under Employment_Profile.');
+                        return modelClassObj;
+                    }
+                    else{*/
+                        pwaloApplicant.ED_City__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.City;
+                    //}
+                    pwaloApplicant.ED_Pin_Code__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Pin_Code;
+                    pwaloApplicant.ED_Address_Line1__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Address_Line1;
+                    pwaloApplicant.ED_Address_Line2__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Address_Line2;
+                    pwaloApplicant.ED_UAN__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.UAN;
+                    pwaloApplicant.ED_Business_Name__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Business_Name;
+                    pwaloApplicant.ED_Industries__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.Industries;
+                    pwaloApplicant.ED_GST_Numbers__c = pwaloApplicantWrap.ApplicantData.Employment_Profile.GST_Numbers;
+                    
+                    //Income Details
+                    pwaloApplicant.Income_Details__c = String.valueOf(pwaloApplicantWrap.ApplicantData.Income_Details);
+                    if(pwaloApplicantWrap.ApplicantData.Income_Details.Income_Type != NULL && pwaloApplicantWrap.ApplicantData.Income_Details.Income_Type.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Income_Type__pc').contains(pwaloApplicantWrap.ApplicantData.Income_Details.Income_Type)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Income_Type parameter under Income_Details.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.ID_Income_Type__c = pwaloApplicantWrap.ApplicantData.Income_Details.Income_Type;
+                    }
+                    if(pwaloApplicantWrap.ApplicantData.Income_Details.Income_Source != NULL && pwaloApplicantWrap.ApplicantData.Income_Details.Income_Source.length() > 0 && !AddApplicantAPIPWA.getPickListValuesIntoList('Account', 'Source_Of_Income__pc').contains(pwaloApplicantWrap.ApplicantData.Income_Details.Income_Source)){
+                        ModelClass modelClassObj = new ModelClass('Error','Please enter correct Picklist value for Income_Source parameter under Income_Details.');
+                        return modelClassObj;
+                    }
+                    else{
+                        pwaloApplicant.ID_Income_Source__c = pwaloApplicantWrap.ApplicantData.Income_Details.Income_Source;
+                    }
+                    pwaloApplicant.ID_Monthly_Income__c = pwaloApplicantWrap.ApplicantData.Income_Details.Monthly_Income;
+                    pwaloApplicant.ID_Monthly_EMI__c = pwaloApplicantWrap.ApplicantData.Income_Details.Monthly_EMI;
+                    pwaloApplicant.ID_Monthly_Insurance__c = pwaloApplicantWrap.ApplicantData.Income_Details.Monthly_Insurance;
+                    pwaloApplicant.ID_Total_Family_Obligation__c = pwaloApplicantWrap.ApplicantData.Income_Details.Total_Family_Obligation;
+                    pwaloApplicant.ID_Total_Montly_Obligation__c = pwaloApplicantWrap.ApplicantData.Income_Details.Total_Montly_Obligation;
+                    pwaloApplicant.ID_Number_of_Current_Loans__c = pwaloApplicantWrap.ApplicantData.Income_Details.Number_of_Current_Loans;
+                    pwaloApplicant.ID_Number_of_Dependents__c = pwaloApplicantWrap.ApplicantData.Income_Details.Number_of_Dependents;
+                    
+                    //EKYC Details
+                    pwaloApplicant.EKYC_Aadhar_Number_Masked__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Full_Name__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Father_s_Name__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Husband_Name__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Mother_Name__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Relative_Name__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Date_of_Birth__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Gender__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Combined_Address__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_House_No__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Street__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Landmark__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_District__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Sub_District__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Village_City_Town__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Location__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Post_Office__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Time_Stamp__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_Photo__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    pwaloApplicant.EKYC_Aadhar_XML__c = pwaloApplicantWrap.ApplicantData.EKYC_Details.Aadhar_Number_Masked;
+                    
+                    //BRE Details
+                    pwaloApplicant.BRE_Red_Amber_Green__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Red_Amber_Green;
+                    pwaloApplicant.BRE_Score_customer_score_internal__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Score_customer_score_internal;
+                    pwaloApplicant.BRE_Api_response_code__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Api_response_code;
+                    pwaloApplicant.BRE_Risk_Category__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Risk_Category;
+                    pwaloApplicant.BRE_Bureau_Type__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Bureau_Type;
+                    pwaloApplicant.BRE_Bureau_Score__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Bureau_Score;
+                    pwaloApplicant.BRE_Invocation_type__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Invocation_type;
+                    pwaloApplicant.BRE_aws_request_id__c = pwaloApplicantWrap.ApplicantData.BRE1Details.aws_request_id;
+                    pwaloApplicant.BRE_time_stamp__c = pwaloApplicantWrap.ApplicantData.BRE1Details.time_stamp;
+                    pwaloApplicant.BRE_Total_Loan_Amount_Sanctioned_Guarant__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Total_Loan_Amount_Sanctioned_Guarantor_Loan_to_be_excluded;
+                    pwaloApplicant.BRE_Current_Balance_Guarantor_Loan_to_be__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Current_Balance_Guarantor_Loan_to_be_excluded;
+                    pwaloApplicant.BRE_No_of_Active_Accounts__c = pwaloApplicantWrap.ApplicantData.BRE1Details.No_of_Active_Accounts;
+                    pwaloApplicant.BRE_No_of_Overdue_Accounts__c = pwaloApplicantWrap.ApplicantData.BRE1Details.No_of_Overdue_Accounts;
+                    pwaloApplicant.BRE_Total_overdue_Amount__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Total_overdue_Amount;
+                    pwaloApplicant.BRE_New_Delinquent_Accounts_in_last_6_Mo__c = pwaloApplicantWrap.ApplicantData.BRE1Details.New_Delinquent_Accounts_in_last_6_Months;
+                    pwaloApplicant.BRE_No_of_Loan_Accounts_running_without__c = pwaloApplicantWrap.ApplicantData.BRE1Details.No_of_Loan_Accounts_running_without_DPD;
+                    pwaloApplicant.BRE_No_of_Loan_Account_closed_without_DP__c = pwaloApplicantWrap.ApplicantData.BRE1Details.No_of_Loan_Account_closed_without_DPD;
+                    pwaloApplicant.BRE_No_of_Loans_Closed_with_Writeoff_Set__c = pwaloApplicantWrap.ApplicantData.BRE1Details.No_of_Loans_Closed_with_Writeoff_Setlled_DBT_Restructured_SMA_LOS;
+                    pwaloApplicant.BRE_No_of_Enquiries_of_Housing_Property__c = pwaloApplicantWrap.ApplicantData.BRE1Details.No_of_Enquiries_of_Housing_Property_Loan_in_last_one_year;
+                    pwaloApplicant.BRE_Eligibility_Amount__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Eligibility_Amount;
+                    pwaloApplicant.BRE_L_T_Charges__c = pwaloApplicantWrap.ApplicantData.BRE1Details.L_T_Charges;
+                    pwaloApplicant.BRE_Extra1__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Extra1;
+                    pwaloApplicant.BRE_Extra2__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Extra2;
+                    pwaloApplicant.BRE_Extra3__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Extra3;
+                    pwaloApplicant.BRE_Extra4__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Extra4;
+                    pwaloApplicant.BRE_Dedupe_DPD_History__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Dedupe_DPD_History;
+                    pwaloApplicant.BRE_Dedupe_Loan_Status__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Dedupe_Loan_Status;
+                    pwaloApplicant.BRE_Dedupe_Customer_Type__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Dedupe_Customer_Type;
+                    pwaloApplicant.BRE_Out_Of_Geographic_Limit__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Out_Of_Geographic_Limit;
+                    pwaloApplicant.BRE_Proposed_LTV__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Proposed_LTV;
+                    pwaloApplicant.BRE_Proposed_Foir__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Proposed_Foir;
+                    pwaloApplicant.BRE_Offer_Expiry_Date__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Offer_Expiry_Date;
+                    pwaloApplicant.BRE_Offer_Generation_Date__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Offer_Generation_Date;
+                    pwaloApplicant.BRE_PAN_Number__c = pwaloApplicantWrap.ApplicantData.BRE1Details.PAN_Number;
+                    pwaloApplicant.BRE_PAN_Name_on_card__c = pwaloApplicantWrap.ApplicantData.BRE1Details.PAN_Name_on_card;
+                    pwaloApplicant.BRE_is_pan_verified__c = pwaloApplicantWrap.ApplicantData.BRE1Details.is_pan_verified;
+                    pwaloApplicant.BRE_PAN_aadhaarSeedingStatus__c = pwaloApplicantWrap.ApplicantData.BRE1Details.PAN_aadhaarSeedingStatus;
+                    pwaloApplicant.BRE_pan_match_with_bureau__c = pwaloApplicantWrap.ApplicantData.BRE1Details.pan_match_with_bureau;
+                    pwaloApplicant.BRE_pan_name_match_percent__c = pwaloApplicantWrap.ApplicantData.BRE1Details.pan_name_match_percent;
+                    pwaloApplicant.BRE_email_match_with_bureau__c = pwaloApplicantWrap.ApplicantData.BRE1Details.email_match_with_bureau;
+                    pwaloApplicant.BRE_voter_id_EPIC_No__c = pwaloApplicantWrap.ApplicantData.BRE1Details.voter_id_EPIC_No;
+                    pwaloApplicant.BRE_is_Voterid_verified__c = pwaloApplicantWrap.ApplicantData.BRE1Details.is_Voterid_verified;
+                    pwaloApplicant.BRE_voter_id_Full_Name__c = pwaloApplicantWrap.ApplicantData.BRE1Details.voter_id_Full_Name;
+                    pwaloApplicant.BRE_voter_id_Name_of_Relative__c = pwaloApplicantWrap.ApplicantData.BRE1Details.voter_id_Name_of_Relative;
+                    pwaloApplicant.BRE_voter_id_Relationship__c = pwaloApplicantWrap.ApplicantData.BRE1Details.voter_id_Relationship;
+                    pwaloApplicant.BRE_voter_id_Gender__c = pwaloApplicantWrap.ApplicantData.BRE1Details.voter_id_Gender;
+                    pwaloApplicant.BRE_voter_id_Age__c = pwaloApplicantWrap.ApplicantData.BRE1Details.voter_id_Age;
+                    pwaloApplicant.BRE_Driving_License_Number__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Driving_License_Number;
+                    pwaloApplicant.BRE_is_DL_Verified__c = pwaloApplicantWrap.ApplicantData.BRE1Details.is_DL_Verified;
+                    pwaloApplicant.BRE_DL_Name__c = pwaloApplicantWrap.ApplicantData.BRE1Details.DL_Name;
+                    pwaloApplicant.BRE_DL_Father_Husband_Name__c = pwaloApplicantWrap.ApplicantData.BRE1Details.DL_Father_Husband_Name;
+                    pwaloApplicant.BRE_DL_Date_of_Birth__c = pwaloApplicantWrap.ApplicantData.BRE1Details.DL_Date_of_Birth;
+                    pwaloApplicant.BRE_DL_Present_Address__c = pwaloApplicantWrap.ApplicantData.BRE1Details.DL_Present_Address;
+                    pwaloApplicant.BRE_DL_Permanent_Address__c = pwaloApplicantWrap.ApplicantData.BRE1Details.DL_Permanent_Address;
+                    pwaloApplicant.BRE_is_UAN_verified__c = pwaloApplicantWrap.ApplicantData.BRE1Details.is_UAN_verified;
+                    pwaloApplicant.BRE_UAN_minimumWorkExperienceInMonths__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_minimumWorkExperienceInMonths;
+                    pwaloApplicant.BRE_UAN_lastEmployer__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_lastEmployer;
+                    pwaloApplicant.BRE_UAN_employerName__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_employerName;
+                    pwaloApplicant.BRE_UAN_startMonthYear__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_startMonthYear;
+                    pwaloApplicant.BRE_UAN_lastMonthYear__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_lastMonthYear;
+                    pwaloApplicant.BRE_UAN_vintageInMonths__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_vintageInMonths;
+                    pwaloApplicant.BRE_is_GST_verified__c = pwaloApplicantWrap.ApplicantData.BRE1Details.is_GST_verified;
+                    pwaloApplicant.BRE_GST_email__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_email;
+                    pwaloApplicant.BRE_GST_mobNum__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_mobNum;
+                    pwaloApplicant.BRE_GST_name__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_name;
+                    pwaloApplicant.BRE_GST_stjCd__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_stjCd;
+                    pwaloApplicant.BRE_GST_lstupdt__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_lstupdt;
+                    pwaloApplicant.BRE_GST_gstin__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_gstin;
+                    pwaloApplicant.BRE_GST_ctjCd__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_ctjCd;
+                    pwaloApplicant.BRE_GST_stj__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_stj;
+                    pwaloApplicant.BRE_GST_dty__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_dty;
+                    pwaloApplicant.BRE_GST_cxdt__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_cxdt;
+                    pwaloApplicant.BRE_GST_ctb__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_ctb;
+                    pwaloApplicant.BRE_GST_sts__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_sts;
+                    pwaloApplicant.BRE_GST_lgnm__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_lgnm;
+                    pwaloApplicant.BRE_GST_ctj__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_ctj;
+                    pwaloApplicant.BRE_Voter_Name_Match_Percentage__c = pwaloApplicantWrap.ApplicantData.BRE1Details.Voter_Name_Match_Percentage;
+                    pwaloApplicant.BRE_DL_Name_Match_Percentage__c = pwaloApplicantWrap.ApplicantData.BRE1Details.DL_Name_Match_Percentage;
+                    pwaloApplicant.BRE_UAN_Name_Match_Percentage__c = pwaloApplicantWrap.ApplicantData.BRE1Details.UAN_Name_Match_Percentage;
+                    pwaloApplicant.BRE_GST_Name_Match_Percentage__c = pwaloApplicantWrap.ApplicantData.BRE1Details.GST_Name_Match_Percentage;
+                    
+                    //Banking Details
+                    pwaloApplicant.Banking_Account_Name__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Account_Name;
+                    pwaloApplicant.Banking_Account_Number__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Account_Number;
+                    pwaloApplicant.Banking_ISFC__c = pwaloApplicantWrap.ApplicantData.BankingDetails.ISFC;
+                    pwaloApplicant.Banking_Account_Validated__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Account_Validated;
+                    pwaloApplicant.Banking_AA_Successful_Status__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_Successful_Status;
+                    pwaloApplicant.Banking_Current_Balance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Current_Balance;
+                    pwaloApplicant.Banking_AA_Status__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_Status;
+                    pwaloApplicant.Banking_Reference_ID__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Reference_ID;
+                    pwaloApplicant.Banking_Tracking_id__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Tracking_id;
+                    pwaloApplicant.Banking_AA_totalAccounts__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalAccounts;
+                    pwaloApplicant.Banking_AA_creditDebitRatio__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_creditDebitRatio;
+                    pwaloApplicant.Banking_AA_avgEodBalance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgEodBalance;
+                    pwaloApplicant.Banking_AA_varianceOfBalance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_varianceOfBalance;
+                    pwaloApplicant.Banking_AA_stdDeviationOfBalance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_stdDeviationOfBalance;
+                    pwaloApplicant.Banking_AA_closingBalance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_closingBalance;
+                    pwaloApplicant.Banking_AA_minimumEodBalance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_minimumEodBalance;
+                    pwaloApplicant.Banking_AA_maximumEodBalance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_maximumEodBalance;
+                    pwaloApplicant.Banking_AA_totalCreditTxn__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalCreditTxn;
+                    pwaloApplicant.Banking_AA_totalCreditAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalCreditAmount;
+                    pwaloApplicant.Banking_AA_avgCreditAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgCreditAmount;
+                    pwaloApplicant.Banking_AA_totalDebitTxn__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalDebitTxn;
+                    pwaloApplicant.Banking_AA_totalDebitAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalDebitAmount;
+                    pwaloApplicant.Banking_AA_avgDebitAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgDebitAmount;
+                    pwaloApplicant.Banking_AA_minimumCreditAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_minimumCreditAmount;
+                    pwaloApplicant.Banking_AA_maximumCreditAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_maximumCreditAmount;
+                    pwaloApplicant.Banking_AA_minimumDebitAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_minimumDebitAmount;
+                    pwaloApplicant.Banking_AA_maximumDebitAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_maximumDebitAmount;
+                    pwaloApplicant.Banking_AA_totalCreditDebitAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalCreditDebitAmount;
+                    pwaloApplicant.Banking_AA_surplusAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_surplusAmount;
+                    pwaloApplicant.Banking_AA_averageSurplusAmount__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_averageSurplusAmount;
+                    pwaloApplicant.Banking_AA_totalCreditTxnLast90Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalCreditTxnLast90Days;
+                    pwaloApplicant.Banking_AA_totalDebitTxnLast90Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalDebitTxnLast90Days;
+                    pwaloApplicant.Banking_AA_ratioOfTotalCreditTxnLast30to__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_ratioOfTotalCreditTxnLast30to60Days;
+                    pwaloApplicant.Banking_AA_ratioOfTotalCreditTxnLast30To__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_ratioOfTotalCreditTxnLast30To90Days;
+                    pwaloApplicant.Banking_AA_creditAmountLast90Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_creditAmountLast90Days;
+                    pwaloApplicant.Banking_AA_totalDebitTxnLast180Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_totalDebitTxnLast180Days;
+                    pwaloApplicant.Banking_AA_avgEodBalanceLast90Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgEodBalanceLast90Days;
+                    pwaloApplicant.Banking_AA_avgEodBalanceLast180Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgEodBalanceLast180Days;
+                    pwaloApplicant.Banking_AA_avgEodBalance180to270Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgEodBalance180to270Days;
+                    pwaloApplicant.Banking_AA_avgEodBalance270to365Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_avgEodBalance270to365Days;
+                    pwaloApplicant.Banking_AA_ratioOfAvgEodBalance0to90vs90__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_ratioOfAvgEodBalance0to90vs90to180;
+                    pwaloApplicant.Banking_AA_minEodBalanceLast90Days__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_minEodBalanceLast90Days;
+                    pwaloApplicant.Banking_AA_PhoneNumber__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_PhoneNumber;
+                    pwaloApplicant.Banking_AA_ReferenceID__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_ReferenceID;
+                    pwaloApplicant.Banking_AA_TrackingID__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_TrackingID;
+                    pwaloApplicant.Banking_AA_excel_Analytics__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_excel_Analytics;
+                    pwaloApplicant.Banking_AA_pdf_bankhistory__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AA_pdf_bankhistory;
+                    pwaloApplicant.Banking_BankID_Fipid__c = pwaloApplicantWrap.ApplicantData.BankingDetails.BankID_Fipid;
+                    pwaloApplicant.Banking_Bank_Name__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Bank_Name;
+                    pwaloApplicant.Banking_Account_Type__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Account_Type;
+                    pwaloApplicant.Banking_fitype__c = pwaloApplicantWrap.ApplicantData.BankingDetails.fitype;
+                    pwaloApplicant.Banking_bank__c = pwaloApplicantWrap.ApplicantData.BankingDetails.bank;
+                    pwaloApplicant.Banking_linkedAccRef__c = pwaloApplicantWrap.ApplicantData.BankingDetails.linkedAccRef;
+                    pwaloApplicant.Banking_AccountHolder_Name__c = pwaloApplicantWrap.ApplicantData.BankingDetails.AccountHolder_Name;
+                    pwaloApplicant.Banking_mobile__c = pwaloApplicantWrap.ApplicantData.BankingDetails.mobile;
+                    pwaloApplicant.Banking_landline__c = pwaloApplicantWrap.ApplicantData.BankingDetails.landline;
+                    pwaloApplicant.Banking_address__c = pwaloApplicantWrap.ApplicantData.BankingDetails.address;
+                    pwaloApplicant.Banking_email__c = pwaloApplicantWrap.ApplicantData.BankingDetails.email;
+                    pwaloApplicant.Banking_ckycCompliance__c = pwaloApplicantWrap.ApplicantData.BankingDetails.ckycCompliance;
+                    pwaloApplicant.Banking_Dob__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Dob;
+                    pwaloApplicant.Banking_Nominee__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Nominee;
+                    pwaloApplicant.Banking_PAN__c = pwaloApplicantWrap.ApplicantData.BankingDetails.PAN;
+                    pwaloApplicant.Banking_Penny_response__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Penny_response;
+                    pwaloApplicant.Banking_Penny_Beneficiary_name__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Penny_Beneficiary_name;
+                    pwaloApplicant.Banking_Penny_active__c = pwaloApplicantWrap.ApplicantData.BankingDetails.Penny_active;
+                    
+                    //UploadScreen Detials
+                    pwaloApplicant.US_Face_Match_or_Face_Liveliness__c = pwaloApplicantWrap.ApplicantData.UploadScreenDetails.Face_Match_or_Face_Liveliness;
+                    pwaloApplicant.US_Face_Match_With_ID_Proof_Check__c = pwaloApplicantWrap.ApplicantData.UploadScreenDetails.Face_Match_With_ID_Proof_Check;
+                    pwaloApplicant.US_POS_Photo_Match_ID_Percentage__c = pwaloApplicantWrap.ApplicantData.UploadScreenDetails.POS_Photo_Match_ID_Percentage;
+                    pwaloApplicant.US_Face_Match_With_Address_Proof_Check__c = pwaloApplicantWrap.ApplicantData.UploadScreenDetails.Face_Match_With_Address_Proof_Check;
+                    pwaloApplicant.US_POS_Photo_Match_Address_Proof_Percent__c = pwaloApplicantWrap.ApplicantData.UploadScreenDetails.POS_Photo_Match_Address_Proof_Percentage;
+                    pwaloApplicant.US_Digital_OSV__c = pwaloApplicantWrap.ApplicantData.UploadScreenDetails.Digital_OSV;
+                    insert pwaloApplicant;
+                    
+                }
+                
+                //Creating Applicant Data and Update the Application
+                AddApplicantAPIPWALOWrapper.ApplicationData application_Data = new AddApplicantAPIPWALOWrapper.ApplicationData();
+                application_Data.Token1 = pwaloApplicantWrap.Token1;
+                application_Data.PWALO_OPP_Id = pwaloApplicantWrap.PWALO_OPP_Id;
+                application_Data.Application_Id = pwaloApplicantWrap.Application_Id;
+                application_Data.Operation_Type = 'Insert';
+                application_Data.API_Name = 'AddApplicantAPIPWA_' + pwaloApplicant.Id;
+                application_Data.Applicant_Type = pwaloApplicantWrap.Applicant_Type;
+                createApplicationData(pwaloApplicantWrap.Token2, JSON.serialize(application_Data));
+                
+                PWALO_Applicant__c pwaloApplicantRecord = [Select Id, Name, AD_Name__c, iTrust_Applicant_Id__c from PWALO_Applicant__c where Id =: pwaloApplicant.Id LIMIT 1];
+                ModelClass modelClassObj = new ModelClass('Success', 'Applicant Data Is Added Successfully.');
+                modelClassObj.PWALO_Applicant_Id = pwaloApplicantRecord.Id;
+                modelClassObj.iTrust_Applicant_Id = pwaloApplicantRecord.iTrust_Applicant_Id__c;
+                modelClassObj.PWALO_APP_Name = pwaloApplicantRecord.Name;
+                modelClassObj.CustomerName = pwaloApplicantRecord.AD_Name__c;
+                return modelClassObj;
+            }
+        }
+        catch(Exception ex) {
+            Database.rollback(sp);
+            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. of = ' + ex.getLineNumber());
+            ModelClass modelClassObj = new ModelClass('Error', 'Development Error From Add Applicant API PWA.');
+            return modelClassObj;
+        }
+    }
+    
+    public static List<String> getPickListValuesIntoList(String objectName, String fieldName){
+        Schema.SObjectType objSobjectType = Schema.getGlobalDescribe().get(objectName) ;
+        Schema.DescribeSObjectResult objDescribeSobject = objSobjectType.getDescribe() ;
+        Map<String,Schema.SObjectField> fields = objDescribeSobject.fields.getMap() ;
+        Schema.DescribeFieldResult fieldResult = fields.get(fieldName).getDescribe();
+        List<Schema.PicklistEntry> ple = fieldResult.getPicklistValues();
+        List<String> pickListValuesList = new List<String>();
+        for(Schema.PicklistEntry pickListVal : ple){
+            pickListValuesList.add(pickListVal.getLabel());
+        }     
+        return pickListValuesList;
+    }
+    
+    @future(Callout=true)
+    public static void createApplicationData(String accessToken, String application_Data){
+        try{
+            System.debug('application_Data===>>>>'+application_Data);
+            Http http = new Http();
+            HttpRequest request = new HttpRequest();
+            request.setEndpoint(System.Label.Salesforce_URL+'/services/apexrest/ApplicationFunctionAPIPWA');
+            request.setMethod('POST');
+            request.setHeader('Content-Type','application/json');
+            request.setHeader('Authorization', 'Bearer '+accessToken);
+            request.setBody(application_Data);
+            HttpResponse response = new HttpResponse();
+            if(!Test.isRunningTest()){
+                response = http.send(request);
+            }
+            System.debug(response.getStatusCode()+'====='+response.getBody());
+        }
+        catch(Exception ex) { 
+            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. of = ' + ex.getLineNumber());
+            throw ex; 
+        }
+    }
+    
+    global class ModelClass {
+        public String Status;
+        public String Message;
+        public String PWALO_Applicant_Id;
+        public String iTrust_Applicant_Id;
+        public String PWALO_APP_Name;
+        public String CustomerName;
+        public ModelClass(String Status, String Message) {
+            this.Status = Status;
+            this.Message = Message;
+        }
+    }
+}
+
+
+and here is its test class
+
+
+
+
+/*
+Date          :       21 May 2024
+Created By    :       Shivam Agarwal
+
+*/
+@isTest
+public class AddApplicantAPIPWATest {
     @testSetup
-    static void setupData() {
-        // Get a Profile Id
-        Profile p = [SELECT Id FROM Profile WHERE Name != null LIMIT 1];
+    public static void testData(){
         
-        // Create Branch
-        Branch__c branch = new Branch__c(
-            Name = 'Test Branch',
-            Branch_State__c = 'Delhi',
-            Branch_PinCode__c = '110001',
-            Branch_User__c = UserInfo.getUserId(),
-            Branch_Location__Latitude__s = 28.6139,
-            Branch_Location__Longitude__s = 77.2090,
-            Geo_tag_for_Technical__Latitude__s = 28.6139,
-            Geo_tag_for_Technical__Longitude__s = 77.2090
-        );
+        Profile profileId = [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1];
+        User usr = new User(LastName = 'Test', FirstName='Tmc', Alias = 'tmt', Email = 'Tmc.test@Tmc.com', Username = 'Tmc.test98@Tmc.com', 
+                            ProfileId = profileId.id, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', 
+                            LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC007');                  
+        insert usr;
+        
+        Trigger_BYPass__c tbObj = new Trigger_BYPass__c(); 
+        tbObj.Name = 'Deactivate';
+        tbObj.isActive__c = true;
+        insert tbObj;
+        
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Ajmer-1';
+        branch.Branch_User__c = usr.Id;
         insert branch;
         
-        // Create Users
-        User hoUser = new User(
-            Alias = 'huser',
-            Email = 'ho@test.com',
-            EmailEncodingKey = 'UTF-8',
-            LastName = 'HO User',
-            LanguageLocaleKey = 'en_US',
-            LocaleSidKey = 'en_US',
-            TimeZoneSidKey = 'Asia/Kolkata',
-            ProfileId = p.Id,
-            UserName = 'ho' + DateTime.now().getTime() + '@test.com',
-            Base_Location__c = 'HO',
-            EmployeeNumber = 'ISFC1234r'
-        );
+        Config__c cf = new Config__c();
+        cf.Name__c = 'Test Config';
+        cf.Value__c = '009870';
+        insert cf;
         
-        User branchUser = new User(
-            Alias = 'buser',
-            Email = 'branch@test.com',
-            EmailEncodingKey = 'UTF-8',
-            LastName = 'Branch User',
-            LanguageLocaleKey = 'en_US',
-            LocaleSidKey = 'en_US',
-            TimeZoneSidKey = 'Asia/Kolkata',
-            ProfileId = p.Id,
-            UserName = 'branch' + DateTime.now().getTime() + '@test.com',
-            Base_Location__c = 'Branch',
-            Designation__c = 'RCM',
-            EmployeeNumber = 'ISFC1234E'
-        );
-        insert new List<User>{ hoUser, branchUser };
-            
-        // Create Employee Account (ISFCL - Employee RecordType)
-        Id employeeRecordTypeId;
-        try {
-            employeeRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByName().get('ISFCL - Employee').getRecordTypeId();
-        } catch (Exception e) {
-            employeeRecordTypeId = [SELECT Id FROM RecordType WHERE SObjectType='Account' LIMIT 1].Id;
-        }
+        Account acc = new Account();
+        acc.RecordTypeId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('ISFCL - Employee').getRecordTypeId();
+        acc.FirstName = 'Fanindra';
+        acc.LastName = 'Fanindra';
+        acc.Employee_Id__c = 'EMP-1004';
+        acc.Branch__c = branch.Id;
+        acc.Employee_Type__c = 'LO';
+        insert acc;
         
-        // MODIFICATION: Created 3 Accounts to cover all IF/ELSE conditions. 
-        // Fixed Designation__pc from 'CO' to 'C.O' so it matches the Controller's SOQL query.
-        Account empAcc1 = new Account(LastName = 'Employee One', RecordTypeId = employeeRecordTypeId, Empl_Code__pc = branchUser.EmployeeNumber, Designation__pc = 'C.O', PersonDepartment = 'Collections', Branch__c = branch.Id);
-        Account empAcc2 = new Account(LastName = 'Employee Two', RecordTypeId = employeeRecordTypeId, Empl_Code__pc = 'E002', Designation__pc = 'C.O', PersonDepartment = 'Collections', Branch__c = branch.Id);
-        Account empAcc3 = new Account(LastName = 'Employee Three', RecordTypeId = employeeRecordTypeId, Empl_Code__pc = 'E003', Designation__pc = 'C.O', PersonDepartment = 'Collections', Branch__c = branch.Id);
-        insert new List<Account>{ empAcc1, empAcc2, empAcc3 };
+        Contact con = new Contact();
+        con.LastName = 'choudhary';
+        con.FirstName = 'fanindra';
+        con.Aadhar_Card__c = '234567876543';
+        con.Mobile__c = '9665777519';
+        con.Is_Property_Identified__c = false;
+        con.is_Property_Owner__c = 'Yes';
+        con.Created_By_Employee__c = acc.Id; 
+        insert con;        
         
-        // Update branch relationships
-        branch.Zonal_Collection_Manager__c = branchUser.Id;
-        branch.Branch_Regional_Collection__c = branchUser.Id;
-        branch.Branch_Area_Collection__c = branchUser.Id;
-        update branch;
-        
-        // Attendance RecordType (iCollect)
-        Id attRecordTypeId;
-        try {
-            attRecordTypeId = Schema.sObjectType.Attendance__c.getRecordTypeInfosByName().get('iCollect').getRecordTypeId();
-        } catch (Exception e) {
-            attRecordTypeId = [SELECT Id FROM RecordType WHERE SObjectType='Attendance__c' LIMIT 1].Id;
-        }
-        
-        // MODIFICATION: Created 3 distinct Attendance records (Active, Inactive, and Time-Lapsed)
-        Attendance__c att1 = new Attendance__c(RecordTypeId = attRecordTypeId, Active__c = true, Account__c = empAcc1.Id, Branch__c = branch.Id, Employee_ID__c = 'E001', Current_Location__Latitude__s = 28.7041, Current_Location__Longitude__s = 77.1025);
-        Attendance__c att2 = new Attendance__c(RecordTypeId = attRecordTypeId, Active__c = false, Account__c = empAcc2.Id, Branch__c = branch.Id, Employee_ID__c = 'E002', Current_Location__Latitude__s = 28.7041, Current_Location__Longitude__s = 77.1025);
-        Attendance__c att3 = new Attendance__c(RecordTypeId = attRecordTypeId, Active__c = true, Account__c = empAcc3.Id, Branch__c = branch.Id, Employee_ID__c = 'E003', Current_Location__Latitude__s = 28.7041, Current_Location__Longitude__s = 77.1025);
-        insert new List<Attendance__c>{ att1, att2, att3 };
-            
-        // MODIFICATION: Push att3's CreatedDate back >45 mins to test the "45 minutes elapsed" inactive branch
-        Test.setCreatedDate(att3.Id, DateTime.now().addMinutes(-60));
+        Login_Session__c ls = new Login_Session__c();
+        ls.Token__c = '783A1B56F1C4CD414F404483D1794BBA259A3DEE13A554CC4535F8036AE7EDB3';
+        ls.Account__c = acc.Id;
+        ls.Last_Hit_Time__c = System.now();
+        DateTime dt = System.now();
+        Integer addhours = dt.hour();
+        addhours = 23 - addhours;
+        dt = dt.addHours(addhours);
+        Integer addminutes = dt.minute();
+        addminutes = 59 - addminutes;
+        dt = dt.addminutes(addminutes);
+        ls.Expiry_Date_Time__c = dt;
+        insert ls;
     }
     
-    // ----------------------------------------------------
-    // Test: getCurrentUserDetails() - Branch User
-    // ----------------------------------------------------
-    @isTest
-    static void testGetCurrentUserDetails_BranchUser() {
-        User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
-        System.runAs(branchUser) {
-            Test.startTest();
-            AttendanceTrackerMapController.RecordLocationWrapper result = AttendanceTrackerMapController.getCurrentUserDetails();
-            Test.stopTest();
-            System.assertNotEquals(null, result);
-        }
-    }
-    
-    // ----------------------------------------------------
-    // Test: getCurrentUserDetails() - HO User
-    // ----------------------------------------------------
-    @isTest
-    static void testGetCurrentUserDetails_HOUser() {
-        User hoUser = [SELECT Id FROM User WHERE Base_Location__c = 'HO' LIMIT 1];
-        System.runAs(hoUser) {
-            Test.startTest();
-            AttendanceTrackerMapController.RecordLocationWrapper result = AttendanceTrackerMapController.getCurrentUserDetails();
-            Test.stopTest();
-            System.assertNotEquals(null, result);
-        }
-    }
-    
-    // ----------------------------------------------------
-    // Test: getUserState()
-    // ----------------------------------------------------
-    @isTest
-    static void testGetUserState() {
-        User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
+    public static testMethod void Util_1(){
         Test.startTest();
-        List<String> states = AttendanceTrackerMapController.getUserState(branchUser.Id);
-        List<String> nullStates = AttendanceTrackerMapController.getUserState(''); // MODIFICATION: covers String.isNotBlank else block
-        Test.stopTest();
-        System.assertNotEquals(null, states);
-    }
-    
-    // ----------------------------------------------------
-    // Test: toggleBranchView()
-    // ----------------------------------------------------
-    @isTest
-    static void testToggleBranchView() {
-        User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
-        Test.startTest();
-        List<AttendanceTrackerMapController.LocationWrapper> locs1 = AttendanceTrackerMapController.toggleBranchView(branchUser.Id, 'Delhi', false);
-        List<AttendanceTrackerMapController.LocationWrapper> locs2 = AttendanceTrackerMapController.toggleBranchView(branchUser.Id, null, true); // Pan India
-        List<AttendanceTrackerMapController.LocationWrapper> locs3 = AttendanceTrackerMapController.toggleBranchView('', 'Delhi', false); // MODIFICATION: covers String.isBlank(selectedUserId)
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/AddApplicantAPIPWA'; 
+        req.httpMethod = 'POST';
+        Test.setMock(HttpCalloutMock.class, new WebSermockTest());
+        PWALO_OPP__c pwalo = new PWALO_OPP__c();
+        insert pwalo;
+        string str = '{\"Token2\":\"token\",\"Token1\":\"token\",\"Application_Id\":\"AP-3155\",\"PWALO_OPP_Id\":\"' + pwalo.Id + '\",\"Applicant_Type\":\"G\",\"ApplicantData\":{\"iTrust_Applicant_Id\":\"254\",\"Aadhar_Data\":\"Yes\",\"Aadhar_Data_Details\":{\"Name\":\"HAriomSingh\",\"Date_Of_Birth\":\"\",\"Email\":\"\",\"Gender\":\"\",\"Phone\":\"9278828249\",\"CO\":\"\",\"District\":\"\",\"House\":\"\",\"LC\":\"\",\"LM\":\"\",\"PC\":\"\",\"PO\":\"\",\"State\":\"\",\"Sub_District\":\"\",\"VTC\":\"\",\"Street\":\"\",\"Country\":\"\",\"PHTPATH\":\"\",\"UID\":\"\"},\"Personal_Information\":{\"salutation\":\"Mrs.\",\"Customer_First_Name\":\"KIRAN\",\"Customer_Last_Name\":\"KIRAN\",\"org_name\":\"KIRADRYCLEANER\",\"entity_type\":\"\",\"Aadhar_Number\":\"\",\"Father_Name\":\"GINNILAL\",\"Spouse_Name\":\"RAMNEWAL\",\"Mother_Name\":\"CHAMPADEVI\",\"Date_Of_Birth\":\"1985-04-05\",\"Email_Address\":\"\",\"Current_Address\":\"WZ-116,GALINO-15,GURUNANAKNAGARTILAKNAGAR,WESTDELHIDELHINURSINGHOME\",\"Additional_Address_same_as_above\":\"\",\"Additional_Address_Type\":\"Permanent\",\"Additional_Address\":\"WZ-905,3RDFLOOR,GALINO-15GURUNANAKNAGAR,TILAKNAGAR,NEWDELHIDELHINURSINGHOME\",\"Gender\":\"Female\",\"Qualification\":\"Non-Metric\",\"Mobile_Number\":\"9278828249\",\"OTP\":\"92172\",\"Line1_Address\":\"WZ-116,GALINO-15,GURUNANAKNAGAR\",\"Line2_Address\":\"TILAKNAGAR,WESTDELHI\",\"Line3_Address\":\"DELHI\",\"City_Address\":\"Delhi\",\"State_Address\":\"Delhi\",\"Pin_Address\":\"110018\",\"State_Code\":\"07\",\"Sub_District_Address\":\"West\",\"District_Address\":\"West\",\"Area_Address\":\"\",\"pr_Line1_Address\":\"WZ-905,3RDFLOOR,GALINO-15\",\"pr_Line2_Address\":\"GURUNANAKNAGAR,TILAKNAGAR,NEWDELHI\",\"pr_Line3_Address\":\"DELHI\",\"pr_City_Address\":\"Delhi\",\"pr_State_Address\":\"Delhi\",\"pr_Pin_Address\":\"110018\",\"pr_District_Address\":\"West\",\"pr_Sub_District\":\"West\",\"pr_Area\":\"\",\"Phone_Number\":\"9278828249\",\"Marital_Status\":\"Married\",\"Religion\":\"Hindu\",\"Preferred_Language\":\"Hindi\",\"Disability\":\"\",\"Add_On_Proof\":\"\",\"Relation_With_Main_Applicant\":\"\",\"PAN\":\"CYZPK9676D\",\"isPanVerified\":\"true\",\"Form_60\":\"false\",\"Applicant_Flag\":\"primaryapplicant\",\"driving_LC\":\"DL243232432\",\"voterID\":\"MH123456\",\"passpost\":\"\",\"rationCard\":\"\",\"is_Whatsapp_Mobile_Number\":false,\"CKYC_Number\":\"\",\"Type_of_Constitution\":\"Individual\",\"Non_Individual_ref_no\":\"\",\"Address_for_Correspondence\":\"Current Residence\",\"Nationality_Residential_Status\":\"Resident Indian\",\"Number_of_Dependents\":\"\",\"Type_of_Applicant\":\"Individual\",\"Verification_Flag\":\"\",\"How_would_you_like_to_proceed\":\"Manual\",\"Select_ID_Type\":\"PAN\",\"Enter_ID_number\":\"\",\"Select_Address_Proof\":\"\",\"Enter_Address_Proof_Number\":\"********3819\",\"Email_Verified\":\"\",\"Email_Verified_TimeStamp\":\"\",\"Mobile_Number_Verified\":\"true\",\"Mobile_Verified_TimeStamp\":\"WedMar20202411:04:37GMT+0000(CoordinatedUniversalTime)\",\"Existing_Customer\":\"FALSE\",\"Existing_Customer_PreApproved_Limit\":\"\",\"Current_Address_Same_As_Above\":\"yes\",\"Type_of_Residence\":\"Selfowned\",\"Number_of_Years_Residing\":\"5\",\"Communication_Address\":\"\",\"pr_Type_of_Residence\":\"\",\"pr_Number_of_Years_Residing\":\"5\",\"pr_Communication_Address\":\"\",\"Test_Field_1\":\"254_238_2024-03-20T11-19-02-929Z.xml\",\"Test_Field_2\":\"\",\"Test_Field_3\":\"\",\"Test_Field_4\":\"\",\"Test_Field_5\":\"\"},\"Employment_Profile\":{\"Applicant_Profile\":\"Self employed\",\"Company_Name\":\"ISFCL\",\"Profile\":\"\",\"Working_Since\":\"\",\"Number_Of_People_In_Business\":\"\",\"State\":\"Delhi\",\"District\":\"\",\"City\":\"Delhi\",\"Pin_Code\":\"110018\",\"Address_Line1\":\"WZ-905GALINO15GURUNANAKNAGAR\",\"Address_Line2\":\"TILAKNAGAR,NEWDELHI\",\"UAN\":\"\",\"Business_Name\":\"KIRADRYCLEANER\",\"Industries\":\"DRYCLEANING\",\"GST_Numbers\":\"\"},\"Income_Details\":{\"Income_Type\":\"\",\"Income_Source\":\"\",\"Monthly_Income\":\"\",\"Monthly_EMI\":\"12000\",\"Monthly_Insurance\":\"\",\"Total_Family_Obligation\":\"\",\"Total_Montly_Obligation\":\"\",\"Number_of_Current_Loans\":\"1\",\"Number_of_Dependents\":\"5\"},\"EKYC_Details\":{\"Aadhar_XML\":\"\",\"Aadhar_Photo\":\"\",\"Aadhar_Gender\":\"\",\"Aadhar_Street\":\"\",\"Aadhar_District\":\"\",\"Aadhar_House_No\":\"\",\"Aadhar_Landmark\":\"\",\"Aadhar_Location\":\"\",\"Aadhar_Full_Name\":\"\",\"Aadhar_Time_Stamp\":\"\",\"Aadhar_Father_Name\":\"\",\"Aadhar_Mother_Name\":\"\",\"Aadhar_Post_Office\":\"\",\"Aadhar_Husband_Name\":\"\",\"Aadhar_Sub_District\":\"\",\"Aadhar_Date_of_Birth\":\"\",\"Aadhar_Number_Masked\":\"\",\"Aadhar_Relative_Name\":\"\",\"Aadhar_Combined_Address\":\"\",\"Aadhar_Village_City_Town\":\"\"},\"BRE1Details\":{\"Red_Amber_Green\":\"Red\",\"Score_customer_score_internal\":\"2\",\"Api_response_code\":\"12345\",\"Risk_Category\":\"20\",\"Bureau_Type\":\"\",\"Bureau_Score\":\"234\",\"Invocation_type\":\"Production\",\"aws_request_id\":\"123der\",\"time_stamp\":\"2024-03-2011:19:47.535183\",\"Total_Loan_Amount_Sanctioned_Guarantor_Loan_to_be_excluded\":\"12345\",\"Current_Balance_Guarantor_Loan_to_be_excluded\":\"12345\",\"No_of_Active_Accounts\":\"12345\",\"No_of_Overdue_Accounts\":\"12345\",\"Total_overdue_Amount\":\"12345\",\"New_Delinquent_Accounts_in_last_6_Months\":\"12345\",\"No_of_Loan_Accounts_running_without_DPD\":\"12345\",\"No_of_Loan_Account_closed_without_DPD\":\"12345\",\"No_of_Loans_Closed_with_Writeoff_Setlled_DBT_Restructured_SMA_LOS\":\"12345\",\"No_of_Enquiries_of_Housing_Property_Loan_in_last_one_year\":\"12345\",\"Eligibility_Amount\":\"2500\",\"L_T_Charges\":\"2\",\"Extra1\":\"\",\"Extra2\":\"\",\"Extra3\":\"\",\"Extra4\":\"\",\"Dedupe_DPD_History\":\"null\",\"Dedupe_Loan_Status\":\"RejectedbyCredit\",\"Dedupe_Customer_Type\":\"Loan-MainApplicant\",\"Out_Of_Geographic_Limit\":\"\",\"Proposed_LTV\":\"\",\"Proposed_Foir\":\"\",\"Offer_Expiry_Date\":\"\",\"Offer_Generation_Date\":\"\",\"PAN_Number\":\"CYZPK9676D\",\"PAN_Name_on_card\":\"KIRAN\",\"is_pan_verified\":\"true\",\"PAN_aadhaarSeedingStatus\":\"Y\",\"pan_match_with_bureau\":\"\",\"pan_name_match_percent\":\"\",\"email_match_with_bureau\":\"\",\"voter_id_EPIC_No\":\"\",\"is_Voterid_verified\":\"\",\"voter_id_Full_Name\":\"\",\"voter_id_Name_of_Relative\":\"\",\"voter_id_Relationship\":\"\",\"voter_id_Gender\":\"\",\"voter_id_Age\":\"\",\"Driving_License_Number\":\"\",\"is_DL_Verified\":\"\",\"DL_Name\":\"\",\"DL_Father_Husband_Name\":\"\",\"DL_Date_of_Birth\":\"\",\"DL_Present_Address\":\"\",\"DL_Permanent_Address\":\"\",\"is_UAN_verified\":\"\",\"UAN_minimumWorkExperienceInMonths\":\"\",\"UAN_lastEmployer\":\"\",\"UAN_employerName\":\"\",\"UAN_startMonthYear\":\"\",\"UAN_lastMonthYear\":\"\",\"UAN_vintageInMonths\":\"\",\"is_GST_verified\":\"\",\"GST_email\":\"\",\"GST_mobNum\":\"\",\"GST_name\":\"\",\"GST_stjCd\":\"\",\"GST_lstupdt\":\"\",\"GST_gstin\":\"\",\"GST_ctjCd\":\"\",\"GST_stj\":\"\",\"GST_dty\":\"\",\"GST_cxdt\":\"\",\"GST_ctb\":\"\",\"GST_sts\":\"\",\"GST_lgnm\":\"\",\"GST_ctj\":\"\",\"Voter_Name_Match_Percentage\":\"\",\"DL_Name_Match_Percentage\":\"\",\"UAN_Name_Match_Percentage\":\"\",\"GST_Name_Match_Percentage\":\"\"},\"BankingDetails\":{\"Account_Name\":\"SantoshYadav\",\"Account_Number\":\"121501503786\",\"ISFC\":\"ICIC0001215\",\"Account_Validated\":\"true\",\"AA_Successful_Status\":\"\",\"Current_Balance\":\"\",\"AA_Status\":\"\",\"Reference_ID\":\"\",\"Tracking_id\":\"\",\"AA_totalAccounts\":\"\",\"AA_creditDebitRatio\":\"\",\"AA_avgEodBalance\":\"\",\"AA_varianceOfBalance\":\"\",\"AA_stdDeviationOfBalance\":\"\",\"AA_closingBalance\":\"\",\"AA_minimumEodBalance\":\"\",\"AA_maximumEodBalance\":\"\",\"AA_totalCreditTxn\":\"\",\"AA_totalCreditAmount\":\"\",\"AA_avgCreditAmount\":\"\",\"AA_totalDebitTxn\":\"\",\"AA_totalDebitAmount\":\"\",\"AA_avgDebitAmount\":\"\",\"AA_minimumCreditAmount\":\"\",\"AA_maximumCreditAmount\":\"\",\"AA_minimumDebitAmount\":\"\",\"AA_maximumDebitAmount\":\"\",\"AA_totalCreditDebitAmount\":\"\",\"AA_surplusAmount\":\"\",\"AA_averageSurplusAmount\":\"\",\"AA_totalCreditTxnLast90Days\":\"\",\"AA_totalDebitTxnLast90Days\":\"\",\"AA_ratioOfTotalCreditTxnLast30to60Days\":\"\",\"AA_ratioOfTotalCreditTxnLast30To90Days\":\"\",\"AA_creditAmountLast90Days\":\"\",\"AA_totalDebitTxnLast180Days\":\"\",\"AA_avgEodBalanceLast90Days\":\"\",\"AA_avgEodBalanceLast180Days\":\"\",\"AA_avgEodBalance180to270Days\":\"\",\"AA_avgEodBalance270to365Days\":\"\",\"AA_ratioOfAvgEodBalance0to90vs90to180\":\"\",\"AA_minEodBalanceLast90Days\":\"\",\"AA_PhoneNumber\":\"\",\"AA_ReferenceID\":\"\",\"AA_TrackingID\":\"\",\"AA_excel_Analytics\":\"\",\"AA_pdf_bankhistory\":\"\",\"BankID_Fipid\":\"\",\"Bank_Name\":\"\",\"Account_Type\":\"\",\"fitype\":\"\",\"bank\":\"\",\"linkedAccRef\":\"\",\"AccountHolder_Name\":\"\",\"mobile\":\"\",\"landline\":\"\",\"address\":\"\",\"email\":\"\",\"ckycCompliance\":\"\",\"Dob\":\"\",\"Nominee\":\"\",\"PAN\":\"\",\"Penny_response\":\"TransactionSuccessful\",\"Penny_Beneficiary_name\":\"SantoshYadav\",\"Penny_active\":\"yes\"},\"UploadScreenDetails\":{\"Face_Match_or_Face_Liveliness\":\"Face_Match\",\"Face_Match_With_ID_Proof_Check\":\"\",\"POS_Photo_Match_ID_Percentage\":\"\",\"Face_Match_With_Address_Proof_Check\":\"\",\"POS_Photo_Match_Address_Proof_Percentage\":\"\",\"Digital_OSV\":\"Yes\"}}}';
+        req.requestBody = Blob.valueOf(str);
+        RestContext.request = req;
+        RestContext.response= res;
+        
+        AddApplicantAPIPWA.doPost();
         Test.stopTest();
     }
-    
-    // ----------------------------------------------------
-    // Test: loadAttendance()
-    // ----------------------------------------------------
-    @isTest
-    static void testLoadAttendance() {
-        User branchUser = [SELECT Id FROM User WHERE Base_Location__c = 'Branch' LIMIT 1];
+    public static testMethod void Util_2(){
         Test.startTest();
-        AttendanceTrackerMapController.RecordLocationWrapper wrapper1 = AttendanceTrackerMapController.loadAttendance(branchUser.Id, 'Delhi', false);
-        AttendanceTrackerMapController.RecordLocationWrapper wrapper2 = AttendanceTrackerMapController.loadAttendance(branchUser.Id, 'Delhi', true); // MODIFICATION: covers the isHO branches
-        Test.stopTest();
-    }
-    
-    // ----------------------------------------------------
-    // Test: loadAttendancePanIndia()
-    // ----------------------------------------------------
-    @isTest
-    static void testLoadAttendancePanIndia() {
-        Test.startTest();
-        AttendanceTrackerMapController.RecordLocationWrapper wrapper = AttendanceTrackerMapController.loadAttendancePanIndia(true);
-        Test.stopTest();
-    }
-    
-    // ----------------------------------------------------
-    // MODIFICATION: New Test to cover Catch Blocks
-    // ----------------------------------------------------
-    @isTest
-    static void testExceptionBlocks() {
-        Test.startTest();
-        // Force errors by passing a deliberately invalid Id to hit the Catch statements
-        AttendanceTrackerMapController.RecordLocationWrapper ex1 = AttendanceTrackerMapController.loadAttendance('invalid_id', 'Delhi', false);
-        List<String> ex2 = AttendanceTrackerMapController.getUserState('invalid_id');
+        RestRequest req = new RestRequest(); 
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/AddApplicantAPIPWA'; 
+        req.httpMethod = 'POST';
+        Test.setMock(HttpCalloutMock.class, new WebSermockTest());
+        PWALO_OPP__c pwalo = new PWALO_OPP__c();
+        insert pwalo;
+        String str = '{\"Token2\":\"token\",\"Token1\":\"token\",\"Application_Id\":\"AP-3155\",\"PWALO_OPP_Id\":\"' + pwalo.Id + '\",\"Applicant_Type\":\"G\",\"ApplicantData\":null}';
+         req.requestBody = Blob.valueOf(str);
+        RestContext.request = req;
+        RestContext.response= res;
         
-        System.assertEquals(null, ex1);
-        System.assertEquals(null, ex2);
+        AddApplicantAPIPWA.doPost();
         Test.stopTest();
     }
 }
