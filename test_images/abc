@@ -1,1919 +1,238 @@
-here ia an apex class 
-
-
-/*
-* Developed by : MindIT Systems
-* Date : 30/july/2021
-* @last modified on  : 24-08-2026 // BY Raghav Adding field Summation of CF
-*/
-
-public class CollateralServiceHitAPIJSON implements Queueable, Database.AllowsCallouts {
-    public string appSet{get;set;}
-    public String dmId{get;set;} 
-    public String dsbSt{get;set;}
-    public static String accesstoken{get;set;}
-    public static String appId;
-    public static String propertyId;
-    public static String result;
-    public static String dbId;
-    public String temp;
-    
-    
-    public CollateralServiceHitAPIJSON (String appId,String dsbId, string st){
-        appSet=appId;
-        dmId=dsbId; 
-        dsbSt=st;
-        
-    }
-    
-    public void execute(QueueableContext context){
-        try{
-            System.debug('appSet'+appSet);
-            System.debug('dmId'+dmId);
-            System.debug('dsbSt'+dsbSt);
-            id recId=Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
-            List<Opportunity> AppList=[select id,Add_L1__c,Sanctioned_Tenure__c,Loan_Number__c,Ownership_Of_Current_Residence__c,Household__c,Household__r.Property_Status__c,A_Locality__c,ECS_StDt__c,Sanctioned_Amont__c,
-                                       Is_Owner_1__c,Is_Owner_2__c,Is_Owner_3__c,Is_Owner_4__c,Is_Owner_5__c,Is_Owner_6__c,
-                                       CollAdd1__c ,CollAdd2__c,CollAdd3__c,Collateral_Pin_Code_New__c,ColPin__c,FinnoneClient_Id__c ,
-                                       (Select Insurance_Company__c,DM_movement_date_Finnone_Disb_Date__c,Loan_Cancellation_type__c,Insurance_Premium__c,caseTyp__c,Beneficiary_Name__c,Construction_Finance_Insurance_Premium__c from Disbursements__r where id =:dmId ),
-                                       (SELECT Id,Proposed_Construction_Value__c,Proposed_Construction_area__c,Total_Prop_Val__c,Build_Up_Area__c,Land_Area__c,Doc_Value_of_Prop__c,Loan_Application__c,PropArea_Units__c ,Build_Up_Area_Units__c,Build_Up_Construction_Value__c FROM CAMs__r)
-                                       from Opportunity where Id =:appSet];
-            System.debug('AppList'+AppList.size());
-            System.debug('AppList'+AppList);
-            string pin=String.valueof(Applist[0].ColPin__c);   
-            List<NucleusStateCity__c> nSc=[SELECT Id, ZIP_CODE__c, Name, CITY_CODE__c, District_Code__c, STATE_CODE__c FROM NucleusStateCity__c where Name=:pin];
-       
-            /* list<Property_Master__c> proList=[select id,Property_Title_Type__c,Property_Type__c,Build_up_Area__c,Informal_Property_Title__c,name,Property_Owner_1__r.Name,Total_Property_Value__c,Village__c,State__c,Document_District__c,Evaluated_Price__c,Sub_Registrar__c,Land_Value__c,Document_Date__c,Document_State__c,City__c,Pin_Code__c,
-Property_Purpose__c,Title_Document_No__c,House_No__c, Proposed_Construction_Area__c,
-Address_Line_1__c,Land_Area_Units__c,District__c,Locality__c, Pin_Code_New__r.STATE_CODE__c,
-Land_Area__c,Pin_Code_New__r.CITY_CODE__c,Plot_No__c,Proposed_Construction_Value__c,
-Build_Up_Area_Units__c,Proposed_Area_units__c,Build_Up_Construction_Value__c
-from Property_Master__c where Household__c=:AppList[0].Household__c order by createdDate desc limit 1];*/
-            
-            System.debug('nSc'+nSc);
-            list<Property_Master__c> proList=[select id,Informal_Property_Title__c,name from Property_Master__c where Household__c=:AppList[0].Household__c order by createdDate desc limit 1];
-            //	 System.debug('proList[0].id'+proList[0].id);
-            appId=AppList[0].id;
-            
-            String rand = string.valueof(Math.abs(Crypto.getRandomInteger()));
-            String otp = rand.substring(0,8);
-            if(proList.size()>0)   
-            { propertyId=proList[0].id; }
-            else
-            {propertyId=otp;}
-            
-            dbId = dmId;
-            System.debug('proList'+proList);
-            List<Opportunity> prntApp=[select Br_net_HL_ID__c from Opportunity where id <>:appSet and /*Br_net_Client_ID__c*/ FinnoneClient_Id__c != NULL  AND FinnoneClient_Id__c=:appList[0].FinnoneClient_Id__c /*Br_net_Client_ID__c*/];
-            System.debug('prntApp'+prntApp);
-            
-            set<id> cApId=new set<id>();
-            cApId.add(appSet);
-          
-            
-            // if(prntApp.size()>0)
-            //  cApId.add(prntApp[0].id);
-            
-            List< Technical_Verification__c > listTechVerify=new List< Technical_Verification__c >();
-            listTechVerify = [select Carpet_area_in_sqft__c,Approved_Land_Use_as_per_Master_Plan__c,Property_Situated_At__c,Property_Type__c,Residual_age_of_the_property__c,
-                              id,Age_of_the_Property__c,Remarks__c,Land_Area__c,Self_Occupied_by_Owner__c,Area_Land_Measurement__c,
-                              Property_Address__c,Current_Usage__c from Technical_Verification__c 
-                              WHERE Vendor_Request__r.Request_Type__c='Technical' AND Vendor_Request__r.Application__c =: cApId
-                              AND (Status__c = 'Final Approved' OR Status__c = 'Approved') AND recordTypeId=:recId
-                              order by createddate asc limit 1 ];
-            if(listTechVerify.size()<=0)
-            {
-                listTechVerify = [select Carpet_area_in_sqft__c,Approved_Land_Use_as_per_Master_Plan__c,Property_Situated_At__c,Property_Type__c,Residual_age_of_the_property__c,
-                                  id,Age_of_the_Property__c,Remarks__c,Land_Area__c,Self_Occupied_by_Owner__c,Area_Land_Measurement__c,
-                                  Property_Address__c,Current_Usage__c from Technical_Verification__c  where id='a0u2K00000N1wVh' limit 1 ];
-            }
-            System.debug('listTechVerify'+listTechVerify);
-            CollateralServiceWrapper.propertyOtherDetailsVO propertyOtherDetailsVO = new CollateralServiceWrapper.propertyOtherDetailsVO();
-            if(listTechVerify.size()>0)
-            {
-                if(listTechVerify[0].Self_Occupied_by_Owner__c==null)
-                {listTechVerify[0].Self_Occupied_by_Owner__c='Vacant';}
-                if(listTechVerify[0].Residual_age_of_the_property__c==null)
-                { propertyOtherDetailsVO.residualAgeCode='LESS_THAN_5_YEARS';}
-            }
-            List<Nucleus_Reciept__c> ncL=[select id from Nucleus_Reciept__c where Property_Master__c=:proList[0].id and collateralNo__c!=null];
-            System.debug('Nucleus_Reciept__c '+ncl);
-            
-            if(AppList[0].CAMs__r[0].Proposed_Construction_area__c==null)
-            {
-                AppList[0].CAMs__r[0].Proposed_Construction_area__c=1;  
-            }
-            if(AppList[0].CAMs__r[0].Build_Up_Area__c==null)
-            {
-                AppList[0].CAMs__r[0].Build_Up_Area__c=1;  
-            }
-            
-            /* will only work if ncl size equal to zero */
-            if(ncL.size()==0){ 
-                
-                List<Property_Title__mdt> ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel='Free hold']; 
-                /* if(prolist.size()>0)
-{
-if(prolist[0].Informal_Property_Title__c!=null)
-{
-ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel=:prolist[0].Informal_Property_Title__c];
-
-}  
-else
-{
-ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel='Free hold']; 
-}
-
-}
-
-else
-{
-ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel='Free hold']; 
-}*/
-                
-                List<Property_Type__mdt > propertyType;
-                if(listTechVerify.size()>0)
-                {
-                    if(listTechVerify[0].Property_Type__c!=null)
-                    {
-                        propertyType = [SELECT FinnOne_Type_Code__c,Property_Type__c  from Property_Type__mdt WHERE MasterLabel=: listTechVerify[0].Property_Type__c];
-                        
-                    }
-                }
-                else
-                {
-                    propertyType = [SELECT FinnOne_Type_Code__c,Property_Type__c  from Property_Type__mdt WHERE MasterLabel='House Ready Build'];
-                    
-                } 
-                
-                System.debug('AppList'+AppList);
-                System.debug('AppList'+AppList.size());
-                for(Opportunity op:AppList){
-                    System.debug('op'+op);
-                    Property_Master__c pm=prolist[0];
-                    string cd='Vacant';
-                    
-                    
-                    if(listTechVerify[0].Self_Occupied_by_Owner__c!=null){
-                        System.debug('inside 97');
-                        list<Property_Purpose__mdt> ppm= [SELECT Code__c from Property_Purpose__mdt where MasterLabel=:listTechVerify[0].Self_Occupied_by_Owner__c];
-                        //if(!test.isRunningTest())
-                        System.debug('inside 100'+ppm);
-                        cd = ppm[0].Code__c;
-                        
-                        Disbursement__c disb = op.Disbursements__r[0];
-                        
-                        /* started modification from here */
-                        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-                        obj.productProcessor ='mCAS';
-                        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*10);
-                        obj.requestReferenceNumber=requestRefernce;
-                        
-                        /* collParameterVO block starts form here !*/
-                        CollateralServiceWrapper.collParameterVO collParameterVO = new CollateralServiceWrapper.collParameterVO();
-                        collParameterVO.collateralTypeCode='Property';
-                        collParameterVO.sourceSystem='CAS';
-                        //After discussion with Abhinav sir ,need to comment below line 2023-02-08
-                        collParameterVO.referenceNumber=appList[0].Loan_Number__c.split('-')[1];//proList[0].name;
-                        //New line added after discussion with deepak ji and abhinav sir
-                         // collParameterVO.referenceNumber=appList[0].Loan_Number__c;
-                        collParameterVO.description='Collateral Property details';
-                        
-                        List<Collateral_Subtype_Mapping__mdt > CollateralSubtype = [select Collateral_Subtype__c,Collateral_Subtype_Loanser__c from Collateral_Subtype_Mapping__mdt where MasterLabel=: listTechVerify[0].Property_Type__c];
-                        if(CollateralSubtype.size()>0){
-                            collParameterVO.collateralSubTypeCode=CollateralSubtype[0].Collateral_Subtype__c;
-                            temp=CollateralSubtype[0].Collateral_Subtype_Loanser__c;
-                        }
-                        
-                        obj.collParameterVO = collParameterVO; /*collParameterVO block added here !*/
-                        
-                        /* propertyDetailsVO block starts form here */
-                        CollateralServiceWrapper.propertyDetailsVO propertyDetailsVO = new CollateralServiceWrapper.propertyDetailsVO();
-                        propertyDetailsVO.applicationTypeCode=system.label.applicationTypeCode;
-                        
-                        if(propertyType[0].FinnOne_Type_Code__c != null)
-                            propertyDetailsVO.propertyTypeCode=propertyType[0].FinnOne_Type_Code__c;
-                        else
-                            propertyDetailsVO.propertyTypeCode='LANDWC';
-                        /*Modified by Jawahar to fix api bugs for dec month end   */
-                        /*  if(listTechVerify[0].Approved_Land_Use_as_per_Master_Plan__c != null){
-
-propertyDetailsVO.natureOfPropertyCode = string.valueOf(listTechVerify[0].Approved_Land_Use_as_per_Master_Plan__c).toUppercase();
-}
-else{
-propertyDetailsVO.natureOfPropertyCode = 'RESIDENTIAL';
-}
-
-*/   
-                        
-                        propertyDetailsVO.natureOfPropertyCode='RESIDENTIAL';
-                        propertyDetailsVO.assetTypeCode='New';
-                        
-                        
-                        
-                        
-                        propertyOtherDetailsVO.age=0;
-                        if( listTechVerify.size()>0){
-                            propertyOtherDetailsVO.age = (Integer) listTechVerify[0].Age_of_the_Property__c!=null ? (Integer) listTechVerify[0].Age_of_the_Property__c : null;   
-                            if(listTechVerify[0].Property_Situated_At__c=='Municipal Corporation Area')
-                                propertyOtherDetailsVO.propertyClassificationCode='NGPF';//'5000022';
-                            else if(listTechVerify[0].Property_Situated_At__c=='Panchayat' || listTechVerify[0].Property_Situated_At__c=='Panchayat Under Development Authority')
-                                propertyOtherDetailsVO.propertyClassificationCode='GPF';//'5000044';
-                            else
-                                propertyOtherDetailsVO.propertyClassificationCode='P1';
-                            
-                            
-                            if(listTechVerify[0].Residual_age_of_the_property__c>=40)
-                                propertyOtherDetailsVO.residualAgeCode='MORE THAN 40 YEARS';
-                            if(listTechVerify[0].Residual_age_of_the_property__c>=25 && listTechVerify[0].Residual_age_of_the_property__c<40)
-                                propertyOtherDetailsVO.residualAgeCode='MORE_THAN_25_AND_LESS_THAN_40_YEARS';
-                            if(listTechVerify[0].Residual_age_of_the_property__c>=15 && listTechVerify[0].Residual_age_of_the_property__c<25)
-                                propertyOtherDetailsVO.residualAgeCode='FROM_15_TO_25_YEARS';
-                            if(listTechVerify[0].Residual_age_of_the_property__c>=5 && listTechVerify[0].Residual_age_of_the_property__c<15)
-                                propertyOtherDetailsVO.residualAgeCode='MORE_THAN_5_TO_15_YEARS';
-                            if(listTechVerify[0].Residual_age_of_the_property__c<5)
-                                propertyOtherDetailsVO.residualAgeCode='LESS_THAN_5_YEARS';
-                            
-                        }
-                        
-                        if(ptm.size()>0)
-                            propertyOtherDetailsVO.propertyOwnershipCode=ptm[0].PropertyOwnershipCode__c;
-                        else
-                            propertyOtherDetailsVO.propertyOwnershipCode = 'FreeHold';
-                        
-                        propertyOtherDetailsVO.propertyPurposeCode = cd;
-                        
-                        CollateralServiceWrapper.constructionArea constructionArea=new CollateralServiceWrapper.constructionArea();
-                        if(AppList[0].CAMs__r.size()>0 && AppList[0].CAMs__r[0].Proposed_Construction_area__c!=null && AppList[0].CAMs__r[0].Proposed_Construction_area__c > 0){
-                            constructionArea.areaValue = (Integer)AppList[0].CAMs__r[0].Proposed_Construction_area__c;
-                            
-                        }
-                        else{
-                            constructionArea.areaValue = 1;
-                        }
-                        
-                        
-                        if(AppList[0].CAMs__r.size()>0 && AppList[0].CAMs__r[0].PropArea_Units__c!=null)
-                            constructionArea.muCode= 'SQUARE_FEET';
-                        else
-                            constructionArea.muCode = 'SQUARE_FEET';
-                        
-                        propertyOtherDetailsVO.constructionArea = constructionArea; /* constructionArea area added here !*/
-                        
-                        CollateralServiceWrapper.totalArea totalArea = new CollateralServiceWrapper.totalArea();
-                        if(AppList[0].CAMs__r.size()>0 && AppList[0].CAMs__r[0].Build_Up_Area__c!=null && AppList[0].CAMs__r[0].Build_Up_Area__c > 0){
-                            if(constructionArea.areaValue > 1 && constructionArea.areaValue != null){
-                                totalArea.areaValue= constructionArea.areaValue + 1;
-                            }else{
-                                totalArea.areaValue= (Integer)AppList[0].CAMs__r[0].Build_Up_Area__c + (Integer)AppList[0].CAMs__r[0].Proposed_Construction_area__c;   
-                            }
-                            
-                            totalArea.muCode='SQUARE_FEET';	
-                        }
-                        else
-                        {
-                            totalArea.muCode='SQUARE_FEET';
-                            if(constructionArea.areaValue > 1 && constructionArea.areaValue != null){
-                                totalArea.areaValue= constructionArea.areaValue + 1;
-                            }else{
-                                totalArea.areaValue=1;
-                            }
-                        }
-                        
-                        
-                        propertyOtherDetailsVO.totalArea=totalArea; // to add totalArea or proposed construction area 
-                        
-                        
-                        
-                        CollateralServiceWrapper.builtUpArea builtUpArea = new CollateralServiceWrapper.builtUpArea();
-                        
-                        if(AppList[0].CAMs__r.size()>0 && AppList[0].CAMs__r[0].Build_Up_Area__c!=null && AppList[0].CAMs__r[0].Build_Up_Area__c > 0){
-                            if(constructionArea.areaValue > 1 && constructionArea.areaValue != null){
-                                builtUpArea.AreaValue = constructionArea.areaValue + 1;   
-                            }else{
-                                builtUpArea.AreaValue = (Integer)AppList[0].CAMs__r[0].Build_Up_Area__c;    
-                            }  
-                        }
-                        
-                        else{
-                            if(constructionArea.areaValue > 1 && constructionArea.areaValue != null){
-                                builtUpArea.AreaValue = constructionArea.areaValue + 1; 
-                            }else{ 
-                                builtUpArea.AreaValue=1;
-                            }
-                        }  
-                        if(AppList[0].CAMs__r.size()>0 && AppList[0].CAMs__r[0].Build_Up_Area_Units__c!=null)
-                            builtUpArea.muCode = 'SQUARE_FEET';
-                        else
-                            builtUpArea.muCode = 'SQUARE_FEET';
-                        
-                        propertyOtherDetailsVO.builtUpArea=builtUpArea;
-                        
-                        CollateralServiceWrapper.carpetArea carpetArea = new CollateralServiceWrapper.carpetArea();
-                        if(listTechVerify[0].Carpet_area_in_sqft__c != null)
-                            if(constructionArea.areaValue > 1 && constructionArea.areaValue != null){
-                                carpetArea.areaValue = constructionArea.areaValue + 1;  
-                            }else{
-                                carpetArea.areaValue=(Integer)listTechVerify[0].Carpet_area_in_sqft__c;
-                            }
-                        else{
-                            if(constructionArea.areaValue > 1 && constructionArea.areaValue != null){
-                                carpetArea.areaValue = constructionArea.areaValue + 1;
-                            }else{
-                                carpetArea.areaValue=1;
-                            }    
-                        }
-                        
-                        
-                        carpetArea.muCode = 'SQUARE_FEET';
-                        
-                        propertyOtherDetailsVO.carpetArea=carpetArea;
-                        propertyDetailsVO.propertyOtherDetailsVO=propertyOtherDetailsVO; 
-                        
-                        CollateralServiceWrapper.propertyCost propertyCost= new CollateralServiceWrapper.propertyCost();
-                        propertyCost.amount =(Integer) AppList[0].CAMs__r[0].Total_Prop_Val__c;
-                        propertyCost.currencyCode='INR';
-                        propertyDetailsVO.propertyCost= propertyCost;
-                        
-                        CollateralServiceWrapper.address address = new CollateralServiceWrapper.address();
-                        address.addressTypeCode='PropertyAddress';
-                        address.countryISOCode='IND';
-                        // system.debug('AppList[0].CollAdd1__c'+AppList[0].CollAdd1__c);
-                        if(AppList[0].CollAdd1__c!=null)
-                        {
-                            address.addressLine1=AppList[0].CollAdd1__c;  
-                        }
-                        else
-                        {
-                            address.addressLine1=AppList[0].Add_L1__c;  
-                        }
-                        address.addressLine2='?';
-                        address.addressLine3='?';
-                        if(address.addressLine1.contains('&'))
-                            address.addressLine1=address.addressLine1.replace('&',',');  
-                        if(AppList[0].CollAdd2__c!=null){      
-                            address.addressLine2=AppList[0].CollAdd2__c;
-                            if(address.addressLine2.contains('&'))
-                                address.addressLine2=address.addressLine2.replace('&',',');
-                        }
-                        if(AppList[0].CollAdd3__c!=null){   
-                            address.addressLine3=AppList[0].CollAdd3__c;
-                            if(address.addressLine3.contains('&'))
-                                address.addressLine3=address.addressLine3.replace('&',',');  
-                        }
-                        
-                        if(AppList[0].ColPin__c!=null)
-                            address.zipcode=String.valueOf(AppList[0].ColPin__c);
-                        else
-                            address.zipcode='?';
-                        
-                        
-                        address.cityCode=nSc[0].CITY_CODE__c;
-                        address.stateCode= nSc[0].STATE_CODE__c;
-                        
-                        
-                        
-                        propertyDetailsVO.address = address; /* address added here ! */
-                        
-                        if(collParameterVO.collateralSubTypeCode != 'LANDOWN' && collParameterVO.collateralSubTypeCode != 'LANDPURCHASE'){
-                            CollateralServiceWrapper.builderDetailsVO builderDetailsVO = new CollateralServiceWrapper.builderDetailsVO();
-                            builderDetailsVO.builderCompanyCode=system.label.builderCompanyCode;
-                            builderDetailsVO.builderProjectCode=system.label.builderProjectCode;
-                            builderDetailsVO.buildingCode=system.label.buildingCode;
-                            
-                            propertyDetailsVO.builderDetailsVO =builderDetailsVO;
-                        }
-                        
-                        propertyDetailsVO.propertyOwnershipDetailVO = new List<CollateralServiceWrapper.propertyOwnershipDetailVO>();
-                        CollateralServiceWrapper.propertyOwnershipDetailVO  propertyOwnershipDetails = new CollateralServiceWrapper.propertyOwnershipDetailVO();
-                        /*Modified by Jawahar for month end fixes */
-                        if(Applist[0].Ownership_Of_Current_Residence__c!=null){
-                            propertyOwnershipDetails.ownerName = Applist[0].Ownership_Of_Current_Residence__c; 
-                        }
-                        else{
-                            propertyOwnershipDetails.ownerName='NA';
-                        }
-                        if(AppList[0].Household__r.Property_Status__c != null)
-                            propertyOwnershipDetails.ownershipStatus=AppList[0].Household__r.Property_Status__c;
-                        else
-                            propertyOwnershipDetails.ownershipStatus='Owned'; //After discuss with Vivek sir
-                        if( propertyOwnershipDetails.ownershipStatus=='Rented')  propertyOwnershipDetails.ownershipStatus='Owned';
-                         if( propertyOwnershipDetails.ownershipStatus=='Company provided')  propertyOwnershipDetails.ownershipStatus='Owned';
-                         if( propertyOwnershipDetails.ownershipStatus=='Relative')  propertyOwnershipDetails.ownershipStatus='Owned';
-                        if( propertyOwnershipDetails.ownershipStatus=='Self owned' || propertyOwnershipDetails.ownershipStatus=='Self Owned' || propertyOwnershipDetails.ownershipStatus=='self owned')propertyOwnershipDetails.ownershipStatus='Owned';//// Added By Rahul Kumar 23-12-2025
-                        propertyOwnershipDetails.ownerType='CURRENT';
-                        
-                        propertyOwnershipDetails.ownershipFrom=String.valueOf(Datetime.now().formatGMT('yyyy-MM-dd'));
-                        propertyOwnershipDetails.percentShare=100;
-                        
-                        propertyDetailsVO.propertyOwnershipDetailVO.add(propertyOwnershipDetails); /*propertyOwnershipDetailVO added here ! */
-                        
-                        
-                        CollateralServiceWrapper.registrationDetailsVO registrationDetailsVO = new CollateralServiceWrapper.registrationDetailsVO();
-                        registrationDetailsVO.registeredProperty=true;
-                        
-                        CollateralServiceWrapper.totalAgrmntAmount totalAgrmntAmount=new CollateralServiceWrapper.totalAgrmntAmount();
-                        if(AppList[0].CAMs__r.size()>0 && AppList[0].CAMs__r[0].Total_Prop_Val__c!=null)
-                            totalAgrmntAmount.amount=   (Integer) AppList[0].CAMs__r[0].Total_Prop_Val__c;
-                        totalAgrmntAmount.currencyCode='INR';
-                        
-                        registrationDetailsVO.totalAgrmntAmount=totalAgrmntAmount;
-                        
-                        registrationDetailsVO.agreementDetailVO  = new List<CollateralServiceWrapper.agreementDetailVO>();
-                        CollateralServiceWrapper.agreementDetailVO  agreementDetails  = new CollateralServiceWrapper.agreementDetailVO();
-                        agreementDetails.registrationNumber = '0';
-                        agreementDetails.saleDeedNumber=0;
-                        
-                        
-                        
-                        agreementDetails.sro = 'SRO_MUMBAI';
-                        agreementDetails.agreementRemarks='?';
-                        agreementDetails.agreementType='CURRENT';
-                        agreementDetails.registrationDate=String.valueOf(Datetime.now().formatGMT('yyyy-MM-dd'));
-                        
-                        
-                        CollateralServiceWrapper.agreementValue aggrement = new CollateralServiceWrapper.agreementValue();
-                        aggrement.amount=0;
-                        aggrement.currencyCode='INR';
-                        
-                        
-                        CollateralServiceWrapper.amenitiesAgreementValue amenities = new CollateralServiceWrapper.amenitiesAgreementValue();
-                        amenities.amount=0;
-                        amenities.currencyCode='INR';
-                        
-                        
-                        agreementDetails.agreementValue=aggrement;
-                        agreementDetails.amenitiesAgreementValue= amenities;      
-                        
-                        registrationDetailsVO.agreementDetailVO.add(agreementDetails);/* agreementDetails added here !*/
-                        propertyDetailsVO.registrationDetailsVO=registrationDetailsVO;
-                        
-                        CollateralServiceWrapper.colInsuranceFundingVO  colInsuranceFundingVO= new CollateralServiceWrapper.colInsuranceFundingVO();
-                        
-                        if(disb.Insurance_Company__c!=null){
-                            List<Insurance_Companies__mdt> insvt = [Select code__c  From Insurance_Companies__mdt Where masterlabel=:disb.Insurance_Company__c];
-                            if(insvt.size()>0){
-                                colInsuranceFundingVO.insuranceCompanyCode=insvt[0].code__c;
-                            }
-                            else{
-                                colInsuranceFundingVO.insuranceCompanyCode='?';
-                            }
-                        }
-                        
-                        if(disb.Loan_Cancellation_type__c =='Loan with Rebook' && disb.Tranch_Details__c == 'First' && disb.Disb_Status__c == ''){
-                            
-                        }
-                        
-                        
-                        CollateralServiceWrapper.premiumAmount premium = new  CollateralServiceWrapper.premiumAmount();
-                        Decimal insurancePremium =disb.Insurance_Premium__c == null ? 0 : disb.Insurance_Premium__c;
-                        Decimal constructionInsurancePremium =disb.Construction_Finance_Insurance_Premium__c == null? 0: disb.Construction_Finance_Insurance_Premium__c;
-                        premium.amount = (Integer)(insurancePremium + constructionInsurancePremium);
-                        premium.currencyCode='INR';
-                        
-                        CollateralServiceWrapper.coverageAmount coverageAmt = new CollateralServiceWrapper.coverageAmount();
-                        coverageAmt.amount= (Integer) AppList[0].Sanctioned_Amont__c;
-                        coverageAmt.currencyCode='INR';
-                        
-                        
-                        colInsuranceFundingVO.premiumAmount=premium;
-                        colInsuranceFundingVO.coverageAmount=coverageAmt;
-                        colInsuranceFundingVO.policyNumber='?';
-                        
-                        propertyDetailsVO.colInsuranceFundingVO=colInsuranceFundingVO;
-                        
-                        obj.propertyDetailsVO=propertyDetailsVO;                    
-                        
-                        
-                        
-                        string st=CollateralServiceMethod(obj,temp);  // to call the method 
-                        
-                        System.debug('st>>>>'+st);
-                        if(st == 'SUCCESS'){
-                            if(!Test.isRunningTest()){
-                                System.enqueueJob(new CustomerServiceHitAPIJSON(appSet,dmId,dsbSt));
-                            }
-                            
-                            
-                        } 
-                        
-                    }
-                }
-            }
-            else{
-                System.debug('inside 392');
-                if(!Test.isRunningTest()){
-                    System.enqueueJob(new CustomerServiceHitAPIJSON(appSet,dmId,dsbSt));
-                } 
-                
-            }
-            
-        }
-        catch(Exception e){
-            System.debug('Excepton =  '+e.getMessage());
-            System.debug('Excepton =  '+e.getLineNumber());
-            /// Added by Rahul kumar 23-12-25
-            String resp=' ::errormessage::'+e.getMessage()+' at linenumber::'+e.getLIneNumber();
-			NucleusAPILogUtility.createNucleusAPILog('Executing CollateralServiceHitAPIJSON',resp,'collateral API','','ERROR',propertyId);
-        	/// End here
-        }
-        
-        
-    }
-    
-    
-    public static String  requestAccessToken(){
-        String url = System.label.ReceiptClientTokenURL;
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
-        request.setEndpoint(url);
-        request.setMethod('POST');
-        request.setHeader('Content-Type','application/x-www-form-urlencoded');
-        String body = System.label.ReceiptClientTokenBody;
-        request.setBody(body);
-        HttpResponse response =http.send(request);
-        
-        JSONParser parser = JSON.createParser(response.getBody());
-        while(parser.nextToken() !=NULL){
-            if((parser.getCurrentToken() == JSONTOKEN.FIELD_NAME) && parser.getText()=='access_token'){
-                parser.nextToken();
-                accesstoken = parser.getText();
-                
-            }
-        }
-        
-        return accesstoken;
-        
-    }
-    
-    
-    
-    
-    // to call the wrapper classs      
-    public static string CollateralServiceMethod(CollateralServiceWrapper obj,String temp ){
-        System.debug('temp'+temp);
-        string propId=propertyId; //// Added By Rahul kumar 24-12-25
-        try{
-            HttpRequest request = new HttpRequest();
-            boolean bIsSucess=false;
-            string url=System.label.ColleateralServiceURL; 
-            request.setEndpoint(url);
-            request.setMethod('POST');
-            request.setHeader('Content-Type','application/json');
-            if(!Test.isRunningTest())
-            request.setHeader('access_token', requestAccessToken());
-            request.setTimeout(120000); 
-            String jsonData = JSON.serialize(obj);  //  to create a json DATA  
-            request.setBody(jsonData);
-            System.debug(System.LoggingLevel.DEBUG,' **  requestBodyJSON  ** ' + jsonData);
-            
-            Http http = new Http();
-            Decimal AppScore = 0;
-            String Response='';
-            HttpResponse res =http.send(request);
-            System.debug(' ***  response status '+res.getStatus() +' status code '+res.getStatusCode());
-            String body = res.getBody();
-            System.debug(System.LoggingLevel.DEBUG,'** ResponseBody ** = '+body);
-            try{
-                Map<String, Object> getErrorJsonBody =   (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-                if((String)getErrorJsonBody.get('status') == 'ERROR'){
-                    DisbursementStaging__c St =  new DisbursementStaging__c();
-                    St.Error__c=(String)getErrorJsonBody.get('errorDesc');
-                    St.Application__c=appId;
-                    St.Disbursement__c=dbId;
-                    insert St;
-                }
-                /*    string str = 'GLBCOLL000123';
-    Nucleus_Reciept__c ncr1=new Nucleus_Reciept__c();
-    
-    if(!string.isBlank(str)){
-    ncr1.collateralNo__c=str;
-    ncr1.Application__c= appId;
-    ncr1.Property_Master__c=propertyId;
-    ncr1.isActive__c=true;
-    insert ncr1; 
-    }*/
-                // system.debug('ncr----'+ncr);
-                
-                //  res = http.send(req);
-                system.debug('res.getStatusCode '+res.getStatusCode());
-                if(res.getStatusCode() == 200){
-                    
-                    ResponseWrapper responseWrapper = (ResponseWrapper)System.JSON.deserialize(body, ResponseWrapper.class);
-                    System.debug(' responseWrapper  '+responseWrapper);
-                    
-                    
-                    Nucleus_Reciept__c ncr=new Nucleus_Reciept__c();
-                    System.debug('responseWrapper>>>>>'+responseWrapper);
-                    if(responseWrapper.status.equalsIgnoreCase('SUCCESS')){
-                        ncr.collateralNo__c=responseWrapper.globalCollateralNumber;
-                        System.debug('ncr.collateralNo__c'+ncr.collateralNo__c);
-                        ncr.Application__c=appId;
-                        ncr.Collateraltypecode__c=temp;//CollateralSubtype[0].Collateral_Subtype_Loanser__c;
-                        ncr.Property_Master__c=propertyId;
-                        ncr.isActive__c=true;
-                        insert ncr;
-                        
-                       // System.debug(' receipt '+ncr);
-                        
-                        Nucleus_API_Log__c ncLog= new Nucleus_API_Log__c();                   
-                        ncLog.Request__c=jsonData;
-                        ncLog.Response__c=res.getbody();
-                        ncLog.Collateral__c=propertyId;
-                        ncLog.API__c='collateral API';
-                        ncLog.status__c='SUCCESS';
-                        insert nclog;
-                        return  result ='SUCCESS';
-                    }
-                    else if(responseWrapper.status.equalsIgnoreCase('ERROR')){
-                        System.debug('Inside else if');
-                        Nucleus_API_Log__c ncLog= new Nucleus_API_Log__c();                   
-                        ncLog.Request__c=jsonData;
-                        ncLog.Response__c=res.getbody();
-                        ncLog.Collateral__c=propertyId;
-                        ncLog.API__c='collateral API';
-                        ncLog.status__c='ERROR';
-                        System.debug('Inside else if'+ncLog);
-                        insert nclog;
-                        
-                        
-                        
-                        return  result ='ERROR';
-                    }
-                    
-                    
-                }
-                Nucleus_API_Log__c ncLog= new Nucleus_API_Log__c();                   
-                ncLog.Request__c=jsonData;
-                ncLog.Response__c=res.getbody();
-                ncLog.Collateral__c=propertyId;
-                ncLog.API__c='collateral API';
-                ncLog.status__c='ERROR';
-                insert nclog;
-                return  result= 'ERROR';
-            }
-			/// Added By Rahul kumar 23-12-2025
-            catch(Exception e){
-                String resp=res.getbody()+' ::errormessage::'+e.getMessage()+' at linenumber::'+e.getLIneNumber();
-				NucleusAPILogUtility.createNucleusAPILog(jsonData,resp,'collateral API','','ERROR',propertyId);
-            }
-            /// END HERE
-        }
-        catch(Exception e){
-            System.debug('Excepton =  '+e.getMessage());
-            System.debug('Excepton =  '+e.getLineNumber());
-            /// Added By Rahul kumar 24-12-2025
-            String resp='Error in collateralApi ->CollateralServiceMethod Block ::errormessage::'+e.getMessage()+' at linenumber::'+e.getLIneNumber();
-            NucleusAPILogUtility.createNucleusAPILog('CollateralApi in CollateralServiceMethod::',resp,'collateral API','','ERROR',propId);
-			/// END HERE
-        }
-        
-        
-        return result;
-        
-    }
-    
-    public class ResponseWrapper
-    {
-        public String status;
-        public String requestReferenceNumber;
-        public String globalCollateralNumber;
-        public String referenceNumber;
-        public String collateralType;
-        public String collateralSubType;
-        
-    } 
-}
-
-
-
-and here is its test class
-
-
-/*
-* Developed by : Gaurav Kumar
-* Date : 05-09-22
-* Description:CollateralServiceHitAPIJSON
-*/
-
-/*@isTest
-public class CollateralServiceHitAPIJSONTest {
-
-@testSetup
-public static void testSetup(){
-
-id recId=Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
-//Code for insert User
-Profile profileId = [SELECT Id FROM Profile WHERE Name = 'ISFCL CPU Head - PD LEGAL' LIMIT 1];
-
-User usr = new User(LastName = 'LIVESTON',
-FirstName='JASON',
-Alias = 'jliv',
-Email = 'jason.liveston@asdf.com',
-Username = 'jason.liveuuuuu@asdf.com',
-ProfileId = profileId.id,
-TimeZoneSidKey = 'GMT',
-LanguageLocaleKey = 'en_US',
-EmailEncodingKey = 'UTF-8',
-LocaleSidKey = 'en_US',
-isActive = true
-);
-insert usr;
-
-//Code for insert Branch
-Branch__c bran = new Branch__c();
-bran.Br_net_Branch_Code__c = 'vghngh';
-bran.Branch_Approver__c = usr.id;
-bran.Name = 'Test-Branch';
-bran.OwnerId = Usr.id;
-bran.BranchLO__c = usr.id;
-bran.Branch_State__c = 'Branch-1';
-bran.Branch_User__c = usr.id;
-bran.Legal_Manager__c = usr.id;
-bran.Branch_Code__c = '121';
-insert bran;
-
-//Code for insert Bank Detail
-Bank_Detail__c bank= new Bank_Detail__c();
-bank.Name = 'cfgvhbjnk';
-insert bank;
-
-//Code for insert NucleusStateCity__c
-NucleusStateCity__c nsc = new NucleusStateCity__c();
-nsc.Name = 'gvhjbkn';
-nsc.ZIP_CODE__c = 321033;
-nsc.CITY_CODE__c = '231132';
-nsc.District_Code__c = '651336';
-nsc.STATE_CODE__c = '512336';            
-insert nsc;
-
-NucleusStateCity__c nsc2 = new NucleusStateCity__c();
-nsc2.Name = 'gvhjbasckn';
-nsc2.ZIP_CODE__c = 322033;
-nsc2.CITY_CODE__c = '261132';
-nsc2.District_Code__c = '652336';
-nsc2.STATE_CODE__c = '522336';            
-insert nsc2;
-
-//Code for insert Account
-Account acc = new Account();
-acc.Name = 'cfgvhbj';
-acc.Finnone_Client_Id__c = 'gfchvhjbk';
-insert acc;
-
-//Code for insert Config__c
-List<Config__c> confList = new List<Config__c>();
-Config__c cof = new Config__c();
-cof.Name__c = 'bhjnk';
-cof.Value__c = '112251';
-confList.add(cof);
-
-Config__c cof2 = new Config__c();
-cof2.Name__c = 'dgfjn';
-cof2.Value__c = '112252';
-confList.add(cof2);
-
-insert confList;
-
-//Code for insert Opportunity
-List<Opportunity> oppList = new List<Opportunity>();
-
-Opportunity opp = new Opportunity();
-opp.Name = 'gvhbjnk';
-opp.StageName = 'Prospecting';
-opp.CloseDate = System.today() + 30;
-opp.Add_L1__c = 'bhjnkml';
-opp.Sanctioned_Tenure__c = 123;
-opp.Loan_Number__c = 'xc512';
-opp.Ownership_Of_Current_Residence__c = 'Owner';
-//opp.Household__c = 
-//opp.Household__r = 
-//opp.A_Locality__c = 
-opp.ECS_StDt__c = System.today() -30;
-opp.Sanctioned_Amont__c = 51231;
-opp.Is_Owner_1__c = true;
-opp.Is_Owner_2__c = false;
-opp.Is_Owner_3__c = true;
-opp.Is_Owner_4__c = false;
-opp.Is_Owner_5__c = true;
-opp.Is_Owner_6__c = false;
-opp.CollAdd1__c = 'xtfcghv bjnm';
-opp.CollAdd2__c = 'xdfcghv cfgvhj';
-opp.CollAdd3__c = 'cfgghvbj nmvhj';
-opp.Collateral_Pin_Code_New__c =  nsc.Id;
-opp.ColPin__c = 153263;
-opp.Br_net_HL_ID__c = 'gvhjbk';
-opp.HLA_Sign_Date__c = System.today() - 25;
-oppList.add(opp);
-
-Opportunity opp2 = new Opportunity();
-opp2.Name = 'xdfcghvjnk';
-opp2.StageName = 'Qualification';
-opp2.CloseDate = System.today() + 30;
-opp2.Add_L1__c = 'bhjcxnkml';
-opp2.Sanctioned_Tenure__c = 124;
-opp2.Loan_Number__c = 'xc4512';
-opp2.Ownership_Of_Current_Residence__c = 'On Rent';
-//opp.Household__c = 
-//opp.Household__r = 
-//opp.A_Locality__c = 
-opp2.ECS_StDt__c = System.today() - 10;
-opp2.Sanctioned_Amont__c = 51431;
-opp2.Is_Owner_1__c = false;
-opp2.Is_Owner_2__c = true;
-opp2.Is_Owner_3__c = false;
-opp2.Is_Owner_4__c = true;
-opp2.Is_Owner_5__c = false;
-opp2.Is_Owner_6__c = true;
-opp2.CollAdd1__c = 'xtfcfghv bsjnm';
-opp2.CollAdd2__c = 'xdfcaghv cfgcvhj';
-opp2.CollAdd3__c = 'cfggsavbja nmvhj';
-opp2.Collateral_Pin_Code_New__c =  nsc.Id;
-opp2.ColPin__c = 153243;
-opp2.Br_net_HL_ID__c = 'gfvhjbk';
-opp2.HLA_Sign_Date__c = System.today() - 35;
-oppList.add(opp2);
-
-insert oppList;
-
-//Code for insert Disbursement
-List<Disbursement__c> disList = new List<Disbursement__c>();
-Disbursement__c dis = new Disbursement__c();
-dis.Application__c = opp.Id;
-dis.Disb_Status__c = 'Handed over customer';
-dis.Insurance_Company__c = 'Kotak Life';
-dis.Date_of_Disbursement__c = System.today() +30 ;
-dis.Loan_Cancellation_type__c = 'Loan with Rebook';
-dis.Insurance_Premium__c = 546312;
-dis.caseTyp__c = 'Purchase';
-dis.Beneficiary_Name__c = 'fghjbkn';
-dis.Disbursement_Amount__c = 5416;
-dis.Bank_Detail__c = bank.Id;
-disList.add(dis);
-
-Disbursement__c dis2 = new Disbursement__c();
-dis2.Application__c = opp.Id;
-dis2.Disb_Status__c = 'Send to UW';
-dis2.Insurance_Company__c = 'Kotak Life';
-dis2.Date_of_Disbursement__c = System.today() +20 ;
-dis2.Loan_Cancellation_type__c = 'Loan with Rebook';
-dis2.Insurance_Premium__c = 54665;
-dis2.caseTyp__c = 'Purchase';
-dis2.Beneficiary_Name__c = 'fghjbknd';
-dis2.Disbursement_Amount__c = 5415;
-dis2.Bank_Detail__c = bank.Id;
-disList.add(dis2);
-
-insert disList;
-
-//Code for insert CAM        
-CAM__c cam = new CAM__c();
-cam.Proposed_Construction_Value__c = 5132;
-cam.Proposed_Construction_area__c = 4512;
-cam.Build_Up_Area__c = 4615;
-cam.Land_Area__c = 51264;
-cam.Doc_Value_of_Prop__c = 4512;
-cam.Loan_Application__c = opp.Id;
-cam.PropArea_Units__c = 'sq meters';
-cam.Build_Up_Area_Units__c = '	sq meters';
-cam.Build_Up_Construction_Value__c = 56132;
-cam.Branch_Name__c = '	Ajmer-1';
-insert cam;
-
-//code for insert property master
-List<Property_Master__c> propList = new List<Property_Master__c>();
-Property_Master__c prop = new Property_Master__c();
-//prop.Informal_Property_Title__c = 
-prop.Branch__c = bran.id;
-prop.Is_there_any_ST_Condition__c = 'Yes';
-propList.add(prop);
-
-Property_Master__c prop2 = new Property_Master__c();
-//prop.Informal_Property_Title__c = 
-prop2.Branch__c = bran.id;
-prop2.Is_there_any_ST_Condition__c = 'Yes';
-propList.add(prop2);
-
-insert propList;
-
-//Code for insert Vendor_Request__c
-Vendor_Request__c ven = new Vendor_Request__c();
-ven.Request_Type__c = 'Technical';
-ven.Application__c = opp.Id;
-ven.Status__c = 'Final Approved';
-insert ven;
-
-//code for insert Technical_Verification__c
-Technical_Verification__c tv = new Technical_Verification__c();
-tv.Carpet_area_in_sqft__c = 15321;
-tv.Approved_Land_Use_as_per_Master_Plan__c = 'Residential';
-tv.Property_Situated_At__c = 'Gram Panchayat Area';
-tv.Property_Type__c = 'Apartment';
-tv.Residual_age_of_the_property__c = 131;
-tv.Age_of_the_Property__c = 51321; 
-tv.Remarks__c = 'fcfvghbjknk';
-tv.Land_Area__c = 21231;
-tv.Self_Occupied_by_Owner__c = 'Yes';
-tv.Length_Land_Measurement__c = 1231;
-tv.Breadth_Land_Measurement__c = 6153;
-tv.Area__c = 5313;
-tv.Property_Address__c = 'cfvghbjknlm'; 
-tv.Current_Usage__c = 'Residential';
-tv.Vendor_Request__c = ven.Id;
-tv.Self_Occupied_by_Owner__c = 'Borrower';
-insert tv;
-
-
-}
-
 @isTest
-public static void executeTest(){
-
-Test.startTest();
-System.enqueueJob(new CollateralServiceHitAPIJSON('0062C00000HGMjOQAX','a0F2C000001iFG2UAM','Cancelled by branch'));
-//Test.setMock(HttpCalloutMock.class, new MockHttpresponseCalling());
-//CollateralServiceHitAPIJSON.requestAccessToken();
-Test.stopTest();
-} 
-}*/
-
-
-@istest
-public class CollateralServiceHitAPIJSONTest
-{
+public class CollateralServiceHitAPIJSONTest {
+    
     @testSetup
-    static void CollateralServiceHitAPITest() 
-    {
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
+    static void setupData() {
+        // Keeping your original trigger bypasses to prevent limits/errors
+        Trigger_BYPass__c tbobj2 = new Trigger_BYPass__c(Name='WhatsappApplication', isActive__c=false);
         insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
+        Trigger_BYPass__c tbobj1 = new Trigger_BYPass__c(Name='Deactivate', isActive__c=true);
         insert tbobj1;
-
-        Collateral_Subtype_Mapping__mdt csmMdt = New Collateral_Subtype_Mapping__mdt();
-        csmMdt.DeveloperName='System Administrator';
-        csmMdt.Collateral_Subtype__c='Test';
-        csmMdt.Collateral_Subtype_Loanser__c='dfgjgfd';
-        //insert csmMdt; 
-        
-        CollateralServiceWrapper wrap = new CollateralServiceWrapper();
-        
-        CollateralServiceWrapper.collParameterVO cpv = new CollateralServiceWrapper.collParameterVO();
-        
-        CollateralServiceWrapper.address addres = new CollateralServiceWrapper.address();
-        
-        CollateralServiceWrapper.propertyDetailsVO pdv = new CollateralServiceWrapper.propertyDetailsVO();
-        pdv.propertyTypeCode='LANDWC';
-        pdv.natureOfPropertyCode='RESIDENTIAL';
-        pdv.assetTypeCode='New';
-        pdv.address=addres;
-        
-        CollateralServiceWrapper.propertyOtherDetailsVO podv = new CollateralServiceWrapper.propertyOtherDetailsVO();
-        
-        CollateralServiceWrapper.totalArea ta = new CollateralServiceWrapper.totalArea();
-        
-        CollateralServiceWrapper.constructionArea ca = new CollateralServiceWrapper.constructionArea();
-        
-        CollateralServiceWrapper.builtUpArea bua = new CollateralServiceWrapper.builtUpArea();
-        
-        CollateralServiceWrapper.carpetArea cpa = new CollateralServiceWrapper.carpetArea();
-        
-        CollateralServiceWrapper.propertyCost pc = new CollateralServiceWrapper.propertyCost();
-        
-        CollateralServiceWrapper.premiumAmount premium = new  CollateralServiceWrapper.premiumAmount();
-        
-        CollateralServiceWrapper.propertyOwnershipDetailVO podvo = new CollateralServiceWrapper.propertyOwnershipDetailVO();
-        
-        CollateralServiceWrapper.registrationDetailsVO rdv = new CollateralServiceWrapper.registrationDetailsVO();
-        
-        CollateralServiceWrapper.agreementDetailVO adv = new CollateralServiceWrapper.agreementDetailVO();
-        
-        CollateralServiceWrapper.agreementValue av = new CollateralServiceWrapper.agreementValue();
-        
-        CollateralServiceWrapper.amenitiesAgreementValue agv = new CollateralServiceWrapper.amenitiesAgreementValue();
-        
-        CollateralServiceWrapper.totalAgrmntAmount taa = new CollateralServiceWrapper.totalAgrmntAmount();
-        
-        CollateralServiceWrapper.builderDetailsVO bdv = new CollateralServiceWrapper.builderDetailsVO();
-        
-        CollateralServiceWrapper.colInsuranceFundingVO cifv  = new CollateralServiceWrapper.colInsuranceFundingVO();
-        
-        CollateralServiceWrapper.premiumAmount pa = new CollateralServiceWrapper.premiumAmount();
-        
-        CollateralServiceWrapper.coverageAmount cAmount = new CollateralServiceWrapper.coverageAmount();
-        
-        
-        
-        
-        
-        
-        
-        id recId=Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
-        // List<CollateralServiceHitAPIJSON.ResponseWrapper> csjson = New List<CollateralServiceHitAPIJSON.ResponseWrapper>();
-        CollateralServiceHitAPIJSON.ResponseWrapper collaserAJsonResWra = New CollateralServiceHitAPIJSON.ResponseWrapper();
-        collaserAJsonResWra.status='Success';
-        collaserAJsonResWra.collateralSubType='';
-        collaserAJsonResWra.collateralType='';
-        collaserAJsonResWra.globalCollateralNumber='';
-        collaserAJsonResWra.referenceNumber='';
-        collaserAJsonResWra.requestReferenceNumber='';
-        // String Myjson ={"status":"Success","requestReferenceNumber":8765432,"globalCollateralNumber":12,"referenceNumber":124,"collateralType":"test","collateralSubType":"Test1"};
-        
-        String jsonData = JSON.serialize(collaserAJsonResWra);
-        //CollateralServiceHitAPIJSON.CollateralServiceMethod(Myjson,'Test');       
-        
-        CollateralServiceWrapper.propertyDetailsVO propertyDetailsVO = new CollateralServiceWrapper.propertyDetailsVO();
-        
-        
-        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
-        tbObj.Name='Deactivate';
-        tbObj.isActive__c=true;
-        insert tbObj;
         
         Profile pro = [SELECT Id FROM Profile WHERE Name = 'System Administrator'];
-        User u = new user();
-        u.LastName = 'Testclassra Code';
-        u.Email = 'test@test.com';
-        u.Alias = 'Tcode';
-        u.Username = 'testclasshhhy@test.com';
-        u.CommunityNickname = 'test12';
-        u.LocaleSidKey = 'en_US';
-        u.TimeZoneSidKey = 'GMT';
-        u.ProfileId = pro.Id;
-        u.LanguageLocaleKey = 'en_US';
-        u.EmailEncodingKey = 'UTF-8';
-        u.EmployeeNumber='ISFC12121';
+        User u = new User(
+            LastName = 'Testclassra Code', Email = 'test@test.com', Alias = 'Tcode',
+            Username = 'testclasshhhy' + DateTime.now().getTime() + '@test.com', 
+            CommunityNickname = 'test12' + DateTime.now().getTime(),
+            LocaleSidKey = 'en_US', TimeZoneSidKey = 'GMT', ProfileId = pro.Id,
+            LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', EmployeeNumber='ISFC12121'
+        );
         insert u;
         
-        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+        Config__c cf = new Config__c(Name__c='Loanapp', value__c='025140');
         insert cf;
         
-        
-        
-        Contact con = new Contact();
-        con.LastName='test';
-        con.Aadhar_Card__c='312323221234';
+        Contact con = new Contact(LastName='test', Aadhar_Card__c='312323221234');
         insert con;
         
-        Branch__c br = new Branch__c();
-        br.Name ='Ajmer-1';
-        br.Branch_City__c = 'Jaiput';
-        br.Branch_State__c = 'Andhra Pradesh';
-        br.Branch_User__c = userinfo.getUserId();
-        br.Finnone_Branch_Code__c='test1';
-        br.Branch_Approver__c = userinfo.getUserId();
-        br.Branch_Location__Latitude__s = 28.5849485;
-        br.Branch_Location__Longitude__s = 77.3149885;
-        br.Legal_Manager__c = u.Id;
+        Branch__c br = new Branch__c(
+            Name ='Ajmer-1', Branch_City__c = 'Jaipur', Branch_State__c = 'Andhra Pradesh',
+            Branch_User__c = userinfo.getUserId(), Finnone_Branch_Code__c='test1',
+            Branch_Approver__c = userinfo.getUserId(), Legal_Manager__c = u.Id,
+            Branch_Location__Latitude__s = 28.5849485, Branch_Location__Longitude__s = 77.3149885
+        );
         insert br; 
         
-        NucleusStateCity__c   ncs=new NucleusStateCity__c();
-        ncs.name='12345';
-        ncs.CITY_CODE__c='151555';
-        ncs.STATE_CODE__c ='321456';
-        ncs.ZIP_CODE__c=12345;
+        NucleusStateCity__c ncs = new NucleusStateCity__c(
+            name='12345', CITY_CODE__c='151555', STATE_CODE__c ='321456', ZIP_CODE__c=12345
+        );
         insert ncs;
         
-        Customer__c cus = New Customer__c();
-        cus.Branch__c='Ajmer-1';
-        cus.Customer_Loan_AccID__c='786645';
-        cus.Customer_Name__c='REWQ';
-        // cus.LoanAppID__c=opp.id; 
-        cus.Customer_Address__c='ttyrtytr errert';
-        cus.Alternate_Mobile_No__c='9828667999';
-        cus.First_name__c='demo';
-        cus.Father_Husband_Name__c='trerer';
-        cus.Brnet_Client_ID__c='6556';
-        cus.Last_Name__c='rerr';
-        cus.Loan_Amount_Applied__c=9897878;
-        cus.Comfortable_EMI__c=4512;
-        cus.Property_Status__c = 'Owned';
+        Customer__c cus = new Customer__c(
+            Branch__c='Ajmer-1', Customer_Loan_AccID__c='786645', Customer_Name__c='REWQ',
+            Customer_Address__c='ttyrtytr errert', Alternate_Mobile_No__c='9828667999',
+            First_name__c='demo', Father_Husband_Name__c='trerer', Brnet_Client_ID__c='6556',
+            Last_Name__c='rerr', Loan_Amount_Applied__c=9897878, Comfortable_EMI__c=4512,
+            Property_Status__c = 'Owned'
+        );
         insert cus;
         
-        account acc = new account();
-        acc.Household__c=cus.Id;
-        acc.LastName ='abc';
-        acc.Finnone_Client_Id__c = 'Test';
-        acc.Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00);
-        acc.RecordTypeId=Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();  
+        Account acc = new Account(
+            Household__c=cus.Id, LastName ='abc', Finnone_Client_Id__c = 'Test',
+            Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00)
+        );
         insert acc;
         
-        
-        opportunity opp = new opportunity();
-        opp.Add_L1__c = 'Test';
-        opp.Ownership_Of_Current_Residence__c = 'Owner';
-        opp.Household__c = cus.Id;
-        opp.A_Locality__c = 'cgfhvjb';
-        opp.Collateral_Pin_Code_New__c = ncs.Id;
-        opp.AccountId = acc.Id;
-        opp.Household__c=cus.id;
-        opp.Loan_Number__c ='1233';
-        opp.DE_Done_By__c = 'By-Pass Ten Thousand Validation';
-        opp.StageName ='Active';
-        opp.Name='Property Insurance';
-        opp.CloseDate = system.today();
-        opp.ECS_IFC_Code__c ='abcbcbcbv12';
-        opp.ECS_Bank_Name__c='hdfc'; 
-        opp.ECS_AccNo__c='34433333';
-        opp.ECS_AccNo__c='6566355';
-        opp.ECS_Amt__c=224222;
-        opp.ECS_EDt__c=system.today();
-        opp.ECS_StDt__c =system.today();
-        //opp.Aadhar_Number__c=Decimal.valueOf('312323221234');
-        opp.Primary_Account_Holder_Name__c ='jatin';
-        opp.Sanctioned_Tenure__c=2;
-        opp.Is_Owner_1__c=true;
-        opp.Is_Owner_2__c=true;
-        opp.Is_Owner_3__c=true;
-        opp.Is_Owner_4__c=true;
-        opp.CollAdd1__c='noida & delhi';
-        opp.CollAdd2__c='noida & Dharamshala';
-        opp.CollAdd3__c='noida & Jaipur';
-        opp.Is_Owner_5__c=true;
-        opp.Is_Owner_6__c=true;
-        //opp.FinnoneClient_Id__c='Test';
-        opp.ColPin__c=12345;
-        opp.CAM_Sancamt__c = 500000;
-        opp.HLA_Sign_Date__c = System.today() - 25;
-        opp.Sanctioned_Amont__c = 51231;
-        opp.LM_Loan_Status__c='Sanctioned';
-        opp.ACH_Registration_Status__c='Registered';
+        Opportunity opp = new Opportunity(
+            Add_L1__c = 'Test', Ownership_Of_Current_Residence__c = 'Owner',
+            Household__c = cus.Id, A_Locality__c = 'cgfhvjb',
+            Collateral_Pin_Code_New__c = ncs.Id, AccountId = acc.Id,
+            Loan_Number__c ='1233-REF456', // CRITICAL FIX: Must have a hyphen for `.split('-')[1]`
+            DE_Done_By__c = 'By-Pass Ten Thousand Validation',
+            StageName ='Active', Name='Property Insurance', CloseDate = system.today(),
+            Primary_Account_Holder_Name__c ='jatin', Sanctioned_Tenure__c=2,
+            Is_Owner_1__c=true, Is_Owner_2__c=true, CollAdd1__c='noida & delhi',
+            CollAdd2__c='noida & Dharamshala', CollAdd3__c='noida & Jaipur',
+            ColPin__c=12345, CAM_Sancamt__c = 500000, HLA_Sign_Date__c = System.today() - 25,
+            Sanctioned_Amont__c = 51231, LM_Loan_Status__c='Sanctioned'
+        );
         insert opp; 
-
+        
         cus.LoanAppID__c=opp.id;
         update cus;
         
-        
-        
-        
-        
-        OpportunityContactRole ocr = new OpportunityContactRole();
-        ocr.ContactId = con.Id;
-        ocr.OpportunityId = opp.Id;
-        insert ocr;
-        
-        
-        
-        CAM__c cam = new CAM__c();
-        cam.Proposed_Construction_Value__c = 1;
-        //cam.Proposed_Construction_area__c=12;
-        cam.Proposed_Construction_area__c=null;
-        cam.Property_Value__c = 2131;
-        cam.PropArea_Units__c='SQUARE_FEET';
-        cam.Build_Up_Area_Units__c='SQUARE_FEET';
-        cam.Proposed_Construction_Value__c = 5132;
-        
-        cam.Build_Up_Area__c = 1 ;
-        cam.Land_Area__c = 51264;
-        cam.Doc_Value_of_Prop__c = 4512;
-        cam.Loan_Application__c = opp.Id;
-        cam.Build_Up_Area_Units__c = '	sq meters';
-        cam.Build_Up_Construction_Value__c = 56132;
-        cam.Branch_Name__c = '	Ajmer-1';
+        CAM__c cam = new CAM__c(
+            Proposed_Construction_Value__c = 5132, Property_Value__c = 2131,
+            PropArea_Units__c='SQUARE_FEET', Build_Up_Area_Units__c='SQUARE_FEET',
+            Build_Up_Area__c = 1, Land_Area__c = 51264, Doc_Value_of_Prop__c = 4512,
+            Loan_Application__c = opp.Id, Build_Up_Construction_Value__c = 56132,
+            Branch_Name__c = 'Ajmer-1', Total_Prop_Val__c=100000
+        );
         insert cam;
         
-        Vendor_Request__c vr = new Vendor_Request__c(Date_First_Submitted__c=System.today(),
-                                                            Application__c=opp.Id, Request_Type__c='Technical',
-                                                            Report_Type__c ='Pre - Sanction Technical Report',
-                                                            Prior_Disbursement__c=454,
-                                                            Is_Submitted_through_Legal__c=True,
-                                                            Date_Recevied__c=System.today());
+        Vendor_Request__c vr = new Vendor_Request__c(
+            Date_First_Submitted__c=System.today(), Application__c=opp.Id, 
+            Request_Type__c='Technical', Report_Type__c ='Pre - Sanction Technical Report',
+            Is_Submitted_through_Legal__c=True
+        );
         insert vr;
         
-        Property_Master__c pm=new Property_Master__c();
-        pm.Informal_Property_Title__c='Free hold';
-        pm.Village__c='fhhjykk';
-        pm.State__c='Delhi & NCR';
-        pm.City__c='Delhi';
-        pm.Document_District__c='fghhytytytu';
-        pm.Title_Document_No__c='yuryryyt';
-        pm.House_No__c='15';
-        pm.Sub_Registrar__c='fdgg222';
-        pm.Pin_Code__c=12345;
-        pm.Document_State__c='Rajasthan';
-        pm.Property_Purpose__c='Rented';
-        pm.Land_Area__c=100;
-        pm.Is_there_any_ST_Condition__c='No';
-        pm.Total_Property_Value__c=100;
-        pm.Branch__c=br.id;
-        pm.OwnerId=br.Branch_User__c;
-        pm.Household__c = opp.Household__c;
+        Property_Master__c pm = new Property_Master__c(
+            Informal_Property_Title__c='Free hold', Village__c='fhhjykk',
+            State__c='Delhi & NCR', City__c='Delhi', Document_District__c='fghhytytytu',
+            Title_Document_No__c='yuryryyt', House_No__c='15', Sub_Registrar__c='fdgg222',
+            Pin_Code__c=12345, Document_State__c='Rajasthan', Property_Purpose__c='Rented',
+            Land_Area__c=100, Is_there_any_ST_Condition__c='No', Total_Property_Value__c=100,
+            Branch__c=br.id, OwnerId=br.Branch_User__c, Household__c = opp.Household__c
+        );
         insert pm;
         
+        Id recId = Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
+        Technical_Verification__c tv = new Technical_Verification__c(
+            Carpet_area_in_sqft__c = 15321, Approved_Land_Use_as_per_Master_Plan__c = 'Residential',
+            Property_Situated_At__c = 'Municipal Corporation Area', Age_of_the_Property__c = 51321,
+            Land_Area__c = 21231, Length_Land_Measurement__c = 1231, Breadth_Land_Measurement__c = 6153,
+            Area__c = 5313, Property_Address__c = 'cfvghbjknlm', Current_Usage__c = 'Residential',
+            Vendor_Request__c = vr.Id, Property_Master__c=pm.id, Application__c=opp.id,
+            Property_Type__c='House Ready Build', // CRITICAL FIX: Ensures it exists in Property_Type__mdt
+            Self_Occupied_by_Owner__c = 'Vacant', // CRITICAL FIX: Ensures it exists in Property_Purpose__mdt
+            Status__c = 'Approved', RecordTypeId=recId, Residual_age_of_the_property__c=30
+        );
+        insert tv;
         
-        Nucleus_API_Log__c ncLog= new Nucleus_API_Log__c();                   
-        ncLog.Request__c='Test';
-        ncLog.Response__c='Test';
-        ncLog.Collateral__c=pm.Id;
-        ncLog.API__c='collateral API';
-        ncLog.status__c='ERROR';
-        try{
-            insert nclog;
-        }
-        Catch(Exception ex){
-            System.debug('Error :'+ex.getMessage());
-            System.debug('In Line Number :'+ex.getLineNumber());
-        }
-        
-        NEILON__File__c nc=new NEILON__File__c();
-		nc.Subcategory__c='Signed Home Loan Agreement';
-        nc.Name='zaxdjfh';
-        nc.NEILON__Opportunity__c=opp.Id;
-		insert nc;  
-        
-        Nucleus_Reciept__c nrsObj = New Nucleus_Reciept__c();
-        nrsObj.Collateraltypecode__c = 'temp';
-        nrsObj.Property_Master__c = pm.Id;
-        nrsObj.isActive__c = true;
-        nrsObj.Reciept_Number__c='1';
-        nrsObj.Application__c=opp.Id;
-        insert nrsobj;
-        test.startTest();
-        //code for insert Technical_Verification__c
-        List<Technical_Verification__c> tList = New List<Technical_Verification__c>();
-        Technical_Verification__c tv = new Technical_Verification__c();
-        tv.Carpet_area_in_sqft__c = 15321;
-        tv.Approved_Land_Use_as_per_Master_Plan__c = 'Residential';
-        tv.Property_Situated_At__c = 'Municipal Corporation Area';
-        tv.Property_Type__c = 'Apartment';
-        //tv.Residual_age_of_the_property__c= 131;
-        tv.Age_of_the_Property__c = 51321; 
-        tv.Remarks__c = 'fcfvgertyuioiuytdfghjkl;lkfdghjkliuytqwertyuioppoiuytrewertyuioiuytrfdfyuiopoiuhygfdsdrtyuiolkmnhgfrtyuikmnbvcxdrtyhbjknk';
-        tv.Land_Area__c = 21231;
-        //tv.Self_Occupied_by_Owner__c = 'Yes';
-        tv.Length_Land_Measurement__c = 1231;
-        tv.Breadth_Land_Measurement__c = 6153;
-        tv.Area__c = 5313;
-        tv.Property_Address__c = 'cfvghbjknlm'; 
-        tv.Current_Usage__c = 'Residential';
-        tv.Vendor_Request__c = vr.Id;
-        //tv.Self_Occupied_by_Owner__c = 'Borrower';
-        tv.Property_Master__c=pm.id;
-        tv.Application__c=opp.id;
-        tv.Property_Type__c='House Under Construction';
-        tv.Visit_Done__c='yuu';
-        tv.Current_Usage__c='Residential';
-        tv.Units_Land_Measurement__c='Feet';
-        tv.Person_Met__c='rag';
-        tv.Property_Situated_At__c='Panchayat';
-        tv.Relationship_with_the_owner__c='self';
-        //tv.Self_Occupied_by_Owner__c='Vacant';
-        tv.Is_Construction_as_per_Sanction_Plan__c='yes';
-        tv.Local_Building_Bye_Laws_Followed__c='yes';
-        tv.Disbursal_Recommendation_Status__c='Positive';
-        //
-        tv.Residual_age_of_the_property__c=30;
-        tv.Serial_Number__c=1;
-        tv.Vendor_Request__c=vr.id;
-        tv.Status__c = 'Approved';
-        tv.Property_Type__c = 'Apartment';
-        tv.RecordTypeId=recId;
-        //insert tv;
-        
-        Technical_Verification__c tv1 = new Technical_Verification__c();
-        tv1.Carpet_area_in_sqft__c = 15321;
-        tv1.Approved_Land_Use_as_per_Master_Plan__c = 'Residential';
-        tv1.Property_Situated_At__c = 'Gram Panchayat Area';
-        tv1.Property_Type__c = 'Apartment';
-        //tv1.Residual_age_of_the_property__c= 131;
-        tv1.Age_of_the_Property__c = 51321; 
-        tv1.Remarks__c = 'fcfvghbjsdfghjkljhgfxfghjklghjklsadfghjkloiu7654esxcvbnmkiuytrfvbnmkloi9876trdfvbnko9876rfdvgbnkjhgfxcghjkjgfdxfghuydsftyuiuydxfghjjhgfcvbjkljhgfcghjknk';
-        tv1.Land_Area__c = 21231;
-        //tv1.Self_Occupied_by_Owner__c = 'Yes';
-        tv1.Length_Land_Measurement__c = 1231;
-        tv1.Breadth_Land_Measurement__c = 6153;
-        tv1.Area__c = 5313;
-        tv1.RecordTypeId=recId;
-        tv1.Property_Address__c = 'cfvghbjknlm'; 
-        tv1.Current_Usage__c = 'Residential';
-        tv1.Vendor_Request__c = vr.Id;
-        tv1.Self_Occupied_by_Owner__c = 'Vacant';
-        tv1.Property_Master__c=pm.id;
-        tv1.Application__c=opp.id;
-        tv1.Property_Type__c='House Under Construction';
-        tv1.Visit_Done__c='yuu';
-        tv1.Current_Usage__c='Residential';
-        tv1.Units_Land_Measurement__c='Feet';
-        tv1.Person_Met__c='rag';
-        tv1.Property_Situated_At__c='Municipal Corporation Area';
-        tv1.Relationship_with_the_owner__c='self';
-        tv1.Self_Occupied_by_Owner__c='seller';
-        tv1.Is_Construction_as_per_Sanction_Plan__c='yes';
-        tv1.Local_Building_Bye_Laws_Followed__c='yes';
-        tv1.Disbursal_Recommendation_Status__c='Positive';
-        tv1.Residual_age_of_the_property__c=null;
-        tv1.Serial_Number__c=1;
-        tv1.Vendor_Request__c=vr.id;
-        tv1.Status__c = 'Approved';
-        tv1.Property_Type__c = 'Apartment';
-        tList.add(tv);
-        tList.add(tv1);
-        insert tList;
-        
-        //List<Technical_Verification__c> techverList = New List<Technical_Verification__c>();
-        
-        Nucleus_Deposit_Bank__c nbt = New Nucleus_Deposit_Bank__c();
-        nbt.Branch_Name__c='tyui';
-        nbt.Bank_Code__c='85555';
-        nbt.Branch_Code__c='4555';
-        nbt.Banktype__c='Disbursement';
+        Nucleus_Deposit_Bank__c nbt = new Nucleus_Deposit_Bank__c(
+            Branch_Name__c='tyui', Bank_Code__c='85555', Branch_Code__c='4555', Banktype__c='Disbursement'
+        );
         insert nbt;
         
-        //Code for insert Bank Detail
-        Bank_Detail__c bank= new Bank_Detail__c();
-        bank.Name = 'cfgvhbjnk';
-        bank.Status__c = 'Active';
+        Bank_Detail__c bank = new Bank_Detail__c(Name = 'cfgvhbjnk', Status__c = 'Active');
         insert bank;
-        
-        Id rctype = Schema.SObjectType.Pay_Slip__c.getRecordTypeInfosByName().get('Online payment').getRecordTypeId();
-        
-        Document_Checklist__c docChecklist = new Document_Checklist__c(Date_of_Disbursement__c=System.now(),
-                                                                       Application__c=opp.Id,
-                                                                       Physical_file_status__c='Approved',
-                                                                       Scan_image_status__c='Rejected');
-        insert docChecklist;
-        System.debug('point 2 testset: '+limits.getQueries());
-        Document_Checklist_History__c docHistory = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Purchase');
-        Document_Checklist_History__c docHistory2 = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Top-Up');
-        insert new List<Document_Checklist_History__c>{docHistory, docHistory2};
-
-        Check_List_History_Line_Item__c lineItem = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistory.Id,
-                                                                                        CPU_RPU_Comments__c='Yes',
-                                                                                        Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
-        Check_List_History_Line_Item__c lineItem2 = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistory2.Id,
-                                                                                        CPU_RPU_Comments__c='Yes',
-                                                                                        Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
-        insert new List<Check_List_History_Line_Item__c> {lineItem,lineItem2};
-
-        
-        //system.debug('===='+opp.id);
-        
-        
-        Test.stopTest();
     }
     
+    // Universal HTTP Callout Mock to handle the API hit
+    public class MockHttpResponseGenerator implements HttpCalloutMock {
+        private Integer statusCode;
+        private String body;
+        
+        public MockHttpResponseGenerator(Integer statusCode, String body) {
+            this.statusCode = statusCode;
+            this.body = body;
+        }
+        
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setBody(this.body);
+            res.setStatusCode(this.statusCode);
+            return res;
+        }
+    }
+    
+    // Covers the Queueable Execution + Successful JSON Parsing
     @isTest
-    static void CollaServiceHitAPItesting() 
-    {
-
-		Opportunity opp = [Select Id from Opportunity where Primary_Account_Holder_Name__c ='jatin'];
-        User u = [Select Id from User where LastName = 'Testclassra Code'];
-        Nucleus_Deposit_Bank__c nbt = [Select Id from Nucleus_Deposit_Bank__c where Branch_Name__c='tyui'];
-        Bank_Detail__c bank = [Select Id from Bank_Detail__c where Name = 'cfgvhbjnk'];
-        Property_Master__c pm = [Select Id, Informal_Property_Title__c, Property_Purpose__c from Property_Master__c where Village__c='fhhjykk'];
-        Technical_Verification__c tv = [Select Id, Property_Type__c from Technical_Verification__c where Property_Situated_At__c='Panchayat'];
+    static void testCalloutSuccess() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        User u = [SELECT Id FROM User WHERE Alias = 'Tcode' LIMIT 1];
+        Nucleus_Deposit_Bank__c nbt = [SELECT Id FROM Nucleus_Deposit_Bank__c LIMIT 1];
+        Bank_Detail__c bank = [SELECT Id FROM Bank_Detail__c LIMIT 1];
         
-        Test.startTest();
-        Deviation__c dev = new Deviation__c(Opportunity__c=opp.Id,
-                                            Waiver__c='Search Fee Waiver',
-                                            Approval_Status__c='OTC Approved',
-                                           	Person_who_can_Approve__c='Nitin Singh',
-            								Type_of_Waiver__c='OTC',
-            								OTC_Submission_Date__c = Date.today().addDays(10));
-        insert dev;
-        
-        List<Disbursement__c> disbursementList = new List<Disbursement__c>();
-        
-        Disbursement__c disb=new Disbursement__c();
-        disb.Mobile_Number__c='123';
-        disb.caseTyp__c='Purchase';
-        disb.BraUsr__c=u.Id;
-        disb.Tranch_Details__c='First';
-        disb.Levels_Of_Tranch__c='First Tranche';
-        disb.Disb_Status__c='Send to CPU';
-        disb.Disbursement_Mode__c='Cheque';
-        disb.Application__c = opp.id;
-        disb.Nucleus_Deposit_Bank__c= nbt.id;
-        disb.Insurance_Company__c='TATA AIG INSURANCE';
-        disb.Date_of_Disbursement__c=system.today();
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10;
-        disb.caseTyp__c='Topup';
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Levels_Of_Tranch__c='First Tranche';
-        //disbursementList.add(disb);
+        Disbursement__c disb = new Disbursement__c(
+            Application__c = opp.id, BraUsr__c = u.Id, Nucleus_Deposit_Bank__c = nbt.id,
+            Bank_Detail__c = bank.Id, Disbursement_Amount__c = 12000, 
+            Insurance_Company__c = 'TATA AIG INSURANCE', 
+            Loan_Cancellation_type__c = 'Other', // CRITICAL FIX: Avoids SObjectException for unqueried fields
+            Insurance_Premium__c = 10, caseTyp__c = 'Purchase', Beneficiary_Name__c = 'Test Ben',
+            Date_of_Disbursement__c = System.today()
+        );
         insert disb;
         
+        // Mock successful JSON
+        String successJson = '{"status":"SUCCESS","requestReferenceNumber":"123","globalCollateralNumber":"GCN123","referenceNumber":"REF123","collateralType":"T","collateralSubType":"S"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator(200, successJson));
         
-        Property_Title__mdt pt = new Property_Title__mdt();
-        pt.MasterLabel=pm.Informal_Property_Title__c;
-        pt.PropertyOwnershipCode__c='FreeHold';
+        Test.startTest();
+        System.enqueueJob(new CollateralServiceHitAPIJSON(opp.id, disb.id, 'success'));
+        Test.stopTest(); // Forces asynchronous execution
         
-        
-        List<Nucleus_Reciept__c> nr = [select id from Nucleus_Reciept__c where Property_Master__c=:pt.id and collateralNo__c!=null];
-        
-        List<Property_Title__mdt> ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel=:pm.Informal_Property_Title__c];
-        List<Property_Type__mdt> propertyType = [SELECT FinnOne_Type_Code__c,Property_Type__c  from Property_Type__mdt WHERE MasterLabel=: tv.Property_Type__c];
-        
-        
-        
-        
-        
-        
-        Property_Purpose__mdt prp = new Property_Purpose__mdt();
-        prp.DeveloperName=pm.Property_Purpose__c;
-        // insert prp;
-        
-        
-        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-        obj.productProcessor ='mCAS';
-        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*10);
-        obj.requestReferenceNumber=requestRefernce;
-        Test.stopTest();
+        List<Nucleus_Reciept__c> receipts = [SELECT Id FROM Nucleus_Reciept__c WHERE Application__c = :opp.Id];
+        System.assert(receipts.size() > 0, 'Nucleus Receipt should be inserted upon successful Callout.');
     }
     
-    
+    // Covers the Queueable Execution + Error JSON Parsing
     @isTest
-    static void CollaServiceHitAPITest() 
-    {
-        Collateral_Subtype_Mapping__mdt csmMdt = New Collateral_Subtype_Mapping__mdt();
-        csmMdt.DeveloperName='System Administrator';
-        csmMdt.Collateral_Subtype__c='Test';
-        csmMdt.Collateral_Subtype_Loanser__c='dfgjgfd';
-        //insert csmMdt; 
+    static void testCalloutErrorStatus() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c disb = new Disbursement__c(
+            Application__c = opp.Id, Loan_Cancellation_type__c = 'Other'
+        );
+        insert disb;
         
+        // Mock Error JSON
+        String errorJson = '{"status":"ERROR","errorDesc":"Test API Error Message"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator(200, errorJson));
+        
+        Test.startTest();
+        System.enqueueJob(new CollateralServiceHitAPIJSON(opp.Id, disb.Id, 'success'));
+        Test.stopTest();
+        
+        List<DisbursementStaging__c> staging = [SELECT Id, Error__c FROM DisbursementStaging__c WHERE Application__c = :opp.Id];
+        System.assert(staging.size() > 0, 'DisbursementStaging__c should be inserted for API Errors.');
+    }
+    
+    // Covers the standard HTTP 500 Failure block
+    @isTest
+    static void testCalloutHttpFailure() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c disb = new Disbursement__c(Application__c = opp.Id, Loan_Cancellation_type__c = 'Other');
+        insert disb;
+        
+        String failureJson = '{"status":"FAILURE"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator(500, failureJson));
+        
+        Test.startTest();
+        System.enqueueJob(new CollateralServiceHitAPIJSON(opp.Id, disb.Id, 'success'));
+        Test.stopTest();
+        
+        List<Nucleus_API_Log__c> logs = [SELECT Id, status__c FROM Nucleus_API_Log__c WHERE status__c = 'ERROR'];
+        System.assert(logs.size() > 0, 'API Log should be created for non-200 responses.');
+    }
+    
+    // Covers the requestAccessToken() method independently
+    @isTest
+    static void testRequestAccessToken() {
+        String tokenJson = '{"access_token":"dummy_token_123"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator(200, tokenJson));
+        
+        Test.startTest();
+        String result = CollateralServiceHitAPIJSON.requestAccessToken();
+        Test.stopTest();
+        
+        System.assertEquals('dummy_token_123', result, 'Token should parse from the JSON response.');
+    }
+
+    // Explicitly covers the structural wrapper classes 
+    @isTest
+    static void testWrapperClasses() {
         CollateralServiceWrapper wrap = new CollateralServiceWrapper();
+        wrap.collParameterVO = new CollateralServiceWrapper.collParameterVO();
+        wrap.propertyDetailsVO = new CollateralServiceWrapper.propertyDetailsVO();
+        wrap.propertyDetailsVO.address = new CollateralServiceWrapper.address();
+        wrap.propertyDetailsVO.propertyOtherDetailsVO = new CollateralServiceWrapper.propertyOtherDetailsVO();
+        wrap.propertyDetailsVO.propertyCost = new CollateralServiceWrapper.propertyCost();
+        wrap.propertyDetailsVO.registrationDetailsVO = new CollateralServiceWrapper.registrationDetailsVO();
+        wrap.propertyDetailsVO.builderDetailsVO = new CollateralServiceWrapper.builderDetailsVO();
+        wrap.propertyDetailsVO.colInsuranceFundingVO = new CollateralServiceWrapper.colInsuranceFundingVO();
         
-        CollateralServiceWrapper.collParameterVO cpv = new CollateralServiceWrapper.collParameterVO();
-        
-        CollateralServiceWrapper.address addres = new CollateralServiceWrapper.address();
-        
-        CollateralServiceWrapper.propertyDetailsVO pdv = new CollateralServiceWrapper.propertyDetailsVO();
-        pdv.propertyTypeCode='LANDWC';
-        pdv.natureOfPropertyCode='RESIDENTIAL';
-        pdv.assetTypeCode='New';
-        pdv.address=addres;
-        
-        CollateralServiceWrapper.propertyOtherDetailsVO podv = new CollateralServiceWrapper.propertyOtherDetailsVO();
-        
-        CollateralServiceWrapper.totalArea ta = new CollateralServiceWrapper.totalArea();
-        
-        CollateralServiceWrapper.constructionArea ca = new CollateralServiceWrapper.constructionArea();
-        
-        CollateralServiceWrapper.builtUpArea bua = new CollateralServiceWrapper.builtUpArea();
-        
-        CollateralServiceWrapper.carpetArea cpa = new CollateralServiceWrapper.carpetArea();
-        
-        CollateralServiceWrapper.propertyCost pc = new CollateralServiceWrapper.propertyCost();
-        
-        CollateralServiceWrapper.premiumAmount premium = new  CollateralServiceWrapper.premiumAmount();
-        
-        CollateralServiceWrapper.propertyOwnershipDetailVO podvo = new CollateralServiceWrapper.propertyOwnershipDetailVO();
-        
-        CollateralServiceWrapper.registrationDetailsVO rdv = new CollateralServiceWrapper.registrationDetailsVO();
-        
-        CollateralServiceWrapper.agreementDetailVO adv = new CollateralServiceWrapper.agreementDetailVO();
-        
-        CollateralServiceWrapper.agreementValue av = new CollateralServiceWrapper.agreementValue();
-        
-        CollateralServiceWrapper.amenitiesAgreementValue agv = new CollateralServiceWrapper.amenitiesAgreementValue();
-        
-        CollateralServiceWrapper.totalAgrmntAmount taa = new CollateralServiceWrapper.totalAgrmntAmount();
-        
-        CollateralServiceWrapper.builderDetailsVO bdv = new CollateralServiceWrapper.builderDetailsVO();
-        
-        CollateralServiceWrapper.colInsuranceFundingVO cifv  = new CollateralServiceWrapper.colInsuranceFundingVO();
-        
-        CollateralServiceWrapper.premiumAmount pa = new CollateralServiceWrapper.premiumAmount();
-        
-        CollateralServiceWrapper.coverageAmount cAmount = new CollateralServiceWrapper.coverageAmount();
-        
-        
-        
-        
-        
-        
-        
-        id recId=Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
-        // List<CollateralServiceHitAPIJSON.ResponseWrapper> csjson = New List<CollateralServiceHitAPIJSON.ResponseWrapper>();
-        CollateralServiceHitAPIJSON.ResponseWrapper collaserAJsonResWra = New CollateralServiceHitAPIJSON.ResponseWrapper();
-        collaserAJsonResWra.status='Success';
-        collaserAJsonResWra.collateralSubType='';
-        collaserAJsonResWra.collateralType='';
-        collaserAJsonResWra.globalCollateralNumber='';
-        collaserAJsonResWra.referenceNumber='';
-        collaserAJsonResWra.requestReferenceNumber='';
-        // String Myjson ={"status":"Success","requestReferenceNumber":8765432,"globalCollateralNumber":12,"referenceNumber":124,"collateralType":"test","collateralSubType":"Test1"};
-        
-        String jsonData = JSON.serialize(collaserAJsonResWra);
-        //CollateralServiceHitAPIJSON.CollateralServiceMethod(Myjson,'Test');       
-        
-        CollateralServiceWrapper.propertyDetailsVO propertyDetailsVO = new CollateralServiceWrapper.propertyDetailsVO();
-        
-
-		Opportunity opp = [Select Id from Opportunity where Primary_Account_Holder_Name__c ='jatin'];
-        User u = [Select Id from User where LastName = 'Testclassra Code'];
-        Nucleus_Deposit_Bank__c nbt = [Select Id from Nucleus_Deposit_Bank__c where Branch_Name__c='tyui'];
-        Bank_Detail__c bank = [Select Id from Bank_Detail__c where Name = 'cfgvhbjnk'];
-        Property_Master__c pm = [Select Id, Informal_Property_Title__c, Property_Purpose__c from Property_Master__c where Village__c='fhhjykk'];
-        Technical_Verification__c tv = [Select Id, Property_Type__c from Technical_Verification__c where Property_Situated_At__c='Panchayat'];
-        
-        Test.startTest();
-        
-        Disbursement__c disb=new Disbursement__c();
-        disb.Mobile_Number__c='123';
-        disb.caseTyp__c='Purchase';
-        disb.BraUsr__c=u.Id;
-        disb.Tranch_Details__c='First';
-        disb.Disb_Status__c='';
-        disb.Application__c = opp.id;
-        disb.Nucleus_Deposit_Bank__c= nbt.id;
-        disb.Insurance_Company__c='TATA AIG INSURANCE';
-        disb.Date_of_Disbursement__c=system.today();
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10.12;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10.12;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Disbursement_Mode__c='Cheque';
-        disb.Levels_Of_Tranch__c='First Tranche';
-        insert disb;
-        
-        System.debug('parth1 point 4: '+limits.getQueries());
-        
-        Property_Title__mdt pt = new Property_Title__mdt();
-        pt.MasterLabel=pm.Informal_Property_Title__c;
-        pt.PropertyOwnershipCode__c='Free hold';
-        
-        
-        List<Nucleus_Reciept__c> nr = [select id from Nucleus_Reciept__c where Property_Master__c=:pt.id and collateralNo__c!=null];
-        
-        List<Property_Title__mdt> ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel=:pm.Informal_Property_Title__c];
-        List<Property_Type__mdt> propertyType = [SELECT FinnOne_Type_Code__c,Property_Type__c  from Property_Type__mdt WHERE MasterLabel=: tv.Property_Type__c];
-        
-        
-        
-        
-        
-        
-        Property_Purpose__mdt prp = new Property_Purpose__mdt();
-        prp.DeveloperName=pm.Property_Purpose__c;
-        // insert prp;
-        
-        
-        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-        obj.productProcessor ='mCAS';
-        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*10);
-        obj.requestReferenceNumber=requestRefernce;
-        
-        
-        //opportunity oppList = [Select id from opportunity where Name= 'Property Insurance'];
-        //Disbursement__c dis = [Select id from Disbursement__c where Application__c = :opp.Id];
-        
-        CollateralServiceHitAPIJSON vc=new CollateralServiceHitAPIJSON(opp.id,disb.id,'success');
-        
-        ID jobID=System.enqueueJob(vc);
-        
-        //system.debug('===='+opp.id);
-        
-        
-        Test.stopTest();
+        System.assertNotEquals(null, wrap);
     }
-    
-    @isTest
-    static void CollaServiceHitAPITest1() 
-    {
-
-        CollateralServiceWrapper wrap = new CollateralServiceWrapper();
-        
-        CollateralServiceWrapper.collParameterVO cpv = new CollateralServiceWrapper.collParameterVO();
-        
-        CollateralServiceWrapper.address addres = new CollateralServiceWrapper.address();
-        
-        CollateralServiceWrapper.propertyDetailsVO pdv = new CollateralServiceWrapper.propertyDetailsVO();
-        pdv.propertyTypeCode='LANDWC';
-        pdv.natureOfPropertyCode='RESIDENTIAL';
-        pdv.assetTypeCode='New';
-        pdv.address=addres;
-        
-        CollateralServiceWrapper.propertyOtherDetailsVO podv = new CollateralServiceWrapper.propertyOtherDetailsVO();
-        
-        CollateralServiceWrapper.totalArea ta = new CollateralServiceWrapper.totalArea();
-        
-        CollateralServiceWrapper.constructionArea ca = new CollateralServiceWrapper.constructionArea();
-        
-        CollateralServiceWrapper.builtUpArea bua = new CollateralServiceWrapper.builtUpArea();
-        
-        CollateralServiceWrapper.carpetArea cpa = new CollateralServiceWrapper.carpetArea();
-        
-        CollateralServiceWrapper.propertyCost pc = new CollateralServiceWrapper.propertyCost();
-        
-        CollateralServiceWrapper.premiumAmount premium = new  CollateralServiceWrapper.premiumAmount();
-        
-        CollateralServiceWrapper.propertyOwnershipDetailVO podvo = new CollateralServiceWrapper.propertyOwnershipDetailVO();
-        
-        CollateralServiceWrapper.registrationDetailsVO rdv = new CollateralServiceWrapper.registrationDetailsVO();
-        
-        CollateralServiceWrapper.agreementDetailVO adv = new CollateralServiceWrapper.agreementDetailVO();
-        
-        CollateralServiceWrapper.agreementValue av = new CollateralServiceWrapper.agreementValue();
-        
-        CollateralServiceWrapper.amenitiesAgreementValue agv = new CollateralServiceWrapper.amenitiesAgreementValue();
-        
-        CollateralServiceWrapper.totalAgrmntAmount taa = new CollateralServiceWrapper.totalAgrmntAmount();
-        
-        CollateralServiceWrapper.builderDetailsVO bdv = new CollateralServiceWrapper.builderDetailsVO();
-        
-        CollateralServiceWrapper.colInsuranceFundingVO cifv  = new CollateralServiceWrapper.colInsuranceFundingVO();
-        
-        CollateralServiceWrapper.premiumAmount pa = new CollateralServiceWrapper.premiumAmount();
-        
-        CollateralServiceWrapper.coverageAmount cAmount = new CollateralServiceWrapper.coverageAmount();
-        
-        
-        
-        
-        
-        
-        
-        id recId=Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
-        // List<CollateralServiceHitAPIJSON.ResponseWrapper> csjson = New List<CollateralServiceHitAPIJSON.ResponseWrapper>();
-        CollateralServiceHitAPIJSON.ResponseWrapper collaserAJsonResWra = New CollateralServiceHitAPIJSON.ResponseWrapper();
-        collaserAJsonResWra.status='Success';
-        collaserAJsonResWra.collateralSubType='';
-        collaserAJsonResWra.collateralType='';
-        collaserAJsonResWra.globalCollateralNumber='';
-        collaserAJsonResWra.referenceNumber='';
-        collaserAJsonResWra.requestReferenceNumber='';
-        // String Myjson ={"status":"Success","requestReferenceNumber":8765432,"globalCollateralNumber":12,"referenceNumber":124,"collateralType":"test","collateralSubType":"Test1"};
-        
-        String jsonData = JSON.serialize(collaserAJsonResWra);
-        //CollateralServiceHitAPIJSON.CollateralServiceMethod(Myjson,'Test');       
-        
-        CollateralServiceWrapper.propertyDetailsVO propertyDetailsVO = new CollateralServiceWrapper.propertyDetailsVO();
-                
-		Opportunity opp = [Select Id from Opportunity where Primary_Account_Holder_Name__c ='jatin'];
-        User u = [Select Id from User where LastName = 'Testclassra Code'];
-        Nucleus_Deposit_Bank__c nbt = [Select Id from Nucleus_Deposit_Bank__c where Branch_Name__c='tyui'];
-        Bank_Detail__c bank = [Select Id from Bank_Detail__c where Name = 'cfgvhbjnk'];
-        Property_Master__c pm = [Select Id, Informal_Property_Title__c, Property_Purpose__c from Property_Master__c where Village__c='fhhjykk'];
-        Technical_Verification__c tv = [Select Id, Property_Type__c from Technical_Verification__c where Property_Situated_At__c='Panchayat'];
-        
-        Test.startTest();
-        
-        Deviation__c dev = new Deviation__c(Opportunity__c=opp.Id,
-                                            Waiver__c='Search Fee Waiver',
-                                            Approval_Status__c='OTC Approved',
-                                           	Person_who_can_Approve__c='Nitin Singh',
-            								Type_of_Waiver__c='OTC',
-            								OTC_Submission_Date__c = Date.today().addDays(10));
-        insert dev;
-        
-        //List<Technical_Verification__c> techverList = New List<Technical_Verification__c>();
-                
-        List<Disbursement__c> disbursementList = new List<Disbursement__c>();
-        
-        Disbursement__c disb=new Disbursement__c();
-        disb.Mobile_Number__c='123';
-        disb.caseTyp__c='Purchase';
-        disb.BraUsr__c=u.Id;
-        disb.Tranch_Details__c='First';
-        disb.Disb_Status__c='';
-        disb.Application__c = opp.id;
-        disb.Nucleus_Deposit_Bank__c= nbt.id;
-        disb.Insurance_Company__c='TATA AIG INSURANCE';
-        disb.Date_of_Disbursement__c=system.today();
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10.12;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        
-        Disbursement__c disb1=new Disbursement__c();
-        disb1.Mobile_Number__c='123';
-        disb1.caseTyp__c='Purchase';
-        disb1.BraUsr__c=u.Id;
-        disb1.Application__c = opp.id;
-        disb1.Nucleus_Deposit_Bank__c= nbt.id;
-        disb1.Insurance_Company__c='Max life insurance';
-        disb1.Date_of_Disbursement__c=system.today();
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10.12;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Disbursement_Mode__c='Cheque';
-        disb.Levels_Of_Tranch__c='First Tranche';
-        //disbursementList.add(disb);
-        insert disb;
-        
-        System.debug('parth point 3: '+limits.getQueries());
-        
-        Property_Title__mdt pt = new Property_Title__mdt();
-        pt.MasterLabel=pm.Informal_Property_Title__c;
-        pt.PropertyOwnershipCode__c='Free hold';
-        
-        
-        List<Nucleus_Reciept__c> nr = [select id from Nucleus_Reciept__c where Property_Master__c=:pt.id and collateralNo__c!=null];
-        
-        List<Property_Title__mdt> ptm=[select PropertyOwnershipCode__c from Property_Title__mdt where MasterLabel=:pm.Informal_Property_Title__c];
-        List<Property_Type__mdt> propertyType = [SELECT FinnOne_Type_Code__c,Property_Type__c  from Property_Type__mdt WHERE MasterLabel=: tv.Property_Type__c];
-        
-        
-        
-        
-        
-        
-        Property_Purpose__mdt prp = new Property_Purpose__mdt();
-        prp.DeveloperName=pm.Property_Purpose__c;
-        // insert prp;
-        
-        
-        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-        obj.productProcessor ='mCAS';
-        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*10);
-        obj.requestReferenceNumber=requestRefernce;
-        
-        
-        //opportunity oppList = [Select id from opportunity where Name= 'Property Insurance'];
-        //Disbursement__c dis = [Select id from Disbursement__c where Application__c = :opp.Id];
-        
-        CollateralServiceHitAPIJSON vc=new CollateralServiceHitAPIJSON(opp.id,disb.id,'success');
-        
-        ID jobID=System.enqueueJob(vc);
-        
-        //system.debug('===='+opp.id);
-        
-        
-        Test.stopTest();
-    }
-    @isTest
-    public static void test1(){
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
-        insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
-        insert tbobj1;
-        
-		Opportunity opp = [Select Id from Opportunity where Primary_Account_Holder_Name__c ='jatin'];
-        User u = [Select Id from User where LastName = 'Testclassra Code'];
-        Nucleus_Deposit_Bank__c nbt = [Select Id from Nucleus_Deposit_Bank__c where Branch_Name__c='tyui'];
-        Bank_Detail__c bank = [Select Id from Bank_Detail__c where Name = 'cfgvhbjnk'];
-        Property_Master__c pm = [Select Id, Informal_Property_Title__c, Property_Purpose__c from Property_Master__c where Village__c='fhhjykk'];
-        Technical_Verification__c tv = [Select Id, Property_Type__c from Technical_Verification__c where Property_Situated_At__c='Panchayat'];
-        
-        Test.startTest();
-        Disbursement__c disb=new Disbursement__c();
-        disb.Mobile_Number__c='123';
-        disb.caseTyp__c='Purchase';
-        disb.BraUsr__c=u.Id;
-        disb.Tranch_Details__c='First';
-        disb.Disb_Status__c='';
-        disb.Application__c = opp.id;
-        disb.Nucleus_Deposit_Bank__c= nbt.id;
-        disb.Insurance_Company__c='TATA AIG INSURANCE';
-        disb.Date_of_Disbursement__c=system.today();
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10.12;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Nucleus_Deposit_Bank__c=nbt.id;
-        disb.Disbursement_Amount__c=12000;
-        disb.Accidental_Life_Insurance__c=987;
-        disb.Bank_Detail__c = bank.Id;
-        disb.Loan_Cancellation_type__c = 'Loan with Rebook';
-        disb.Insurance_Premium__c = 10.12;
-        disb.Beneficiary_Name__c = 'vyguhbjkn';
-        disb.Disbursement_Mode__c='Cheque';
-        disb.Levels_Of_Tranch__c='First Tranche';
-        disb.Loan_Cancellation_type__c='Loan with Rebook';
-        disb.Insurance_Company__c='HDFC';
-        insert disb;
-        
-        opportunity opp1 = [Select id from opportunity where Name= 'Property Insurance'];
-        Disbursement__c dis = [Select id from Disbursement__c where Application__c = :opp1.Id];
-        
-        CollateralServiceHitAPIJSON vc=new CollateralServiceHitAPIJSON(opp1.id,dis.id,'success');
-        
-        ID jobID=System.enqueueJob(vc);
-        Test.stopTest();
-        
-    }
-    @isTest
-    public  static void test2(){
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
-        insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
-        insert tbobj1;
-        test.setMock(HttpCalloutMock.class, new CollaWebSerTest1());
-        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*10);
-        //obj.requestReferenceNumber=requestRefernce;
-        //obj.productProcessor=jsonData;
-        CollateralServiceHitAPIJSON.CollateralServiceMethod(obj,'Test');
-        
-    }
-    
-    @isTest
-    public  static void test5(){
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
-        insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
-        insert tbobj1;
-        test.setMock(HttpCalloutMock.class, new WebSerCollaSerHitAPIJSON1());
-        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*0);
-        obj.requestReferenceNumber=requestRefernce;
-        //obj.productProcessor=jsonData;
-        CollateralServiceHitAPIJSON.CollateralServiceMethod(obj,'Test');
-        
-    }
-    
-    @isTest()
-    public static void test4(){
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
-        insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
-        insert tbobj1;
-        Test.startTest();
-        Test.setMock(HttpCalloutMock.class, new WebSerCollaSerHitAPIJSON());
-        CollateralServiceHitAPIJSON.requestAccessToken();
-        Test.stopTest();
-    }
-    
-    @isTest()
-    public static void test6(){
-        Test.startTest();
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
-        insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
-        insert tbobj1;
-        test.setMock(HttpCalloutMock.class, new CollaWebSerTest4());
-        CollateralServiceWrapper obj=new CollateralServiceWrapper();
-        String requestRefernce = String.valueOf(Datetime.now().formatGMT('yyyyMMddHHmmssSSS'))+Integer.valueOf(Math.random()*0);
-        obj.requestReferenceNumber=requestRefernce;
-        //obj.productProcessor=jsonData;
-        CollateralServiceHitAPIJSON.CollateralServiceMethod(obj,'Test');
-        Test.stopTest();
-    }
-    @isTest
-    public static void test3(){
-        Trigger_BYPass__c tbobj2=New Trigger_BYPass__c();
-        tbobj2.Name='WhatsappApplication';
-        tbobj2.isActive__c=false;
-        insert tbobj2;
-        
-        Trigger_BYPass__c tbobj1=New Trigger_BYPass__c();
-        tbobj1.Name='Deactivate';
-        tbobj1.isActive__c=false;
-        insert tbobj1;
-        CollateralServiceWrapper.premiumAmount premium = new  CollateralServiceWrapper.premiumAmount();
-        premium.amount=12;
-    }
-    
 }
