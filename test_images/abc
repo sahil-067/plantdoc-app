@@ -1,16 +1,17 @@
 @isTest
 public class CIBILIntegrationTriggerHelperTest {
     
-    // MOCK HTTP RESPONSE - Ensures parseXML processes correctly to get maximum coverage
+    // MOCK HTTP RESPONSE - XML structure perfectly aligned to prevent Null Pointer Exceptions
     public class MockForCibilIntegration implements HttpCalloutMock {
         public HTTPResponse respond(HTTPRequest req) {
             HttpResponse res = new HttpResponse();
             res.setHeader('Content-Type', 'text/xml');
             res.setStatusCode(200);
             
-            // Comprehensive XML mock covering all segments to hit the DOM parsing loops
+            // Unified Field Tag to survive the strict chaining in parseXML: .getChildElement('Field').getChildElement('Applicants')
             String xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<ExecuteXMLStringResult><Root><ApplicationId>APP123</ApplicationId><ContextData><Field>Pass</Field><Field><Applicants><Applicant><DsCibilBureau><Document><Id>DOC123</Id></Document><Response><CibilBureauResponse><BureauResponseXml><CreditReport>' +
+            '<ExecuteXMLStringResult><Root><ApplicationId>APP123</ApplicationId><ContextData><Field>Pass' +
+            '<Applicants><Applicant><DsCibilBureau><Document><Id>DOC123</Id></Document><Response><CibilBureauResponse><BureauResponseXml><CreditReport>' +
             '<Header><SegmentTag>T1</SegmentTag><Version>1</Version><ReferenceNumber>REF</ReferenceNumber><SubjectReturnCode>SRC</SubjectReturnCode><EnquiryControlNumber>ECN</EnquiryControlNumber><DateProcessed>01012023</DateProcessed><TimeProcessed>120000</TimeProcessed></Header>' +
             '<NameSegment><ConsumerName1>A</ConsumerName1><ConsumerName2>B</ConsumerName2><DateOfBirth>01011990</DateOfBirth><Gender>2</Gender></NameSegment>' +
             '<EmploymentSegment><OccupationCode>01</OccupationCode><AccountType>01</AccountType><DateReportedCertified>01012023</DateReportedCertified></EmploymentSegment>' +
@@ -38,7 +39,6 @@ public class CIBILIntegrationTriggerHelperTest {
 
     @testSetup
     static void setupData() {
-        // Essential Custom Settings for Trigger/Execution Bypasses
         Trigger_BYPass__c tbObj = new Trigger_BYPass__c(Name='WhatsappApplication', isActive__c=true);
         Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name='Deactivate', isActive__c=false);
         insert new List<Trigger_BYPass__c>{tbObj, tbObj1};
@@ -46,7 +46,7 @@ public class CIBILIntegrationTriggerHelperTest {
         Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '99009870');
         insert cf; 
         
-        // Perfect Baseline Account (Passes all validations naturally to reach Callout logic)
+        // Baseline Account that successfully passes all data validations to reach XML Parsing
         String recTypeId = [SELECT Id FROM RecordType WHERE SobjectType='Account' AND IsPersonType=True LIMIT 1].Id;
         Account acc = new Account();
         acc.RecordTypeId = recTypeId;
