@@ -3,13 +3,8 @@ public class MockProcessReceiptSuccess implements HttpCalloutMock {
             HttpResponse res = new HttpResponse();
             res.setHeader('Content-Type', 'application/json');
             res.setStatusCode(200);
-            
-            String reqBody = req.getBody();
-            if (reqBody != null && reqBody.contains('ReceiptProcessingMO')) {
-                res.setBody('{"responseCode":"success","payload":{"messages":[{"messageArguments":["123456"]}]},"dummy":"with Receipt # 12345\"","value":"Status:Cleared"}');
-            } else {
-                res.setBody('{"access_token":"token123"}');
-            }
+            // Universal JSON body to satisfy both Token parsing and Payload parsing
+            res.setBody('{"access_token":"token123", "responseCode":"success", "payload":{"messages":[{"messageArguments":["123456"]}]}, "dummy":"with Receipt # 12345\"", "value":"Status:Cleared"}');
             return res;
         }
     }
@@ -18,15 +13,9 @@ public class MockProcessReceiptSuccess implements HttpCalloutMock {
         public HTTPResponse respond(HTTPRequest req) {
             HttpResponse res = new HttpResponse();
             res.setHeader('Content-Type', 'application/json');
-            
-            String reqBody = req.getBody();
-            if (reqBody != null && reqBody.contains('ReceiptProcessingMO')) {
-                res.setStatusCode(500);
-                res.setBody('{"responseCode":"error","value":"Status:Failed"}');
-            } else {
-                res.setStatusCode(200);
-                res.setBody('{"access_token":"token123"}');
-            }
+            res.setStatusCode(500);
+            // Universal JSON body for the Error path
+            res.setBody('{"access_token":"token123", "responseCode":"error", "value":"Status:Failed"}');
             return res;
         }
     }
