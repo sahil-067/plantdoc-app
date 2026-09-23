@@ -1,21 +1,137 @@
-public class MockProcessReceiptSuccess implements HttpCalloutMock {
-        public HTTPResponse respond(HTTPRequest req) {
-            HttpResponse res = new HttpResponse();
-            res.setHeader('Content-Type', 'application/json');
-            res.setStatusCode(200);
-            // Universal JSON body to satisfy both Token parsing and Payload parsing
-            res.setBody('{"access_token":"token123", "responseCode":"success", "payload":{"messages":[{"messageArguments":["123456"]}]}, "dummy":"with Receipt # 12345\"", "value":"Status:Cleared"}');
-            return res;
-        }
+@isTest
+    public static void testCashProcessingFeeAndSuccessMock() {
+        Test.startTest();
+        
+        // Using your org's existing mock generator with an augmented JSON body
+        String mockBody = '{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"dummy","access_token":"45678ihgxvbnmenbmfvbyereui87678", "responseCode":"success", "payload":{"messages":[{"messageArguments":["123456"]}]},"dummy":"with Receipt # 12345\\\"","value":"Status:Cleared"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200, mockBody));
+        ProcessReceiptService.requestAccessToken();
+        
+        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
+        User usr = new User(LastName = 'testUser6', FirstName = 'Test6', alias = 'tu6', Username = 'testuser6_mock@techmatrix.com', Email = 'test6@techmatrix.com', ProfileId = prof.Id, isActive = true, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC12126');
+        insert usr;
+        
+        insert new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = true);
+        
+        Branch__c br = new Branch__c ();
+        br.Name='Jaipur-1';
+        br.Br_net_Branch_Code__c='123';
+        br.Branch_Approver__c=usr.Id;
+        br.Branch_Code__c='123456';
+        br.Branch_User__c=userInfo.getUserId(); 
+        br.Branch_Address__c='Ajmer';
+        br.Branch_City__c='Ajmer';
+        br.Branch_Opening_Date__c=system.today()-18;
+        br.Branch_PinCode__c='456788';
+        br.Branch_State__c='Rajsthan';
+        br.ClusterManagerName__c='vinay';
+        br.Finnone_Branch_Code__c='12345';
+        insert br;
+        
+        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
+        insert new Config__c(Name__c = 'Loanapp', value__c = '025140');
+        
+        Account acc1 = new Account(
+            FirstName = 'Techh',
+            LastName = 'Techmatrix',
+            Personal_email__pc = 'tch@tech.com',
+            Date_of_Joining__pc = System.today().addMonths(-3),
+            Designation__pc = 'LO',
+            RecordTypeId = paId,
+            Date_of_Leaving__pc = System.today().addMonths(-2),
+            Finnone_Client_Id__c='12345',
+            Branch__c = br.id
+        );
+        insert acc1;
+        
+        Customer__c cus = new Customer__c(OwnerId = usr.Id, Branch__c = 'Ajmer-1', Customer_Name__c = 'Test', Loan_Amount_Applied__c = 10000, Finnone_Instrument_Sequence_Number__c = 1);
+        insert cus;
+        
+        Loan_Product__c lp = new Loan_Product__c(Display_Order__c = 34);
+        insert lp;
+        Opportunity opp = new Opportunity(Name = 'abc', StageName = 'Prospecting', CloseDate = System.today(), Branch__c = br.Id, AccountId = acc1.Id, Household__c = cus.Id, Loan_Number__c = 'AP-12345', Loan_Product__c = lp.Id);
+        insert opp;
+        
+        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c(Name = 'Axis Bank', BankType__c = 'Cash', Branch_Name__c = 'Jaipur-1');
+        insert ndp;
+        
+        Collection__c col = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'Cash', Status__c = 'Active', ClearenceStatus__c = 'Cleared', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'Processing Fee (incl. Service tax)', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today(), Customer_Bank_Name__c = 'HDFC', Bank_Name__c = 'Test Bank No. 123');
+        insert col;
+        
+        insert new Pay_Slip__c(Collection__c = col.Id, date__c = System.today(), Cheque_Date__c = System.today());
+        insert new Nucleus_Reciept__c(Collection__c = col.Id, Application__c = opp.Id, Reciept_Number__c = '12345', isActive__c = true, amount__c = 1000);
+        insert new process_token__c(name = 'test', Token__c = 'text');
+        
+        ProcessReceiptServiceNew1.doPost(String.valueOf(col.Id), '');
+        Test.stopTest();
     }
-
-    public class MockProcessReceiptError implements HttpCalloutMock {
-        public HTTPResponse respond(HTTPRequest req) {
-            HttpResponse res = new HttpResponse();
-            res.setHeader('Content-Type', 'application/json');
-            res.setStatusCode(500);
-            // Universal JSON body for the Error path
-            res.setBody('{"access_token":"token123", "responseCode":"error", "value":"Status:Failed"}');
-            return res;
-        }
+    
+    @isTest
+    public static void testENACHErrorAndDemandDraft() {
+        Test.startTest();
+        
+        // Using your org's existing mock generator with an augmented JSON body
+        String mockBody = '{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"dummy","access_token":"45678ihgxvbnmenbmfvbyereui87678", "responseCode":"error", "value":"Status:Failed"}';
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200, mockBody));
+        ProcessReceiptService.requestAccessToken();
+        
+        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
+        User usr = new User(LastName = 'testUser7', FirstName = 'Test7', alias = 'tu7', Username = 'testuser7_mock@techmatrix.com', Email = 'test7@techmatrix.com', ProfileId = prof.Id, isActive = true, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC12127');
+        insert usr;
+        
+        insert new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = true);
+        
+        Branch__c br = new Branch__c ();
+        br.Name='Jaipur-1';
+        br.Br_net_Branch_Code__c='123';
+        br.Branch_Approver__c=usr.Id;
+        br.Branch_Code__c='123456';
+        br.Branch_User__c=userInfo.getUserId();
+        br.Branch_Address__c='Ajmer';
+        br.Branch_City__c='Ajmer';
+        br.Branch_Opening_Date__c=system.today()-18;
+        br.Branch_PinCode__c='456788';
+        br.Branch_State__c='Rajsthan';
+        br.ClusterManagerName__c='vinay';
+        br.Finnone_Branch_Code__c='12345';
+        insert br;
+        
+        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
+        
+        Account acc1 = new Account(
+            FirstName = 'Techh',
+            LastName = 'Techmatrix',
+            Personal_email__pc = 'tch@tech.com',
+            Date_of_Joining__pc = System.today().addMonths(-3),
+            Designation__pc = 'LO',
+            RecordTypeId = paId,
+            Date_of_Leaving__pc = System.today().addMonths(-2),
+            Finnone_Client_Id__c='12345',
+            Branch__c = br.id
+        );
+        insert acc1;
+        
+        Customer__c cus = new Customer__c(OwnerId = usr.Id, Branch__c = 'Ajmer-1', Customer_Name__c = 'Test', Loan_Amount_Applied__c = 10000);
+        insert cus;
+        
+        Loan_Product__c lp = new Loan_Product__c(Display_Order__c = 34);
+        insert lp;
+        Opportunity opp = new Opportunity(Name = 'abc', StageName = 'Prospecting', CloseDate = System.today(), Branch__c = br.Id, AccountId = acc1.Id, Household__c = cus.Id, Loan_Number__c = 'AP-12345', Loan_Product__c = lp.Id);
+        insert opp;
+        
+        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c(Name = 'Axis Bank', BankType__c = 'eNACH', Branch_Name__c = 'Jaipur-1');
+        insert ndp;
+        
+        Collection__c col1 = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'eNACH', Bank_Name__c = 'HDFC No. 987654321', Status__c = 'Cancelled', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'IMD', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today(), Customer_Bank_Name__c = 'HDFC');
+        insert col1;
+        
+        Collection__c col2 = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'Demand Draft', Status__c = 'Active', ClearenceStatus__c = 'Handover pending', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'Emi/Advances/Part Payment', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today(), Customer_Bank_Name__c = 'HDFC', Bank_Name__c = 'Test Bank No. 123');
+        insert col2;
+        
+        insert new process_token__c(name = 'test', Token__c = 'text');
+        
+        ProcessReceiptServiceNew1.doPost(String.valueOf(col1.Id), '');
+        ProcessReceiptServiceNew1.doPost(String.valueOf(col2.Id), '');
+        
+        Test.stopTest();
     }
