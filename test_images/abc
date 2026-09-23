@@ -1,278 +1,117 @@
-@isTest
-public class CIBILIntegrationTriggerHelperTest {
-    
-    // MOCK HTTP RESPONSE - XML structure perfectly aligned to prevent Null Pointer Exceptions
-    public class MockForCibilIntegration implements HttpCalloutMock {
+    // --- ADDITIONS BEGIN HERE ---
+
+    public class MockProcessReceiptSuccess implements HttpCalloutMock {
         public HTTPResponse respond(HTTPRequest req) {
             HttpResponse res = new HttpResponse();
-            res.setHeader('Content-Type', 'text/xml');
+            res.setHeader('Content-Type', 'application/json');
             res.setStatusCode(200);
-            
-            // Unified Field Tag to survive the strict chaining in parseXML: .getChildElement('Field').getChildElement('Applicants')
-            String xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<ExecuteXMLStringResult><Root><ApplicationId>APP123</ApplicationId><ContextData><Field>Pass' +
-            '<Applicants><Applicant><DsCibilBureau><Document><Id>DOC123</Id></Document><Response><CibilBureauResponse><BureauResponseXml><CreditReport>' +
-            '<Header><SegmentTag>T1</SegmentTag><Version>1</Version><ReferenceNumber>REF</ReferenceNumber><SubjectReturnCode>SRC</SubjectReturnCode><EnquiryControlNumber>ECN</EnquiryControlNumber><DateProcessed>01012023</DateProcessed><TimeProcessed>120000</TimeProcessed></Header>' +
-            '<NameSegment><ConsumerName1>A</ConsumerName1><ConsumerName2>B</ConsumerName2><DateOfBirth>01011990</DateOfBirth><Gender>2</Gender></NameSegment>' +
-            '<EmploymentSegment><OccupationCode>01</OccupationCode><AccountType>01</AccountType><DateReportedCertified>01012023</DateReportedCertified></EmploymentSegment>' +
-            '<ScoreSegment><ScoreCardName>SC</ScoreCardName><Score>800</Score><ScoreCardVersion>V1</ScoreCardVersion><ReasonCode1>R1</ReasonCode1><ReasonCode2>R2</ReasonCode2><ScoreDate>01012023</ScoreDate></ScoreSegment>' +
-            '<TelephoneSegment><TelephoneNumber>111</TelephoneNumber><TelephoneType>01</TelephoneType><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></TelephoneSegment>' +
-            '<TelephoneSegment><TelephoneNumber>222</TelephoneNumber><TelephoneType>02</TelephoneType><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></TelephoneSegment>' +
-            '<TelephoneSegment><TelephoneNumber>333</TelephoneNumber><TelephoneType>03</TelephoneType><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></TelephoneSegment>' +
-            '<TelephoneSegment><TelephoneNumber>444</TelephoneNumber><TelephoneType>00</TelephoneType><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></TelephoneSegment>' +
-            '<EmailContactSegment><EmailID>1@test.com</EmailID></EmailContactSegment>' +
-            '<EmailContactSegment><EmailID>2@test.com</EmailID></EmailContactSegment>' +
-            '<IDSegment><IDType>01</IDType><IDNumber>ID1</IDNumber><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></IDSegment>' +
-            '<IDSegment><IDType>02</IDType><IDNumber>ID2</IDNumber><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></IDSegment>' +
-            '<Address><AddressLine1>A1</AddressLine1><AddressLine2>A2</AddressLine2><AddressLine5>A5</AddressLine5><StateCode>01</StateCode><PinCode>111</PinCode><AddressCategory>01</AddressCategory><ResidenceCode>01</ResidenceCode><DateReported>01012023</DateReported><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></Address>' +
-            '<Address><AddressLine1>A1</AddressLine1><AddressLine2>A2</AddressLine2><AddressLine5>A5</AddressLine5><StateCode>02</StateCode><PinCode>111</PinCode><AddressCategory>02</AddressCategory><ResidenceCode>01</ResidenceCode><DateReported>01012023</DateReported><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></Address>' +
-            '<Address><AddressLine1>A1</AddressLine1><AddressLine2>A2</AddressLine2><AddressLine5>A5</AddressLine5><StateCode>03</StateCode><PinCode>111</PinCode><AddressCategory>03</AddressCategory><ResidenceCode>01</ResidenceCode><DateReported>01012023</DateReported><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></Address>' +
-            '<Address><AddressLine1>A1</AddressLine1><AddressLine2>A2</AddressLine2><AddressLine5>A5</AddressLine5><StateCode>04</StateCode><PinCode>111</PinCode><AddressCategory>04</AddressCategory><ResidenceCode>01</ResidenceCode><DateReported>01012023</DateReported><EnrichedThroughEnquiry>Y</EnrichedThroughEnquiry></Address>' +
-            '<Account><SegmentTag>ACC</SegmentTag><Account_NonSummary_Segment_Fields><CurrentBalance>100</CurrentBalance><DateOfLastPayment>01012023</DateOfLastPayment><DateOpenedOrDisbursed>01012023</DateOpenedOrDisbursed><DateClosed>01012023</DateClosed><DateReportedAndCertified>01012023</DateReportedAndCertified><PaymentHistoryStartDate>01012023</PaymentHistoryStartDate><PaymentHistoryEndDate>01012023</PaymentHistoryEndDate><ReportingMemberShortName>RS</ReportingMemberShortName><AccountType>01</AccountType><OwenershipIndicator>O</OwenershipIndicator><HighCreditOrSanctionedAmount>100</HighCreditOrSanctionedAmount><PaymentHistory1>P1</PaymentHistory1><PaymentHistory2>P2</PaymentHistory2></Account_NonSummary_Segment_Fields></Account>' +
-            '<Enquiry><SegmentTag>ENQ</SegmentTag><EnquiryAmount>100</EnquiryAmount><DateOfEnquiryFields>01012023</DateOfEnquiryFields><EnquiringMemberShortName>EN</EnquiringMemberShortName><EnquiryPurpose>01</EnquiryPurpose></Enquiry>' +
-            '</CreditReport></BureauResponseXml></CibilBureauResponse></Response></DsCibilBureau></Applicant></Applicants></Field></ContextData></Root></ExecuteXMLStringResult>';
-            
-            res.setBody(xml);
+            if (req.getBody() != null && req.getBody().contains('grant_type')) {
+                res.setBody('{"access_token":"token123"}');
+            } else {
+                // Formatted to pass both JSON.deserialize and the class's manual String.split() checks
+                res.setBody('{"responseCode":"success","payload":{"messages":[{"messageArguments":["123456"]}]},"dummy":"with Receipt # 12345\"","value":"Status:Cleared"}');
+            }
             return res;
         }
     }
 
-    @testSetup
-    static void setupData() {
-        Trigger_BYPass__c tbObj = new Trigger_BYPass__c(Name='WhatsappApplication', isActive__c=true);
-        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name='Deactivate', isActive__c=false);
-        insert new List<Trigger_BYPass__c>{tbObj, tbObj1};
+    public class MockProcessReceiptError implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setStatusCode(500);
+            if (req.getBody() != null && req.getBody().contains('grant_type')) {
+                res.setBody('{"access_token":"token123"}');
+            } else {
+                res.setBody('{"responseCode":"error","value":"Status:Failed"}');
+            }
+            return res;
+        }
+    }
+
+    @isTest
+    public static void testCashProcessingFeeAndSuccessMock() {
+        Test.startTest();
+        Test.setMock(HttpCalloutMock.class, new MockProcessReceiptSuccess());
         
-        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '99009870');
-        insert cf; 
+        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
+        User usr = new User(LastName = 'testUser6', FirstName = 'Test6', alias = 'tu6', Username = 'testuser6_mock@techmatrix.com', Email = 'test6@techmatrix.com', ProfileId = prof.Id, isActive = true, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC12126');
+        insert usr;
         
-        // Baseline Account that successfully passes all data validations to reach XML Parsing
-        String recTypeId = [SELECT Id FROM RecordType WHERE SobjectType='Account' AND IsPersonType=True LIMIT 1].Id;
-        Account acc = new Account();
-        acc.RecordTypeId = recTypeId;
-        acc.FirstName = 'TestFirst';
-        acc.LastName = 'TestLast';
-        acc.Date_Of_Birth__pc = Date.newInstance(1990, 01, 01);
-        acc.Sex__pc = 'Male';
-        acc.Mobile__pc = '9876543210';
-        acc.Pan_Card_No__pc = 'ABCDE1234F';
-        acc.PersonEmail = 'test@example.com';
-        acc.Address_Line_1__pc = 'Valid Line 1';
-        acc.Address_Line_2__pc = 'Valid Line 2';
-        acc.City__pc = 'Gurugram';
-        acc.State_Code__c = '33';
-        acc.Pin_Code__pc = 123456;
-        acc.Generate_Cibil_Flag__c = false;
-        acc.Is_this_WhatsApp_Number__pc = true;
-        insert acc;
+        insert new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = true);
         
-        EBS_Approval_Question__c eaq = new EBS_Approval_Question__c(Question__c='Test1', Active__c=true, Customer_Type__c='Default');
-        insert eaq;  
+        Branch__c br = new Branch__c(Name = 'Jaipur-1', Branch_Code__c = '123456', Finnone_Branch_Code__c = '12345');
+        insert br;
         
-        Customer__c cus1 = new Customer__c(Name='Test', Last_Name__c = 'TestLast', Address_Proof__c ='Aadhar',
-                                           Loan_Amount_Applied__c=6780, LnApp__c=56788, Customer_Status__c = 'Pending',
-                                           Hindsight_Approval__c = 'Approved', origin__c='Paperless', Branch__c='Agra-1');
-        insert cus1; 
+        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
+        insert new Config__c(Name__c = 'Loanapp', value__c = '025140');
         
-        Opportunity opp = new Opportunity(Name='Test', Loan_Product_Type__c='HL', StageName='Prospect',
-                                          CloseDate=system.today(), Household__c = cus1.Id,
-                                          LM_Loan_Status__c = 'Login Approved', Loan_Number__c='1234',
-                                          Loan_Amount_Applied__c = 200000);
+        Account acc1 = new Account(FirstName = 'Test', LastName = 'Test', RecordTypeId = paId, Branch__c = br.Id, Finnone_Client_Id__c = '12345');
+        insert acc1;
+        
+        Customer__c cus = new Customer__c(OwnerId = usr.Id, Branch__c = 'Ajmer-1', Customer_Name__c = 'Test', Loan_Amount_Applied__c = 10000, Finnone_Instrument_Sequence_Number__c = 1);
+        insert cus;
+        
+        Opportunity opp = new Opportunity(Name = 'abc', StageName = 'Prospecting', CloseDate = System.today(), Branch__c = br.Id, AccountId = acc1.Id, Household__c = cus.Id, Loan_Number__c = 'AP-12345');
         insert opp;
         
-        Contact con = [Select id, AccountId, LastName From Contact where AccountId =: acc.Id Limit 1];
-        OpportunityContactRole ocr = new OpportunityContactRole(ContactId = con.Id, OpportunityId = opp.Id, IsPrimary = TRUE, Role = 'Co-Applicant 5');
-        insert ocr;
+        // Covering Instrument == 'Cash' branch logic
+        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c(Name = 'Axis Bank', BankType__c = 'Cash', Branch_Name__c = 'Jaipur-1');
+        insert ndp;
         
-        EBS_Approval_History__c ea = new EBS_Approval_History__c(Customer__c = cus1.Id, Approval_Time__c = System.today(), Approver__c = userinfo.getuserid());
-        insert ea;
+        // Covering Processing Fee logic and Cleared status
+        Collection__c col = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'Cash', Status__c = 'Active', ClearenceStatus__c = 'Cleared', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'Processing Fee (incl. Service tax)', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today());
+        insert col;
         
-        Approval_Question_History__c aqh = new Approval_Question_History__c(EBS_Approval_History__c = ea.Id, Question__c=eaq.Question__c, Answer__c=false);
-        insert aqh;
-    }
-    
-    // METHOD 1: Test generateCIBILFromCustomer (PWA Logic Flow)
-    @isTest
-    static void testPWA_Flow(){
-        Account acc = [SELECT Id, Pan_Card_No__pc FROM Account LIMIT 1];
-        PWA__c pwa = new PWA__c(PAN_Number__c=acc.Pan_Card_No__pc);
-        insert pwa;
+        insert new Pay_Slip__c(Collection__c = col.Id, date__c = System.today(), Cheque_Date__c = System.today());
+        insert new Nucleus_Reciept__c(Collection__c = col.Id, Application__c = opp.Id, Reciept_Number__c = '12345', isActive__c = true, amount__c = 1000);
+        insert new process_token__c(name = 'test', Token__c = 'text');
         
-        Attachment att = new Attachment(Name='CIBIL.html', ParentId=pwa.Id, Body=Blob.valueOf('test'));
-        insert att;
-        
-        Cibil_Data__c cd = new Cibil_Data__c(PAN_Number__c=acc.Pan_Card_No__pc, Cibil_Score__c='750');
-        insert cd;
-        
-        Customer__c cus = [Select Id, Customer_Status__c, LoanAppID__c from Customer__c LIMIT 1];
-        Opportunity opp = [Select Id from Opportunity LIMIT 1];
-        cus.LoanAppID__c = opp.Id;
-        
-        Map<Id, Customer__c> oldMap = new Map<Id, Customer__c>();
-        Customer__c oldCus = cus.clone(true, false, false, false);
-        oldCus.Customer_Status__c = 'Pending';
-        oldMap.put(oldCus.Id, oldCus);
-        
-        cus.Customer_Status__c = 'Approved';
-        
-        Test.startTest();
-        CIBILIntegrationTriggerHelper.generateCIBILFromCustomer(new List<Customer__c>{cus}, oldMap);
+        ProcessReceiptServiceNew1.doPost(String.valueOf(col.Id), '');
         Test.stopTest();
     }
     
-    // METHOD 2: Test generateCIBILFromCustomer (PWALO Logic Flow)
     @isTest
-    static void testPWALO_Flow(){
-        Account acc = [SELECT Id, Pan_Card_No__pc FROM Account LIMIT 1];
-        Opportunity opp = [Select Id from Opportunity LIMIT 1];
-        
-        PWALO_OPP__c po = new PWALO_OPP__c(Application__c=opp.Id);
-        insert po;
-        
-        PWALO_Applicant__c pa = new PWALO_Applicant__c(PWALO_OPP__c=po.Id, Applicant_Id__c=acc.Id);
-        insert pa;
-        
-        PWALO_Cibil_Data__c pcd = new PWALO_Cibil_Data__c(PWALO_Applicant__c=pa.Id, Cibil_Score__c='750');
-        insert pcd;
-        
-        Attachment att = new Attachment(Name='CIBIL.html', ParentId=pa.Id, Body=Blob.valueOf('test'));
-        insert att;
-        
-        Customer__c cus = [Select Id, Customer_Status__c, LoanAppID__c from Customer__c LIMIT 1];
-        cus.LoanAppID__c = opp.Id;
-        
-        Map<Id, Customer__c> oldMap = new Map<Id, Customer__c>();
-        Customer__c oldCus = cus.clone(true, false, false, false);
-        oldCus.Customer_Status__c = 'Pending';
-        oldMap.put(oldCus.Id, oldCus);
-        
-        cus.Customer_Status__c = 'Approved';
-        
+    public static void testENACHErrorAndDemandDraft() {
         Test.startTest();
-        CIBILIntegrationTriggerHelper.generateCIBILFromCustomer(new List<Customer__c>{cus}, oldMap);
-        Test.stopTest();
-    }
-    
-    // METHOD 3: Full API Callout and XML Parsing (Maximum Coverage)
-    @isTest
-    static void testAPI_Callout_And_XML_Parsing(){
-        Test.setMock(HttpCalloutMock.class, new MockForCibilIntegration());
+        Test.setMock(HttpCalloutMock.class, new MockProcessReceiptError());
         
-        Account acc = [SELECT Id, FirstName, LastName, Date_Of_Birth__pc, Sex__pc, Mobile__pc, 
-                       Pan_Card_No__pc, Passport_No__pc, Voter_Card__pc, Drv_Licn__pc, 
-                       Ration_Card__pc, Aadhar_Card__pc, Address_Line_1__pc, Address_Line_2__pc, 
-                       City__pc, State_Code__c, Pin_Code__pc, PersonEmail, Generate_Cibil_Flag__c 
-                       FROM Account LIMIT 1];
-                       
-        Opportunity opp = [Select Id from Opportunity LIMIT 1];
-        Customer__c cus = [Select Id, Customer_Status__c, LoanAppID__c from Customer__c LIMIT 1];
-        cus.LoanAppID__c = opp.Id;
+        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
+        User usr = new User(LastName = 'testUser7', FirstName = 'Test7', alias = 'tu7', Username = 'testuser7_mock@techmatrix.com', Email = 'test7@techmatrix.com', ProfileId = prof.Id, isActive = true, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC12127');
+        insert usr;
         
-        Map<Id, Customer__c> oldMap = new Map<Id, Customer__c>();
-        Customer__c oldCus = cus.clone(true, false, false, false);
-        oldCus.Customer_Status__c = 'Pending';
-        oldMap.put(oldCus.Id, oldCus);
-        cus.Customer_Status__c = 'Approved';
+        insert new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = true);
         
-        Test.startTest();
-        // 1. Triggers standard logic
-        CIBILIntegrationTriggerHelper.generateCIBILFromCustomer(new List<Customer__c>{cus}, oldMap);
+        Branch__c br = new Branch__c(Name = 'Jaipur-1', Branch_Code__c = '123456', Finnone_Branch_Code__c = '12345');
+        insert br;
         
-        // 2. Direct hit to generateCIBILNew to force Mock response and XML parsing
-        try {
-            CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(acc), 200000);
-        } catch (Exception e) {
-            System.debug('Exception in generateCIBILNew: ' + e.getMessage());
-        }
+        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
         
-        // 3. Fallback queue execution logic from original test class
-        try { system.enqueueJob(new CibiliIntegartionQueue(JSON.serialize(acc), 2000)); } catch(Exception e){}
-        try { CibilUploadDocumentByTriggerQueue.uploadDocumentMethod(opp.Id,'5570439',acc.Id); } catch(Exception e){}
-        Test.stopTest();
-    }
-    
-    // METHOD 4: Isolate Name/DOB Validation (Prevents Duplicate ID Error)
-    @isTest
-    static void testValidation_NameAndAge(){
-        Account acc = [SELECT Id, FirstName, LastName, Date_Of_Birth__pc, Sex__pc, Mobile__pc, Pan_Card_No__pc, Passport_No__pc, Voter_Card__pc, Drv_Licn__pc, Ration_Card__pc, Aadhar_Card__pc, Address_Line_1__pc, Address_Line_2__pc, City__pc, State_Code__c, Pin_Code__pc FROM Account LIMIT 1];
+        Account acc1 = new Account(FirstName = 'Test', LastName = 'Test', RecordTypeId = paId, Branch__c = br.Id, Finnone_Client_Id__c = '12345');
+        insert acc1;
         
-        Test.startTest();
+        Customer__c cus = new Customer__c(OwnerId = usr.Id, Branch__c = 'Ajmer-1', Customer_Name__c = 'Test', Loan_Amount_Applied__c = 10000);
+        insert cus;
         
-        // Break 1: Short Name
-        Account badAcc1 = acc.clone(true, false, false, false);
-        badAcc1.FirstName = 'A';
-        badAcc1.LastName = 'B';
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc1), 2000); } catch(Exception e){}
+        Opportunity opp = new Opportunity(Name = 'abc', StageName = 'Prospecting', CloseDate = System.today(), Branch__c = br.Id, AccountId = acc1.Id, Household__c = cus.Id, Loan_Number__c = 'AP-12345');
+        insert opp;
         
-        // Break 2: Age
-        Account badAcc2 = acc.clone(true, false, false, false);
-        badAcc2.Date_Of_Birth__pc = Date.today().addYears(-10);
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc2), 2000); } catch(Exception e){}
+        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c(Name = 'Axis Bank', BankType__c = 'eNACH', Branch_Name__c = 'Jaipur-1');
+        insert ndp;
+        
+        // Covering eNACH split ('No.') logic, Cancelled status ('X'), and IMD logic
+        Collection__c col1 = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'eNACH', Bank_Name__c = 'HDFC No. 987654321', Status__c = 'Cancelled', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'IMD', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today());
+        insert col1;
+        
+        // Covering Demand Draft and Handover pending ('D') logic
+        Collection__c col2 = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'Demand Draft', Status__c = 'Active', ClearenceStatus__c = 'Handover pending', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'Emi/Advances/Part Payment', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today());
+        insert col2;
+        
+        insert new process_token__c(name = 'test', Token__c = 'text');
+        
+        ProcessReceiptServiceNew1.doPost(String.valueOf(col1.Id), '');
+        ProcessReceiptServiceNew1.doPost(String.valueOf(col2.Id), '');
         
         Test.stopTest();
     }
-    
-    // METHOD 5: Isolate Missing Identifiers (Prevents Duplicate ID Error)
-    @isTest
-    static void testValidation_MissingIdentifiers(){
-        Account acc = [SELECT Id, FirstName, LastName, Date_Of_Birth__pc, Sex__pc, Mobile__pc, Pan_Card_No__pc, Passport_No__pc, Voter_Card__pc, Drv_Licn__pc, Ration_Card__pc, Aadhar_Card__pc, Address_Line_1__pc, Address_Line_2__pc, City__pc, State_Code__c, Pin_Code__pc FROM Account LIMIT 1];
-        
-        Account badAcc = acc.clone(true, false, false, false);
-        badAcc.Mobile__pc = null;
-        badAcc.Pan_Card_No__pc = null;
-        badAcc.Passport_No__pc = null;
-        badAcc.Voter_Card__pc = null;
-        badAcc.Drv_Licn__pc = null;
-        badAcc.Ration_Card__pc = null;
-        badAcc.Aadhar_Card__pc = null;
-        
-        Test.startTest();
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc), 2000); } catch(Exception e){}
-        Test.stopTest();
-    }
-    
-    // METHOD 6: Isolate Ampersand Character Errors (Prevents Duplicate ID Error)
-    @isTest
-    static void testValidation_Ampersands(){
-        Account acc = [SELECT Id, FirstName, LastName, Date_Of_Birth__pc, Sex__pc, Mobile__pc, Pan_Card_No__pc, Passport_No__pc, Voter_Card__pc, Drv_Licn__pc, Ration_Card__pc, Aadhar_Card__pc, Address_Line_1__pc, Address_Line_2__pc, City__pc, State_Code__c, Pin_Code__pc FROM Account LIMIT 1];
-        
-        Test.startTest();
-        
-        Account badAcc = acc.clone(true, false, false, false);
-        badAcc.Mobile__pc = '123&456';
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc), 2000); } catch(Exception e){}
-        
-        Account badAcc2 = acc.clone(true, false, false, false);
-        badAcc2.Address_Line_1__pc = 'Test&Test';
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc2), 2000); } catch(Exception e){}
-        
-        Account badAcc3 = acc.clone(true, false, false, false);
-        badAcc3.City__pc = 'City&City';
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc3), 2000); } catch(Exception e){}
-        
-        Test.stopTest();
-    }
-    
-    // METHOD 7: Isolate Pincode and Address Length Errors (Prevents Duplicate ID Error)
-    @isTest
-    static void testValidation_PincodesAndAddressLengths(){
-        Account acc = [SELECT Id, FirstName, LastName, Date_Of_Birth__pc, Sex__pc, Mobile__pc, Pan_Card_No__pc, Passport_No__pc, Voter_Card__pc, Drv_Licn__pc, Ration_Card__pc, Aadhar_Card__pc, Address_Line_1__pc, Address_Line_2__pc, City__pc, State_Code__c, Pin_Code__pc FROM Account LIMIT 1];
-        
-        Test.startTest();
-        
-        Account badAcc = acc.clone(true, false, false, false);
-        badAcc.Pin_Code__pc = 120000; // Ends in 000
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc), 2000); } catch(Exception e){}
-        
-        Account badAcc2 = acc.clone(true, false, false, false);
-        badAcc2.Pin_Code__pc = 12345; // Short length
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc2), 2000); } catch(Exception e){}
-        
-        Account badAcc3 = acc.clone(true, false, false, false);
-        badAcc3.Address_Line_1__pc = 'a'; // Short length
-        badAcc3.Address_Line_2__pc = 'b';
-        try { CIBILIntegrationTriggerHelper.generateCIBILNew(JSON.serialize(badAcc3), 2000); } catch(Exception e){}
-        
-        Test.stopTest();
-    }
-}
+    // --- ADDITIONS END HERE ---
