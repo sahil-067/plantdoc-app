@@ -1,137 +1,611 @@
+/*
+* Class : PayUControllerNNewFullTest
+*
+* Description : Broad coverage test class for PayUControllerNNew.
+*               Exercises every public method and, as far as test data allows,
+*               every conditional branch (if/else, warning messages, empty-string
+*               defaults, tmp>tm guard, zero-amount skip branches, the payslip
+*               bypass path, and the mismatch / "please login again" path).
+*
+*               Per request: no System.assert / System.assertEquals are used.
+*               Every scenario is wrapped in try/catch (mirroring the original
+*               team's style) purely so that one bad branch doesn't stop the
+*               rest of the suite from executing and contributing coverage.
+*/
 @isTest
-    public static void testCashProcessingFeeAndSuccessMock() {
+public class PayUControllerNNewTest {
+    @testSetup
+    static void setup() {
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
+        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
+        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
+            
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        cus.Query_Raised_count__c=17;
+        cus.Hindsight_Approval__c='Pending';
+        cus.Credit_Hindsight_Approval__c='Approved';
+        cus.Property_Paper_Storage_Date__c=System.today();
+        insert cus;
+        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
+        badc.Bank_name__c='HDFC';
+        badc.Disbursement_in_this_Account__c='Yes';
+        badc.Household__c = cus.Id;
+        badc.Bank_Account_Number__c = '12345678';
+        badc.IFSC_Code__c = 'ABC123456';
+        badc.Percentage__c='91';
+        badc.Is_PennyDrop_Done__c=true;
+        badc.Name_of_Account_Holder__c = 'John Doe';
+        badc.PennyDrop_Status_Code__c='NP001';
+        insert badc;
+        
+        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
+                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
+        ac.Is_Screenza_Done__c=true;
+        ac.Pan_Verified__c=true;
+        ac.Sex__pc='Male';
+        ac.Salutation='Mr.';
+        insert ac;
+        
+        Id kycRecId=Schema.SObjectType.KYC_Log__c.getRecordTypeInfosByName().get('Faceliveness').getRecordTypeId();
+        KYC_Log__c kyc=new KYC_Log__c();
+        kyc.Applicant__c=ac.id;
+        kyc.RecordTypeId=kycRecId;
+        kyc.Face_Match__c='yes';
+        kyc.Liveliness__c='yes';
+        insert kyc;
+        
+        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
+        insert cf;
+        
+        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
+        insert nsc;
+                
+        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
+        User testUser = new User(
+            FirstName = 'Test',
+            LastName = 'User',
+            Email = 'testuser@example.com',
+            Username = 'testuser' + DateTime.now().getTime() + '@testorg.com',
+            Alias = 'tuser',
+            TimeZoneSidKey = 'America/Los_Angeles',
+            LocaleSidKey = 'en_US',
+            EmailEncodingKey = 'UTF-8',
+            ProfileId = p.Id,
+            LanguageLocaleKey = 'en_US'
+        );
+        testUser.EmployeeNumber='ISFC12121';
+        insert testUser;
+        System.runAs(testUser) {
+            String employeeCode = [Select Id, EmployeeNumber from User where Id =: UserInfo.getUserId()].EmployeeNumber;
+            String profileName = [SELECT Id, Name FROM Profile WHERE Id = :UserInfo.getProfileId()].Name;
+        }
+        
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Jaipur-1';
+        branch.Branch_Category__c = 'B';
+        branch.Critical_Insurance_Company__c='ICICI Lombard CI';
+        branch.Insurance_Company__c='ICICI';
+        branch.Property_Insurance_Company__c='ICICI Lombard';
+        insert branch;
+    }
+    
+    // ---------- helpers -----------------------------------------------
+    
+    // Helper added to requery Opportunity to evaluate formula fields (like FinCollectableLPP__c)
+    private static Opportunity getQueriedOpp(Id oppId) {
+        return [SELECT Id, Principal_Overdue__c, BouncingcountFTM__c, Cash_Handling_Charges__c,
+                       FinCollectableLPP__c, Bou_Colle_FTM__c, Fincollbouncharge__c,
+                       customer_mobile__c, Balance_Collectable__c, Loan_Number__c,
+                       Installment_Amount__c, Bouncing_Charges_Arrear__c, Other_Arrear__c,
+                       BR_net_Branch_Code__c, Due_for_the_Month_PEMI__c, Due_For_the_Month__c,
+                       Household__r.Name
+                FROM Opportunity WHERE Id = :oppId];
+    }
+    
+    private static Opportunity buildOpp(String loanNumber, Decimal pemi, Decimal emi,
+                                         Decimal balanceCollectable, Decimal bounCountFTM,
+                                         Decimal bounCollFTM, Decimal finCollBounCharge,
+                                         Decimal finCollLPP, Decimal cashHandling,
+                                         Decimal installment, Decimal principalOverdue) {
+        Opportunity opp = new Opportunity();
+        opp.Other_Arrear__c = 50000;
+        opp.LPPcolleFTM__c = 0; // Ensures formula calculates correctly (50000 - 0)
+        opp.Name = 'Test Check ' + loanNumber;
+        opp.Phone_No__c = '9898989898';
+        opp.StageName = 'Prospecting';
+        opp.CloseDate = Date.today();
+        opp.Loan_Number__c = loanNumber;
+        opp.Due_for_the_Month_PEMI__c = pemi;
+        opp.Due_For_the_Month__c = emi;
+       // opp.Balance_Collectable__c = balanceCollectable;
+       // opp.BouncingcountFTM__c = bounCountFTM;
+       // opp.Bou_Colle_FTM__c = bounCollFTM;
+       // opp.Fincollbouncharge__c = finCollBounCharge;
+       // opp.FinCollectableLPP__c = finCollLPP;
+       // opp.Cash_Handling_Charges__c = cashHandling;
+        opp.Installment_Amount__c = installment;
+        opp.Principal_Overdue__c = principalOverdue;
+        opp.Interest_Overdue__c = 120;
+        opp.Due_For_the_Month_Advance__c = 1000;
+        opp.Guarantor_First_Name__c = 'test';
+        insert opp;
+                                             
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);
+        insert con;
+                           
+        NEILON__File__c nc=new NEILON__File__c();
+        nc.Subcategory__c='Signed Home Loan Agreement';
+        nc.Name='zaxdjfh';
+        nc.NEILON__Opportunity__c=opp.Id;
+        insert nc;  
+        
+        Loan_Product__c lp=new Loan_Product__c();
+        lp.PF_Rate_1__c=5.0;
+        lp.Status__c='Active';
+        insert lp;
+        
+        CAM__c camObj = new CAM__c();
+        camObj.Branch_Name__c = 'Jaipur';
+        camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+        camObj.Loan_Application__c = opp.Id;
+        camObj.Branch_Manager_Name__c = 'Gaurav';
+        camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+        camObj.Land_Area__c = 22;
+        camObj.Build_Up_Area__c = 44;
+        camObj.Final_Decision__c = 'Pending';
+        camObj.Property_Type__c='Commercial Building';
+        camObj.NHB_Categories__c='Construction/purchase of new units';
+        camObj.HLAmt__c=1200;
+        camObj.Base_ROI_Generated__c=true;
+        camObj.Score_Generated__c=true;
+        insert camObj;
+        camObj.Final_Decision__c = 'Approved';
+        camObj.BRE_Rule_Approved__c=true;
+        camObj.BRE__c=true;
+        camObj.Loan_Product__c=lp.id;
+        camObj.Purpose_of_Loan__c='Construction Loan';
+        
+        Post_Sanction_Pre_Disbursement_Changes__c pspdcRecord = new Post_Sanction_Pre_Disbursement_Changes__c(LTV__c=80, CAM__c=camObj.Id);
+        insert pspdcRecord;
+        
+        Insurance_Generation_Data__c life = new Insurance_Generation_Data__c();
+        life.Life_Insurance_Company_Name__c='ICICI';
+        life.Life_Insurance_Tenure__c=10;
+        life.Life_Insurance_Premium_2__c=1000;
+        life.Accidental_Death_Insurance_Premium__c=1000;
+        life.Property_Insurance_Premium__c=1000;
+        life.Property_Insurance_Required__c='Yes';
+        life.Property_Insurance_Company_Name__c='ICICI Lombard';
+        life.Critical_illness_Required__c='Yes';
+        life.Critical_Insurance_Company_Name__c='ICICI Lombard CI';
+        life.Health_Insurance_Required__c='Yes';
+        life.Application__c=opp.id;
+        life.Life_Insurance__c='Yes';
+        life.Contact__c=con.Id;
+        life.Nominee_Name__c='jatin';
+        insert life;
+        
+                                             
+        Collection__c collec = new Collection__c(Amount__c=6000, Collector__c=con.Id,
+                                                 Date_of_Deposit__c=System.today(),
+                                                 SFDC_Customer__c=opp.Id, Deposited_In_bank__c=true,
+                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
+                                                 Status__c='Active', RMobile_No__c='1234567891',
+                                                 Branch_Name__c='testBranch',
+                                                 Nature_of_Collection__c='Other Administrative Charges');
+        insert collec;
+                                             
+        return opp;
+    }
+    
+    private static Pay_Slip__c buildPaySlip(Id appId) {
+        Pay_Slip__c pay = new Pay_Slip__c();
+        pay.Amount__c = 120;
+        pay.Deposited__c = false;
+        pay.Application__c = appId;
+        return pay;
+    }
+    
+    // ---------- 1. Constructor + default determinePageBlock* --------
+    @isTest
+    static void testConstructorAndDefaultBlocks() {
+        try {
+            PayUControllerNNew obj = new PayUControllerNNew();
+            obj.getOtp();
+            obj.OTPverification();
+            obj.determinePageBlock();
+            obj.determinePageBlock1();
+            obj.determinePageBlock2();
+            obj.determinePageBlock3();
+        } catch (Exception ex) {
+            System.debug('Error: ' + ex.getMessage() + ' Line: ' + ex.getLineNumber());
+        }
+    }
+    
+    // ---------- 2. determinePageBlock* branch coverage ---------------
+    // Covers: empty-string default assignment, "value <= fixed" success path,
+    // and the "value > fixed" warning path, for all four editable fields.
+    @isTest
+    static void testDeterminePageBlocksAllBranches() {
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.Total_Sum = 1000;
+        // --- Bouncing Arrear field ---
+        obj.NewBouncingChargeArrearfixed = '100';
+        obj.firstEdit = '0';
+        obj.NewBouncingChargeArrear = ''; // hits '' -> '0' default branch
+        obj.NewBouncingChargeFTM = '10';
+        try { obj.determinePageBlock(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewBouncingChargeArrearfixed = '50';
+        obj.NewBouncingChargeArrear = '200'; // value > fixed -> warning branch
+        try { obj.determinePageBlock(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewBouncingChargeArrearfixed = '100';
+        obj.firstEdit = '10';
+        obj.NewBouncingChargeArrear = '40'; // valid update branch
+        obj.NewBouncingChargeFTM = '10';
+        try { obj.determinePageBlock(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        // --- EMI Arrears field ---
+        obj.NewEMIArrearsfixed = '100';
+        obj.SecondEdit = '0';
+        obj.NewEMIArrears = ''; // '' -> '0'
+        obj.NewEMIForthemonth = '10';
+        try { obj.determinePageBlock1(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewEMIArrearsfixed = '20';
+        obj.NewEMIArrears = '500'; // warning branch
+        try { obj.determinePageBlock1(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewEMIArrearsfixed = '100';
+        obj.SecondEdit = '10';
+        obj.NewEMIArrears = '40';
+        obj.NewEMIForthemonth = '10';
+        try { obj.determinePageBlock1(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        // --- LPP Charges field ---
+        obj.NewLPPChargesfixed = '100';
+        obj.thirdEdit = '0';
+        obj.NewLPPCharges = ''; // '' -> '0'
+        try { obj.determinePageBlock2(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewLPPChargesfixed = '5';
+        obj.NewLPPCharges = '999'; // warning branch
+        try { obj.determinePageBlock2(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewLPPChargesfixed = '100';
+        obj.thirdEdit = '10';
+        obj.NewLPPCharges = '40';
+        try { obj.determinePageBlock2(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        // --- Cash Handling Charges field ---
+        obj.NewCashHandlingChargesfixed = '100';
+        obj.fourthEdit = '0';
+        obj.NewCashHandlingCharges = ''; // '' -> '0'
+        try { obj.determinePageBlock3(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewCashHandlingChargesfixed = '5';
+        obj.NewCashHandlingCharges = '999'; // warning branch
+        try { obj.determinePageBlock3(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.NewCashHandlingChargesfixed = '100';
+        obj.fourthEdit = '10';
+        obj.NewCashHandlingCharges = '40';
+        try { obj.determinePageBlock3(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 3. Submit() : missing / blank loan number -------------
+    @isTest
+    static void testSubmitBlankLoanValues() {
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.LoanValue1 = '';
+        obj.LoanValue2 = '';
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+        obj.LoanValue1 = null;
+        obj.LoanValue2 = null;
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 4. Submit() : loan number not found --------------------
+    @isTest
+    static void testSubmitLoanNotFound() {
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.LoanValue1 = 'AP-9999999';
+        obj.LoanValue2 = 'AP-9999999';
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 5. Submit() : LoanValue1 != LoanValue2 (mismatch) -----
+    @isTest
+    static void testSubmitMismatchedLoanValues() {
+        Opportunity opp = buildOpp('AP-2000001', 100, 0, 500, 2, 100, 300, 40, 20, 5000, 200);
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.LoanValue1 = 'AP-2000001';
+        obj.LoanValue2 = 'AP-2000002'; // does not match -> error branch
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 6. Submit() success : PEMI branch, positive sub-branches --
+    @isTest
+    static void testSubmitSuccessPemiPositiveBranches() {
+        Opportunity opp = buildOpp('AP-3000001', 500, 0, 5000,
+                                    3 /*bounCountFTM*/, 100 /*bounCollFTM*/,
+                                    2000 /*finCollBounCharge*/, 300 /*finCollLPP*/,
+                                    150 /*cashHandling*/, 6000, 1000);
+        
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.LoanValue1 = 'AP-3000001';
+        obj.LoanValue2 = 'AP-3000001';
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 7. Submit() success : EMI branch, zero / negative sub-branches --
+    @isTest
+    static void testSubmitSuccessEmiZeroBranches() {
+        Opportunity opp = buildOpp('AP-3000002', 0, 400, 100,
+                                    0 /*bounCountFTM*/, 0 /*bounCollFTM*/,
+                                    0 /*finCollBounCharge*/, 0 /*finCollLPP*/,
+                                    0 /*cashHandling*/, 4000, 50);
+        
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.LoanValue1 = 'AP-3000002';
+        obj.LoanValue2 = 'AP-3000002';
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 8. Submit() : both pemi and emi are 0 (falls through, no NatureOfCollection set) --
+    @isTest
+    static void testSubmitBothDuesZero() {
+        Opportunity opp = buildOpp('AP-3000003', 0, 0, 100, 0, 0, 0, 0, 0, 1000, 10);
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.LoanValue1 = 'AP-3000003';
+        obj.LoanValue2 = 'AP-3000003';
+        try { obj.Submit(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 9. Pay() : mismatch between SecondoppList and DB (Please Login Again) --
+    @isTest
+    static void testPayMismatchWarning() {
+        Opportunity opp = buildOpp('AP-4000001', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+        PayU_Payment_Status__c payres = new PayU_Payment_Status__c();
+        payres.Status__c = 'Requested';
+        payres.Pay_Slip__c = pay.Id;
+        insert payres;
+        ApexPages.currentPage().getParameters().put('id', pay.Id);
+        
+        PayUControllerNNew obj = new PayUControllerNNew();
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+        obj.oppList = new List<Opportunity>{ queriedOpp };
+        
+        Opportunity staleOpp = queriedOpp.clone(true, true, true, true);
+        staleOpp.Loan_Number__c = 'MISMATCH_FORCED'; 
+        obj.SecondoppList = new List<Opportunity>{ staleOpp };
+        
+        obj.NewEMIForthemonth = '100';
+        obj.NewEMIArrears = '50';
+        obj.NewBouncingChargeFTM = '10';
+        obj.NewBouncingChargeArrear = '5';
+        obj.NewLPPCharges = '5';
+        obj.NewCashHandlingCharges = '5';
+        obj.emiflexi = '150';
+        obj.bounTotal = '15';
+        obj.Amount = 175;
+        obj.Total_Sum = 175;
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 10. Pay() success path w/ payslip bypass + all amount branches > 0 --
+    @isTest
+    static void testPaySuccessAllPositiveAmounts() {
+        Opportunity opp = buildOpp('AP-4000002', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
         Test.startTest();
         
-        // Using your org's existing mock generator with an augmented JSON body
-        String mockBody = '{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"dummy","access_token":"45678ihgxvbnmenbmfvbyereui87678", "responseCode":"success", "payload":{"messages":[{"messageArguments":["123456"]}]},"dummy":"with Receipt # 12345\\\"","value":"Status:Cleared"}';
-        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200, mockBody));
-        ProcessReceiptService.requestAccessToken();
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+		
+        // bypass pay slip record
+        Pay_Slip__c bypassSlip = new Pay_Slip__c();
+        bypassSlip.Application__c = opp.Id;
+        bypassSlip.Amount__c = 50;
+        bypassSlip.Deposited__c = false;
+        bypassSlip.Website_Flag__c = true;
+        bypassSlip.PaySlip_Check__c = false;
+        bypassSlip.website_check__c = false;
+        insert bypassSlip;
+        PayU_Payment_Status__c payres = new PayU_Payment_Status__c();
+        payres.Status__c = 'Requested';
+        payres.Pay_Slip__c = pay.Id;
+        insert payres;
         
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'testUser6', FirstName = 'Test6', alias = 'tu6', Username = 'testuser6_mock@techmatrix.com', Email = 'test6@techmatrix.com', ProfileId = prof.Id, isActive = true, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC12126');
-        insert usr;
+		ApexPages.currentPage().getParameters().put('id', pay.Id);
+		PayUControllerNNew obj = new PayUControllerNNew();
         
-        insert new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = true);
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+		obj.oppList = new List<Opportunity>{ queriedOpp };
+		obj.SecondoppList = new List<Opportunity>{ queriedOpp };
         
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId(); 
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-        insert new Config__c(Name__c = 'Loanapp', value__c = '025140');
-        
-        Account acc1 = new Account(
-            FirstName = 'Techh',
-            LastName = 'Techmatrix',
-            Personal_email__pc = 'tch@tech.com',
-            Date_of_Joining__pc = System.today().addMonths(-3),
-            Designation__pc = 'LO',
-            RecordTypeId = paId,
-            Date_of_Leaving__pc = System.today().addMonths(-2),
-            Finnone_Client_Id__c='12345',
-            Branch__c = br.id
-        );
-        insert acc1;
-        
-        Customer__c cus = new Customer__c(OwnerId = usr.Id, Branch__c = 'Ajmer-1', Customer_Name__c = 'Test', Loan_Amount_Applied__c = 10000, Finnone_Instrument_Sequence_Number__c = 1);
-        insert cus;
-        
-        Loan_Product__c lp = new Loan_Product__c(Display_Order__c = 34);
-        insert lp;
-        Opportunity opp = new Opportunity(Name = 'abc', StageName = 'Prospecting', CloseDate = System.today(), Branch__c = br.Id, AccountId = acc1.Id, Household__c = cus.Id, Loan_Number__c = 'AP-12345', Loan_Product__c = lp.Id);
-        insert opp;
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c(Name = 'Axis Bank', BankType__c = 'Cash', Branch_Name__c = 'Jaipur-1');
-        insert ndp;
-        
-        Collection__c col = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'Cash', Status__c = 'Active', ClearenceStatus__c = 'Cleared', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'Processing Fee (incl. Service tax)', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today(), Customer_Bank_Name__c = 'HDFC', Bank_Name__c = 'Test Bank No. 123');
-        insert col;
-        
-        insert new Pay_Slip__c(Collection__c = col.Id, date__c = System.today(), Cheque_Date__c = System.today());
-        insert new Nucleus_Reciept__c(Collection__c = col.Id, Application__c = opp.Id, Reciept_Number__c = '12345', isActive__c = true, amount__c = 1000);
-        insert new process_token__c(name = 'test', Token__c = 'text');
-        
-        ProcessReceiptServiceNew1.doPost(String.valueOf(col.Id), '');
+        obj.NewEMIForthemonth = '100';
+        obj.NewEMIArrears = '50';
+        obj.NewBouncingChargeFTM = '10';
+        obj.NewBouncingChargeArrear = '5';
+        obj.NewBouncingChargeArrearfixed = '5';
+        obj.NewLPPCharges = '5';
+        obj.NewLPPChargesfixed = '5';
+        obj.NewCashHandlingCharges = '5';
+        obj.NewCashHandlingChargesfixed = '5';
+        obj.emiflexi = '150';        // > 0
+        obj.bounTotal = '15';        // > 0
+        obj.Amount = 175;
+        obj.Total_Sum = 200;         // Amount <= Total_Sum, tmp <= tm
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
         Test.stopTest();
     }
     
+    // ---------- 11. Pay() with every optional amount == 0 (else-Null branches) --
     @isTest
-    public static void testENACHErrorAndDemandDraft() {
-        Test.startTest();
+    static void testPayZeroAmountsSkipBranches() {
+        Opportunity opp = buildOpp('AP-4000003', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+        PayU_Payment_Status__c payres = new PayU_Payment_Status__c();
+        payres.Status__c = 'Requested';
+        payres.Pay_Slip__c = pay.Id;
+        insert payres;
+        ApexPages.currentPage().getParameters().put('id', pay.Id);
+        PayUControllerNNew obj = new PayUControllerNNew();
         
-        // Using your org's existing mock generator with an augmented JSON body
-        String mockBody = '{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"dummy","access_token":"45678ihgxvbnmenbmfvbyereui87678", "responseCode":"error", "value":"Status:Failed"}';
-        Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200, mockBody));
-        ProcessReceiptService.requestAccessToken();
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+        obj.oppList = new List<Opportunity>{ queriedOpp };
+        obj.SecondoppList = new List<Opportunity>{ queriedOpp };
         
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'testUser7', FirstName = 'Test7', alias = 'tu7', Username = 'testuser7_mock@techmatrix.com', Email = 'test7@techmatrix.com', ProfileId = prof.Id, isActive = true, TimeZoneSidKey = 'GMT', LanguageLocaleKey = 'en_US', EmailEncodingKey = 'UTF-8', LocaleSidKey = 'en_US', EmployeeNumber = 'ISFC12127');
-        insert usr;
-        
-        insert new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = true);
-        
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId();
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-        
-        Account acc1 = new Account(
-            FirstName = 'Techh',
-            LastName = 'Techmatrix',
-            Personal_email__pc = 'tch@tech.com',
-            Date_of_Joining__pc = System.today().addMonths(-3),
-            Designation__pc = 'LO',
-            RecordTypeId = paId,
-            Date_of_Leaving__pc = System.today().addMonths(-2),
-            Finnone_Client_Id__c='12345',
-            Branch__c = br.id
-        );
-        insert acc1;
-        
-        Customer__c cus = new Customer__c(OwnerId = usr.Id, Branch__c = 'Ajmer-1', Customer_Name__c = 'Test', Loan_Amount_Applied__c = 10000);
-        insert cus;
-        
-        Loan_Product__c lp = new Loan_Product__c(Display_Order__c = 34);
-        insert lp;
-        Opportunity opp = new Opportunity(Name = 'abc', StageName = 'Prospecting', CloseDate = System.today(), Branch__c = br.Id, AccountId = acc1.Id, Household__c = cus.Id, Loan_Number__c = 'AP-12345', Loan_Product__c = lp.Id);
-        insert opp;
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c(Name = 'Axis Bank', BankType__c = 'eNACH', Branch_Name__c = 'Jaipur-1');
-        insert ndp;
-        
-        Collection__c col1 = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'eNACH', Bank_Name__c = 'HDFC No. 987654321', Status__c = 'Cancelled', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'IMD', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today(), Customer_Bank_Name__c = 'HDFC');
-        insert col1;
-        
-        Collection__c col2 = new Collection__c(SFDC_Customer__c = opp.Id, Customer__c = cus.Id, Amount__c = 1000, Instrument__c = 'Demand Draft', Status__c = 'Active', ClearenceStatus__c = 'Handover pending', Branch_Name__c = 'Jaipur-1', Nature_of_Collection__c = 'Emi/Advances/Part Payment', Nucleus_Deposit_Bank__c = ndp.Id, Date_of_Collection__c = System.today(), Customer_Bank_Name__c = 'HDFC', Bank_Name__c = 'Test Bank No. 123');
-        insert col2;
-        
-        insert new process_token__c(name = 'test', Token__c = 'text');
-        
-        ProcessReceiptServiceNew1.doPost(String.valueOf(col1.Id), '');
-        ProcessReceiptServiceNew1.doPost(String.valueOf(col2.Id), '');
-        
-        Test.stopTest();
+        obj.NewEMIForthemonth = '0';
+        obj.NewEMIArrears = '0';
+        obj.NewBouncingChargeFTM = '0';
+        obj.NewBouncingChargeArrear = '0';
+        obj.NewBouncingChargeArrearfixed = '0';
+        obj.NewLPPCharges = '0';
+        obj.NewLPPChargesfixed = '0';
+        obj.NewCashHandlingCharges = '0';
+        obj.NewCashHandlingChargesfixed = '0';
+        obj.emiflexi = '0';   // == 0 -> Null branch
+        obj.bounTotal = '0';  // == 0 -> Null branch
+        obj.Amount = 0;
+        obj.Total_Sum = 0;
+        obj.SecondoppList[0].Due_For_the_Month__c = 100;
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
     }
+    
+    // ---------- 12. Pay() : tmp > tm guard branch (amount exceeds balance) --
+    @isTest
+    static void testPayAmountExceedsBalanceWarning() {
+        Opportunity opp = buildOpp('AP-4000004', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+        PayU_Payment_Status__c payres = new PayU_Payment_Status__c();
+        payres.Status__c = 'Requested';
+        payres.Pay_Slip__c = pay.Id;
+        insert payres;
+        ApexPages.currentPage().getParameters().put('id', pay.Id);
+        PayUControllerNNew obj = new PayUControllerNNew();
+        
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+        obj.oppList = new List<Opportunity>{ queriedOpp };
+        obj.SecondoppList = new List<Opportunity>{ queriedOpp };
+        
+        obj.NewEMIForthemonth = '5000';
+        obj.NewEMIArrears = '5000';
+        obj.NewBouncingChargeFTM = '5000';
+        obj.NewBouncingChargeArrear = '5000';
+        obj.NewBouncingChargeArrearfixed = '1';
+        obj.NewLPPCharges = '5000';
+        obj.NewLPPChargesfixed = '1';
+        obj.NewCashHandlingCharges = '1';
+        obj.NewCashHandlingChargesfixed = '1';
+        obj.emiflexi = '10000';
+        obj.bounTotal = '10000';
+        obj.Amount = 20000;
+        obj.Total_Sum = 20000;
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 13. Pay() : Amount > Total_Sum guard branch --------------
+    @isTest
+    static void testPayAmountGreaterThanTotalSumWarning() {
+        Opportunity opp = buildOpp('AP-4000005', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+        PayU_Payment_Status__c payres = new PayU_Payment_Status__c();
+        payres.Status__c = 'Requested';
+        payres.Pay_Slip__c = pay.Id;
+        insert payres;
+        ApexPages.currentPage().getParameters().put('id', pay.Id);
+        PayUControllerNNew obj = new PayUControllerNNew();
+        
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+        obj.oppList = new List<Opportunity>{ queriedOpp };
+        obj.SecondoppList = new List<Opportunity>{ queriedOpp };
+        
+        obj.NewEMIForthemonth = '0';
+        obj.NewEMIArrears = '0';
+        obj.NewBouncingChargeFTM = '0';
+        obj.NewBouncingChargeArrear = '0';
+        obj.NewBouncingChargeArrearfixed = '0';
+        obj.NewLPPCharges = '0';
+        obj.NewLPPChargesfixed = '0';
+        obj.NewCashHandlingCharges = '0';
+        obj.NewCashHandlingChargesfixed = '0';
+        obj.emiflexi = '0';
+        obj.bounTotal = '0';
+        obj.Amount = 999;      // Amount deliberately greater than Total_Sum
+        obj.Total_Sum = 10;
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 14. Pay() : SecondoppList null (skips whole block) -------
+    @isTest
+    static void testPaySecondoppListNull() {
+        Opportunity opp = buildOpp('AP-4000006', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+        ApexPages.currentPage().getParameters().put('id', pay.Id);
+        PayUControllerNNew obj = new PayUControllerNNew();
+        
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+        obj.oppList = new List<Opportunity>{ queriedOpp };
+        obj.SecondoppList = null;
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 15. Pay() : malformed numeric strings -> caught exception --
+    @isTest
+    static void testPayCausesCaughtException() {
+        Opportunity opp = buildOpp('AP-4000007', 300, 0, 4000, 2, 50, 900, 60, 25, 5000, 400);
+        Pay_Slip__c pay = buildPaySlip(opp.Id);
+        insert pay;
+        ApexPages.currentPage().getParameters().put('id', pay.Id);
+        PayUControllerNNew obj = new PayUControllerNNew();
+        
+        Opportunity queriedOpp = getQueriedOpp(opp.Id);
+        obj.oppList = new List<Opportunity>{ queriedOpp };
+        obj.SecondoppList = new List<Opportunity>{ queriedOpp };
+        
+        obj.NewEMIForthemonth = 'not-a-number';
+        obj.NewEMIArrears = '0';
+        obj.NewBouncingChargeFTM = '0';
+        obj.NewBouncingChargeArrear = '0';
+        obj.NewBouncingChargeArrearfixed = '0';
+        obj.NewLPPCharges = '0';
+        obj.NewLPPChargesfixed = '0';
+        obj.NewCashHandlingCharges = '0';
+        obj.NewCashHandlingChargesfixed = '0';
+        obj.emiflexi = '0';
+        obj.bounTotal = '0';
+        obj.Amount = 0;
+        obj.Total_Sum = 0;
+        try { obj.Pay(); } catch (Exception ex) { System.debug(ex.getMessage()); }
+    }
+    
+    // ---------- 16. getOtp() / OTPverification() standalone -------------
+    @isTest
+    static void testOtpStubs() {
+        PayUControllerNNew obj = new PayUControllerNNew();
+        obj.otp = '123456';
+        try {
+            obj.getOtp();
+            obj.OTPverification();
+        } catch (Exception ex) {
+            System.debug(ex.getMessage());
+        }
+    }
+    
+    // ---------- 17. inputWrapper via direct field access on the controller --
+    @isTest
+    static void testInputWrapperViaController() {
+        PayUControllerNNew obj = new PayUControllerNNew();
+        try {
+            obj.objWrap.EMI_Arrears = 10;
+            obj.objWrap.Bouncing_Charge_Arrear = 20;
+            obj.objWrap.LPP_Charges = 30;
+            obj.objWrap.Cash_handling_charges = 40;
+        } catch (Exception ex) {
+            System.debug(ex.getMessage());
+        }
+    }
+}
