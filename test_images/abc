@@ -1,3 +1,6 @@
+Here ia an apex class create a test class for this with max coverage and same style and objects i generally use
+
+
 @RestResource(urlMapping='/dashboardApiV1/*')
 global with sharing class DashboardApi_V1 {
 	// Response Status
