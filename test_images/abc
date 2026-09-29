@@ -1,28 +1,106 @@
-@isTest
-static void testGetDetail_SuccessPath() {
-    RestRequest req = new RestRequest();
-    RestResponse res = new RestResponse();
+public class DecryptionUtil {
     
-    req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
-    req.httpMethod = 'GET';
+  // AES Encryption (256-bit key, managed IV)
+  /*public static Map<String, String> encrypt(String plainText, String keyStr) {
+    Map<String, String> result = new Map<String, String>();
+    try {
+        String base64IV = '6543210987654321';
+        Blob key = Blob.valueOf(keyStr); // Must be 16 characters
+        Blob iv = Blob.valueOf(base64IV);//Crypto.generateAesKey(128); // 16 bytes
+        Blob input = Blob.valueOf(plainText);
+
+        Blob encrypted = Crypto.encrypt('AES128', key, iv, input);
+        
+        String base64Encoded = EncodingUtil.base64Encode(encrypted);
+        // Replace characters to make it URL-safe
+        String urlSafe = base64Encoded.replace('+', '-').replace('/', '_').replace('=', '');
+        result.put('base64Ciphertext', EncodingUtil.base64Encode(encrypted));
+        //result.put('base64Ciphertext', urlSafe);
+        
+        result.put('base64IV', EncodingUtil.base64Encode(iv));
+    } catch (Exception e) {
+        System.debug('❌ Encryption error: ' + e.getMessage());
+        throw new DecryptionException('Decryption failed: ' + e.getMessage());
+    }
+    return result;
+	}
+
+
+    public static String decryptFinal(String base64Ciphertext, String base64IV, String keyStr) {
+        base64IV = 'NjU0MzIxMDk4NzY1NDMyMQ==';
+        keyStr = '1234567890123456'; // 16-byte key
+        
+
+        // Decode everything
+        Blob key = Blob.valueOf(keyStr);
+        Blob iv = EncodingUtil.base64Decode(base64IV);
+        Blob encrypted = EncodingUtil.base64Decode(base64Ciphertext);
+
+        try {
+            Blob decrypted = Crypto.decrypt('AES128', key, iv, encrypted);
+            String result = decrypted.toString();
+            System.debug('✅ Decrypted: ' + result); // Expected: "106803 "
+            return result;
+        } catch (Exception e) {
+            System.debug('❌ Decryption error: ' + e.getMessage());
+            //return null;
+            throw new DecryptionException('Decryption failed: ' + e.getMessage());
+        }
+
+    }*/
     
-    // FIX: Provide a string that DecryptionUtil can actually decrypt.
-    // If your util has an encrypt method, use it like this:
-    // String encryptedPhone = DecryptionUtil.encryptFinal('9999999999', '', '');
-    // req.params.put('Mobile', encryptedPhone);
+  public static Map<String, String> encrypt(String plainText, String keyStr) {
+    Map<String, String> result = new Map<String, String>();
+    try {
+        String base64IV = '6543210987654321'; // 16-byte IV
+        Blob key = Blob.valueOf(keyStr); // Must be 16 characters
+        Blob iv = Blob.valueOf(base64IV);
+        Blob input = Blob.valueOf(plainText);
+
+        Blob encrypted = Crypto.encrypt('AES128', key, iv, input);
+        String base64Encoded = EncodingUtil.base64Encode(encrypted);
+
+        // Make Base64 URL-safe
+        String urlSafeEncoded = base64Encoded.replace('+', '-').replace('/', '_').replace('=', '');
+
+        result.put('base64Ciphertext', urlSafeEncoded);
+        result.put('base64IV', EncodingUtil.base64Encode(iv)); // You can also make IV URL-safe if needed
+    } catch (Exception e) {
+        System.debug('❌ Encryption error: ' + e.getMessage());
+        throw new DecryptionException('Encryption failed: ' + e.getMessage());
+    }
+    return result;
+}
+
+public static String decryptFinal(String base64Ciphertext, String base64IV, String keyStr) {
+    base64IV = 'NjU0MzIxMDk4NzY1NDMyMQ=='; // Example IV
+    keyStr = '1234567890123456'; // 16-byte key
+
+    // Restore original Base64 format
+    String base64 = base64Ciphertext.replace('-', '+').replace('_', '/');
+    while (Math.mod(base64.length(), 4) != 0) {
+   		 base64 += '=';
+	}
+
+
+    Blob key = Blob.valueOf(keyStr);
+    Blob iv = EncodingUtil.base64Decode(base64IV);
+    Blob encrypted = EncodingUtil.base64Decode(base64);
+
+    try {
+        Blob decrypted = Crypto.decrypt('AES128', key, iv, encrypted);
+        String result = decrypted.toString();
+        System.debug('✅ Decrypted: ' + result);
+        return result;
+    } catch (Exception e) {
+        System.debug('❌ Decryption error: ' + e.getMessage());
+        throw new DecryptionException('Decryption failed: ' + e.getMessage());
+    }
+}
+
     
-    // OR, if you don't have an encrypt method, paste a known valid encrypted string from your logs:
-    req.params.put('Mobile', 'PASTE_A_VALID_ENCRYPTED_STRING_HERE');
     
-    req.params.put('Source', 'TestApp');
-    req.params.put('currentVersion', '1.0');
-    
-    RestContext.request = req;
-    RestContext.response = res;
-    
-    Test.startTest();
-    DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-    Test.stopTest();
-    
-    System.assertEquals('200', responseWrapper.response.resCode, 'Response Code should be 200 Success');
+	
+	public class DecryptionException extends Exception {}
+
 }
