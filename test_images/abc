@@ -1,992 +1,242 @@
-Here ia an apex class create a test class for this with max coverage and same style and objects i generally use
-
-
-@RestResource(urlMapping='/dashboardApiV1/*')
-global with sharing class DashboardApi_V1 {
-	// Response Status
-    global class ResponseCode{
-        public String resMessage;
-        public String resCode;
-        ResponseCode(){
-            resMessage='';
-            resCode='';
-        }
-    }
-    global class ReferralOffer{
-        Id recordId;
-        public String title;
-        public Integer referCount;
-        public List<ReferralData> dataList;
-       
-        ReferralOffer(){
-            title ='';
-            referCount =0; 
-            dataList=null;
-        }
-    }
+@isTest
+public class DashboardApi_V1_Test {
     
-    /*Vijay Uniyal added on 18 jun 2024 for dynamic Parameters for loan details card layout*/
-    global class DynamicParameters{
-        public String label;
-        public String value;
-        public Integer sequenceNumber;
+    @testSetup
+    static void setupTestData() {
+        // 1. Setup Account (Mimicking Person Account structure as per __pc fields)
+        Account testAcc = new Account(
+            Name = 'Test Applicant Account',
+            Property_Status__c = true,
+            Smart_Input_Flow__c = true,
+            // Assuming these are custom fields on your Account object
+            Sex__pc = 'Male',
+            Date_Of_Birth__pc = Date.newInstance(1990, 1, 1),
+            Mother_s_Name__pc = 'Test Mother',
+            Pan_Card_No__pc = 'ABCDE1234F'
+        );
+        insert testAcc;
         
-        DynamicParameters(){
-            label ='';
-            value ='';
-            sequenceNumber =0;             
-        }
-    }
-    
-   global class TimelineParameters{
-        public String label;
-        public Date value;
-        public Integer sequenceNumber;
+        // 2. Setup Contact
+        Contact testCon = new Contact(
+            LastName = 'Test Contact',
+            AccountId = testAcc.Id,
+            MobilePhone = '9999999999',
+            Mobile__c = '9999999999'
+        );
+        insert testCon;
         
-        TimelineParameters(){
-            label ='';
-            value =null;
-            sequenceNumber =0;             
-        }
-    }
-    
-    global class ReferralData{
-        Id recordId;
-        public String title;
-        public String leadcode;
-        public String status;
-        ReferralData(){
-            title ='';
-            leadcode ='';
-            status='';   
-           
-        }
-    }
-    
-    global class InsuranceParameters{
-        public String label;
-        public String document;
+        // 3. Setup CustomerAppLoginLog__c
+        CustomerAppLoginLog__c loginLog = new CustomerAppLoginLog__c(
+            Version__c = '1.0',
+            EaseBuzz__c = true,
+            PayU__c = true,
+            IsActive__c = true
+        );
+        insert loginLog;
         
-        InsuranceParameters(){
-            label ='';
-            document ='';          
-        }
-    }
-    
-    global class LoanOffers{
-        Id recordId;
-        public String title;
-        public String offer;
-        public String loanPurpose;
-        public String offerType;
-        public boolean isOfferAvail;
-        public String OfferKey;
-        LoanOffers(){
-            title ='';
-            offer ='';
-            loanPurpose='';
-            offerType='';
-            isOfferAvail=false;
-            OfferKey='';
-            
-        }
-    }
-    
-    
-    global class LeadsRequest{
-        Id recordId;
-    }
-    
-    global class LoanTimeLine{
-        public Date LoanCreationDate;
-        public Date LoanSanctionDate;
-        public Date FirstEmiDate;
-        public Date Disbursementdate;
-        public Date lastPaymnetdate;
+        // 4. Setup Service_Request_iServe_App__c
+        Service_Request_iServe_App__c serviceReq = new Service_Request_iServe_App__c(
+            Name = 'Test Service',
+            URL__c = 'https://test.com',
+            Is_Active__c = true
+        );
+        insert serviceReq;
         
-        LoanTimeLine(){
-            LoanCreationDate= null;
-            LoanSanctionDate= null;
-            FirstEmiDate= null;
-            Disbursementdate= null;
-            lastPaymnetdate= null;
-        }
-    }
-    // Response body
-    global class LoanParameter {
-        Id oppertunityId;
-        Id ApplicantId;
-        Id HouseholdId;
-        public String LoanAccountNumber;
-        public String LoanAccountName;
-        public String Loantype;
-        public String LoanStatus;
-        public Date LoanCreationDate;
-        public Decimal LoanAmmount;
-        public Integer CompletionPercentage;
-        public Decimal OverDueAmmout;
-        public Decimal Term;
-        public Date NextEmiDate;
-        public Decimal MonthlyEmi;
-        public Integer CompletedServiceRequest;
-        public Integer PendingServiceRequest;
-        public Integer StDocCount;
-        public Integer ServiceQueryCount;
-        public Integer ProcessingFeePaid;
-        public Integer StampDutyAmooundPaid;
-        public Integer EsignCompleted;
-        public Integer RequestDisbursemenet;
-        public Integer HasCase;
-        public String FinOneLoanId;
-        public String applicationId;
-        public Decimal rateOfInterest;
-        public boolean enableROI;
-        public boolean enableTenure;
-        public boolean cashbackAvail;
-        public String welcomeKitUrl;
-        public Date firstDisbursementdate;
-        public Date lastPaymnetdate;
-        public Decimal Disbursementamount;
-        public Date SanctionDate;
-        public Decimal PendingDisbursement; //added on 12 Jun 2025 for PendingDisbursement Card vijay uniyal
-        public Decimal BalanceCollectable; //added on 12 Jun 2025 for PendingDisbursement Card vijay uniyal
-        public boolean LastDisbursementDate; //added on 12 Jun 2025 for PendingDisbursement Card vijay uniyal
-        public List<DynamicParameters> loanDetailsList;
-        public LoanTimeLine timeline;
-        public List<TimelineParameters> loanTimelineList;
-        public List<InsuranceParameters> insuranceList; //added on 24 Dec 2024 for insuarance Services vijay uniyal
-        public boolean SOAPaymentAllowed;  //added on 1 April 2025 Vijay Uniyal for SOA PAyment allowed in APP
-        /*Vijay Uniyal added for show/hide service card in iserve app on 15 Jul 2025*/
-        public boolean CriticalillnessInsurance;
- 		public boolean HealthInsurance;
- 		public boolean InterestCertificate;
- 		public boolean LifeInsurance;
- 		public boolean PropertyInsurance;
+        // 5. Setup Lead & Customer__c for Refer and Earn
+        Lead testLead = new Lead(
+            LastName = 'Referral Lead',
+            Customer_Mobile_No__c = '9999999999',
+            Lead_Phone_Number_1__c = '9999999999',
+            Lead_Code__c = 'LD-001',
+            Status = 'New',
+            How_did_you_come_to_know_about_us__c = 'Customer Referral',
+            LeadSource = 'CustomerApp'
+        );
+        insert testLead;
         
+        Customer__c testCustomer = new Customer__c(
+            Name = 'Test Customer',
+            Mobile__c = '9999999999',
+            Alternate_Mobile_No__c = '9999999999',
+            Lead_Code__c = 'LD-001'
+        );
+        insert testCustomer;
         
+        // 6. Setup Opportunities with different Stages for distinct branch coverage
+        List<Opportunity> oppList = new List<Opportunity>();
         
-        LoanParameter(){
-            welcomeKitUrl='';
-            LoanAccountNumber ='';
-            LoanAccountName ='';
-            Loantype='';
-            LoanStatus='';
-            LoanCreationDate= null;
-            LoanAmmount=0.0;
-            CompletionPercentage = 0;
-            OverDueAmmout=0.0;
-            Term=0.0;
-            NextEmiDate=null;
-            MonthlyEmi=0.0;
-            ServiceQueryCount=0;
-            CompletedServiceRequest=0;
-            PendingServiceRequest=0;
-            StDocCount=0;
-            ProcessingFeePaid = 0;
-            StampDutyAmooundPaid = 0;
-            EsignCompleted = 0;
-            RequestDisbursemenet = 0;
-            HasCase = 0;
-            FinOneLoanId = '';
-            applicationId = '';
-            rateOfInterest=0.0;
-            enableROI=false;
-            enableTenure=false;
-            cashbackAvail=false;
-            firstDisbursementdate=null;//Date.newInstance(2022, 10, 12);
-            lastPaymnetdate=null;//Date.newInstance(2024, 06, 09);
-            Disbursementamount=20000.00;
-            loanDetailsList=new List<DynamicParameters>();
-            timeline=null;
-            SanctionDate=null;
-            loanTimelineList=new List<TimelineParameters>();
-            insuranceList=new List<InsuranceParameters>();
-            SOAPaymentAllowed=false;
-            PendingDisbursement=0.0;
-            BalanceCollectable=0.0;
-            LastDisbursementDate=false;
-            CriticalillnessInsurance=true;
- 		    HealthInsurance=true;
- 		    InterestCertificate=true;
- 		    LifeInsurance=true;
- 		    PropertyInsurance=true;
-            
-        }
-    }
-    
-    global class WrapperClass{
-        List<LoanParameter> loanList = new List<LoanParameter>();
-        List<LoanOffers> offers=new List<LoanOffers>();
-        List<LeadsRequest> leads=new List<LeadsRequest>();  
-        List<ReferralOffer> referEarnList=new List<ReferralOffer>();
-        List<Service_Request_iServe_App__c> allowedServicesList=new List<Service_Request_iServe_App__c>();
-        String refferContent;
-        String partialPaymentAllowed;
-        String myreferalEarning='0.0';
-        boolean EaseBuzzPayment=false;
-        boolean PayUPayment=false;
-        ResponseCode response = new ResponseCode();
-    }
-    
-    // method Get
-    @HttpGet
-    global Static WrapperClass getDetail(){
+        // Opp 1: Sanctioned
+        Opportunity oppSanc = new Opportunity(
+            Name = 'Sanctioned Opp',
+            AccountId = testAcc.Id,
+            Household__c = testCustomer.Id,
+            StageName = 'Qualification',
+            CloseDate = Date.today().addDays(30),
+            LM_Loan_Status__c = 'Sanctioned',
+            Loan_Number__c = 'LN-001',
+            Purpose_of_loan__c = 'Home Purchase',
+            Sanctioned_Amont__c = 500000,
+            Sanc_EMI__c = 5000,
+            Sanctioned_Tenure__c = 120,
+            Pending_Disbursement__c = 50000,
+            Balance_Collectable__c = 1000
+        );
+        oppList.add(oppSanc);
         
-        try {
-            WrapperClass wrapper = new WrapperClass();
-            
-            /*Vijay added on 23 Jan 2024 for Partial payment option configurable on customer label start*/
-            wrapper.partialPaymentAllowed = System.Label.CustomerAppPartialPaymentAllowed;
-            /*Vijay added on 23 Jan 2024 for Partial payment option configurable  on customer label end*/
-            RestRequest request = RestContext.request;
-            
-            Map<String ,String> mapdata=request.params;
-            System.debug(mapdata.get('Mobile'));
-            String phone=DecryptionUtil.decryptFinal(mapdata.get('Mobile'),'','');//mapdata.get('Mobile');
-            System.debug('phone'+phone);
-            String source=mapdata.get('Source');
-            String currentVersion=mapdata.get('currentVersion'); 
-            
-			/*Vijay Uniyal changes on 16 feb 2023, change in query to fetch contact name from opportunityContactRole of Main applicant. also replace Opportunity.Name with Contact.Name*/	            
-            if(!String.isBlank(phone)){
-                system.debug('inside phone'+phone);
-               for(CustomerAppLoginLog__c allowData : [select Version__c,EaseBuzz__c,PayU__c from CustomerAppLoginLog__c where IsActive__c=true and Version__c=:currentVersion]){
-                   if(allowData.EaseBuzz__c==true){
-                       wrapper.EaseBuzzPayment=true;
-                   }
-                   if(allowData.PayU__c==true){
-     				   wrapper.PayUPayment=true;                 
-                   }
-                        system.debug('allowed Version'+allowData.Version__c);
-               }
-                
-                
-               List<Service_Request_iServe_App__c> allowedServices = [SELECT Name, URL__c, Is_Active__c FROM Service_Request_iServe_App__c where Is_Active__c=true];
-                for (Service_Request_iServe_App__c record : allowedServices) {
-                    System.debug('DeveloperName: ' + record.Name + ', MasterLabel: ' + record.Name);
-                    wrapper.allowedServicesList.add(record);
-                    // Add more fields as needed
-                }
-                //Customer_Notification__c notification=[SELECT Offer_Key__c from Customer_Notification__c where Offer_Key__c<>'' and Mobile_Number__c=:phone and Notification_Sent__c=true limit 1];
-                
-                /*Vijay Uniyal added below for loop for viewing offers to customer based on mobile number and offer type mapped in tables start: added on 2 Aug 2023*/
-                /* comments on 5 Feb 2024:
-                 *  for(Customer_App_Offers_visibility__c notification :[select Offer_Key__c from Customer_App_Offers_visibility__c where Offer_Key__c<>'' and Mobile_Number__c=:phone  limit 1]){
-                    system.debug('inside notification');
-                    List<String> lstAlpha = notification.Offer_Key__c.split(',');
-                        for (customerAppOffers__c setting : customerAppOffers__c.getAll().values()){
-                       system.debug(lstAlpha+' inside notification'+setting.Name);
-                            if(lstAlpha.contains(setting.Name)){   
-                            LoanOffers lo= new LoanOffers();
-                            lo.title=setting.title__c;
-                            lo.offer=setting.offers__c;
-                            lo.recordId=setting.Id;
-                            lo.loanPurpose=setting.loanpurpose__c;
-                            lo.offerType=setting.offerType__c;
-                            wrapper.offers.add(lo);
-                        }
-                    }
-                }*/
-               /*Vijay Uniyal added below for loop for viewing offers to customer based on mobile number and offer type mapped in tables End: added on 2 Aug 2023*/
-                /*Vijay Uniyal update on 5-feb-2024 offer population based on the data find in customer_app_offer_visibilty as per new logic customerappoffer customer setting are not allowed:START*/
-                for(Customer_App_Offers_visibility__c notification :[select isOfferAvail__c,Offer_Key__c,offerLoanPurpose__c,offerAmount__c,offerTitle__c,offerType__c,offerValidtill__c from Customer_App_Offers_visibility__c where Offer_Key__c<>'RS' and Mobile_Number__c=:phone and isOfferAvail__c=false and offerValidtill__c>= TODAY]){
-                    	   system.debug('inside notification');
-                            LoanOffers lo= new LoanOffers();
-                            lo.title=notification.offerTitle__c;
-                            lo.offer=notification.offerAmount__c;
-                            lo.recordId=notification.Id;
-                            lo.loanPurpose=notification.offerLoanPurpose__c;
-                            lo.offerType=notification.offerType__c;
-                    		lo.isOfferAvail=notification.isOfferAvail__c;
-            				lo.OfferKey=notification.Offer_Key__c;
-                            wrapper.offers.add(lo);                        
-                   
-                }
-                
-                //Vijay Uniyal added on 9 may 2024 for refer and earn grid data population
-                 List<ReferralData> listRef=new List<ReferralData>();
-                 List<String> leads=new List<String>(); 
-                 for(Lead lds:[select Id,Lead_Code__c,Status from Lead where  (How_did_you_come_to_know_about_us__c='Customer Referral') AND LeadSource='CustomerApp' AND Customer_Mobile_No__c =:phone])
-                 {
-                 		    
-                     	    ReferralData lo= new ReferralData();
-                            lo.title=lds.Status == 'Rejected' ? 'DECLINED':'INPROGRESS';
-                            lo.leadcode=lds.Lead_Code__c;
-                            lo.status=lds.Status;
-                            lo.recordId=lds.Id;
-                            if(lds.Status != 'Rejected'){
-                                    leads.add(lds.Lead_Code__c);                         
-                            }
-                            listRef.add(lo);
-                 }
-                
-              
-                 for(Customer__c earnList :[select Id,Lead_Code__c from Customer__c where Lead_Code__c IN:leads]){
-                     
-                  	  for(Opportunity opprefer:[SELECT Id,LM_Loan_Status__c from Opportunity c where Household__c =: earnList.Id]){
-                          if(opprefer.LM_Loan_Status__c=='Reject' || opprefer.LM_Loan_Status__c=='Cancel'){                              
-                              for(Integer i=0;i<listRef.Size();i++){
-                                  if(listRef[i].leadcode==earnList.Lead_Code__c){
-                                      listRef[i].title='DECLINED';                                      
-                                  }
-                              }
-                              
-                          }else{
-                              for(Disbursement__c disbur:[Select Id,Date_of_Disbursement__c,Disb_Status__c from Disbursement__c where Application__c=:opprefer.Id and Disb_Status__c in ('Payment Processed','Handed over customer') order by Id asc limit 1]){ 
-                                    for(Integer i=0;i<listRef.Size();i++){
-                                        if(listRef[i].leadcode==earnList.Lead_Code__c){
-                                            listRef[i].title='DISBURSED';                                               
-                                        }
-                                    }
-                              } 
-                          }
-                              
-                     }
-                 			
-                 }
-                    Map<String, Integer> titleCountMap = new Map<String, Integer>();
-                    titleCountMap.put('INPROGRESS',0);
-                	titleCountMap.put('DECLINED',0);
-                	titleCountMap.put('DISBURSED',0);
-                
-                
-                    for (ReferralData obj : listRef) {
-                        if (titleCountMap.containsKey(obj.title)) {
-                            titleCountMap.put(obj.title, titleCountMap.get(obj.title) + 1);
-                        } else {
-                            titleCountMap.put(obj.title, 1);
-                        }
-                    }
-                
-                	for (String title : titleCountMap.keySet()) {
-                        ReferralOffer tc = new ReferralOffer();
-                        tc.title = title;
-                        tc.referCount = titleCountMap.get(title);
-                        wrapper.referEarnList.add(tc);
-                    }
-                    
-                
-                
-                /*Vijay Uniyal update on 5-feb-2024 offer population based on the data find in customer_app_offer_visibilty as per new logic customerappoffer customer setting are not allowed:END*/
-                /*Vijay Uniyal added for fetching Loan Offers 20 Jun 2023 start*/
-                
-    			
-                /*VIjay Uniyal added on 21 July 2023 for Offer Lead Count*/
-                for(Lead ld:[Select Id from Lead where Lead_Phone_Number_1__c=:phone]){  
-                    LeadsRequest lr= new LeadsRequest();
-                    lr.recordId=ld.Id;
-                    wrapper.leads.add(lr);
-                }
-                
-                /*Vijay Uniyal ended 21 July 2023*/
-                // wrapper.loanList.add(loanpara);
-                /*Vijay Uniyal added for fetching Loan Offers 20 Jun 2023 send*/ 
-                
-                /*Vijay Uniyal changes on 28 Mar 2023 for app login for customer with primary and alternative mobile start*/
-                List<Customer__c> custlist=[select Id from Customer__c where Mobile__c=:phone or Alternate_Mobile_No__c=:phone];
-                List<String> ProdCodes = new List<String>();
-                for(Customer__c ol : custlist){
-                    ProdCodes.add(ol.Id);
-                }
-                /*Vijay Uniyal 28 Mar 2023 end*/
-                              
-                List<OpportunityContactRole> oppDataList = [SELECT
-                                                           	Opportunity.Id,
-                                                            Opportunity.AccountId,
-                                                           	Opportunity.Name,
-                                                           	Opportunity.Loan_Number__c,
-                                                           	Opportunity.Purpose_of_loan__c,
-                                                           	Opportunity.LM_Loan_Status__c,
-                                                            Opportunity.Loan_Amount_Applied__c,
-                                                            Opportunity.Finnone_Loan_Id__c,
-                                                            Opportunity.Loan_Amount_Required__c,
-                                                            Opportunity.Principal_Overdue__c,
-                                                            Opportunity.ECS_Presentation_Date__c,
-                                                            Opportunity.Household__c,
-                                                            Opportunity.CreatedDate,Contact.Name,
-                                                            OpportunityContactRole.Role,
-                                                            Opportunity.Effective_ROI__c,
-                                                            Opportunity.Disbursed_Amount__c,
-                                                            Opportunity.Sanc_EMI__c,
-                                                            Opportunity.Sanctioned_Amont__c,
-                                                            Opportunity.Sanctioned_Tenure__c,
-                                                            Opportunity.Sanctioned_Date__c,
-                                                            Opportunity.Pending_Disbursement__c,
-                                                            Opportunity.Balance_Collectable__c
-                                                            
-                                                           	from OpportunityContactRole c where (Contact.Mobile__c=:phone or Opportunity.Household__c IN: ProdCodes )
-                                                             AND (OpportunityContactRole.Role in ('Loan - Co-Applicant','Main Applicant','Co-Applicant 1','Co-Applicant 2','Co-Applicant 3','Co-Applicant 4','Co-Applicant 5','Guarantor') or  OpportunityContactRole.MyRole1__c in ('Loan - Main Applicant','Loan - Co-Applicant','Loan - Guarantor'))
-                                                            AND (Opportunity.LM_Loan_Status__c='Sanctioned'
-                                                                 OR Opportunity.LM_Loan_Status__c='Pending'
-                                                                 OR Opportunity.LM_Loan_Status__c='Partially Disbursed' 
-                                                                 OR Opportunity.LM_Loan_Status__c='Fully Disbursed (Active)' 
-                                                                // OR Opportunity.LM_Loan_Status__c LIKE '%Prepaid%'
-                                                           		 OR Opportunity.LM_Loan_Status__c= 'New Login'
-                                                           		 OR Opportunity.LM_Loan_Status__c= 'In process')];
-                system.debug('oppDataList size '+oppDataList.size());
-                if(oppDataList.size()>0){
-                    Map<Id,OpportunityContactRole> oppContactsroles = new Map<Id,OpportunityContactRole>();
-                    
-                    for(OpportunityContactRole opp: oppDataList){
-                        oppContactsroles.put(opp.Opportunity.Id, opp);
-                    }
-                    List<String> oppCode = new List<String>();
-                    for(OpportunityContactRole opp: oppDataList){
-                        oppCode.add(opp.Opportunity.Id);
-                    }
-                      
-                    for(OpportunityContactRole opp: oppContactsroles.values()){
-                        
-                        LoanParameter loanpara = new LoanParameter();
-                        loanpara.oppertunityId = opp.Opportunity.Id;
-                        loanpara.ApplicantId = opp.Opportunity.AccountId;
-                        loanpara.HouseholdId = opp.Opportunity.Household__c;
-                        loanpara.LoanAccountNumber =  opp.Opportunity.Loan_Number__c;
-                        loanpara.rateOfInterest=opp.Opportunity.Effective_ROI__c;
-                        loanpara.SanctionDate=opp.Opportunity.Sanctioned_Date__c;
-                        
-                        //shivam added on 31 may 2024 populate data from application
-                        loanpara.LoanAmmount = opp.Opportunity.Sanctioned_Amont__c;
-                        loanpara.MonthlyEmi = opp.Opportunity.Sanc_EMI__c;                        
-                        loanpara.Term = opp.Opportunity.Sanctioned_Tenure__c;
-                        
-                        //vijay uniyal 16 Feb 2023 comment below line and new line.
-                        //vijay uniyal added 10 Jun 2025
-                        if(opp.Opportunity.Pending_Disbursement__c!=null){
-                        	loanpara.PendingDisbursement = opp.Opportunity.Pending_Disbursement__c;    
-                        }
-                        
-                        if(opp.Opportunity.Balance_Collectable__c!=null){
-                        	loanpara.BalanceCollectable = opp.Opportunity.Balance_Collectable__c;    
-                        }
-                        
-						Date fifteenDaysAgo = Date.today().addDays(-15);
-                        List<Disbursement__c> allDisbursements=[SELECT Date_of_Disbursement__c,Disb_Status__c FROM Disbursement__c WHERE Application__c=:opp.Opportunity.Id  order by Date_Created__c desc limit 1];   
-                        // and (Date_of_Disbursement__c <= :fifteenDaysAgo or Date_of_Disbursement__c=null)
-                        List<Disbursement__c> filtered = new List<Disbursement__c>();  
-                        system.debug('allDisbursements---------'+allDisbursements);
-                        for (Disbursement__c d : allDisbursements) {
-                            system.debug('d.Date_of_Disbursement__c---------'+d.Date_of_Disbursement__c);
-                            if (d.Date_of_Disbursement__c !=null && d.Date_of_Disbursement__c<=fifteenDaysAgo && ( d.Disb_Status__c == null || !d.Disb_Status__c.containsIgnoreCase('Cancelled'))) {
-                                filtered.add(d);
-                            }
-                        }
-                        system.debug('filtered---------'+filtered);
-                        if(filtered!=null && filtered.Size()>0){
-                            loanpara.LastDisbursementDate=true;
-                        }
-
-	
-                        //
-                        //vijay uniyal 16 Feb 2023 comment below line and new line.
-                        
-                        
-                        //loanpara.LoanAccountName = opp.Opportunity.Name;
-                        if(opp.Role=='Main Applicant'){
-                        	loanpara.LoanAccountName = opp.Contact.Name;
-                        }else{
-                            //vijay uniyal 13 Mar 2023 added below code for fetching main applicant name for co-application and Guarantor login
-                             List<OpportunityContactRole> oppSubDataList = [SELECT
-                                                            Opportunity.CreatedDate,Contact.Name
-                                                           	from OpportunityContactRole where Opportunity.Loan_Number__c=:opp.Opportunity.Loan_Number__c 
-                                                                AND OpportunityContactRole.Role='Main Applicant'
-                                                             AND (Opportunity.LM_Loan_Status__c='Sanctioned'
-                                                                 OR Opportunity.LM_Loan_Status__c='Pending'
-                                                                 OR Opportunity.LM_Loan_Status__c='Partially Disbursed' 
-                                                                 OR Opportunity.LM_Loan_Status__c='Fully Disbursed (Active)' 
-                                                                 OR Opportunity.LM_Loan_Status__c LIKE '%Prepaid%'
-                                                           		 OR Opportunity.LM_Loan_Status__c= 'New Login'
-                                                           		 OR Opportunity.LM_Loan_Status__c= 'In process')];
-                            system.debug('opp.Opportunity.Loan_Number__c '+opp.Opportunity.Loan_Number__c );
-                            if(oppSubDataList==null || oppSubDataList.size()==0){
-                                system.debug('inside oppSubDataList ----------'+oppSubDataList.size());
-                                oppSubDataList = [SELECT
-                                                            Opportunity.CreatedDate,Contact.Name
-                                                           	from OpportunityContactRole where Opportunity.Loan_Number__c=:opp.Opportunity.Loan_Number__c 
-                                                                AND (OpportunityContactRole.Role1__c='Loan - Main Applicant' OR OpportunityContactRole.MyRole1__c='Loan - Main Applicant')
-                                                             AND (Opportunity.LM_Loan_Status__c='Sanctioned'
-                                                                 OR Opportunity.LM_Loan_Status__c='Pending'
-                                                                 OR Opportunity.LM_Loan_Status__c='Partially Disbursed' 
-                                                                 OR Opportunity.LM_Loan_Status__c='Fully Disbursed (Active)' 
-                                                                 OR Opportunity.LM_Loan_Status__c LIKE '%Prepaid%'
-                                                           		 OR Opportunity.LM_Loan_Status__c= 'New Login'
-                                                           		 OR Opportunity.LM_Loan_Status__c= 'In process')];
-                                
-                                system.debug('inside oppSubDataList after ----------'+oppSubDataList.size());
-                            }
-                            
-                            loanpara.LoanAccountName = oppSubDataList[0].Contact.Name;
-                        }
-                        
-                        // Vijay Uniyal changes on 27 march 2023 add condition hwen purpose of loan numm or empty pass default value
-                        if(opp.Opportunity.Purpose_of_loan__c!=null){
-                        	loanpara.Loantype = opp.Opportunity.Purpose_of_loan__c;    
-                        }else{
-                            loanpara.Loantype ='Home Purchase';
-                        }
-                        system.debug('Opportunity.Purpose_of_loan__c---------------'+Opportunity.Purpose_of_loan__c);
-                        /*Vijay Uniyal added this for validate cashback offer avail by customer on perticular application on 6 jul 23 start*/
-                            for(Customer_App_Offers__c offerObj :[select Cashback_Avail__c from Customer_App_Offers__c where Application_Id__c=:opp.Opportunity.Id]){
-                                loanPara.cashbackAvail=offerObj.Cashback_Avail__c;
-                            }                                
-                            /*Vijay Uniyal added this for validate cashback offer avail by customer on perticular application on 6 jul 23 end*/
-                        loanpara.LoanStatus = opp.Opportunity.LM_Loan_Status__c;
-                        loanpara.LoanCreationDate = opp.Opportunity.CreatedDate.date();
-                        
-
-
-                        if(opp.Opportunity.LM_Loan_Status__c=='Sanctioned'){
-                            loanpara.CompletionPercentage = 100;
-                            if([SELECT Id FROM Collection__c where SFDC_Customer__c=:opp.Opportunity.Id AND Nature_of_Collection__c='Processing Fee (incl. Service tax)' limit 1].size()>0){
-                                loanpara.ProcessingFeePaid = 1;
-                                if([SELECT Id FROM Collection__c where SFDC_Customer__c=:opp.Opportunity.Id AND Nature_of_Collection__c='Stamp Duty Amount' limit 1].size()>0 &&
-                                   [SELECT Id FROM Collection__c where SFDC_Customer__c=:opp.Opportunity.Id AND Nature_of_Collection__c='Stamp Duty Service Charge' limit 1].size()>0) {
-                                       loanpara.StampDutyAmooundPaid = 1;
-                                       List <Legality__c> legality=[SELECT Id,Leegality_Status__c FROM Legality__c where Application__c=:opp.Opportunity.Id ORDER BY CreatedDate desc limit 1];
-                                       if(legality.size()>0&&legality[0].Leegality_Status__c=='Accepted') {
-                                           loanpara.EsignCompleted = 1;
-                                           loanpara.StDocCount = checkSTDocCount(opp.Opportunity.Id,'Before Disbursement');
-                                           loanpara.RequestDisbursemenet = 1;
-                                           if(loanpara.StDocCount==0){
-                                            List<Case> caseObj=[SELECT Id FROM Case WHERE Application_Name__c=:Opp.Opportunity.Id limit 1];
-                                            if(caseObj.size()>0){
-                                                loanPara.HasCase=1;
-                                            }
-                                            else{
-                                                loanpara.HasCase=0;
-                                            }
-                                        }
-                                       }
-                                   }
-                            }
-                        }
-                        else if(opp.Opportunity.LM_Loan_Status__c == 'Partially Disbursed' || opp.Opportunity.LM_Loan_Status__c=='Fully Disbursed (Active)') 
-                        {
-                            loanpara.CompletionPercentage = 100;
-                            loanpara.StDocCount = checkSTDocCount(opp.Opportunity.Id,'2nd Tranche');
-
-                            if(opp.Opportunity.LM_Loan_Status__c == 'Partially Disbursed') {
-                                loanPara.RequestDisbursemenet = 1;
-                            }
-                            /*Vijay Uniyal added this for validate cashback offer avail by customer on perticular application on 6 jul 23 start*/
-                            for(Customer_App_Offers__c offerObj :[select Cashback_Avail__c from Customer_App_Offers__c where Application_Id__c=:opp.Opportunity.Id]){
-                                loanPara.cashbackAvail=offerObj.Cashback_Avail__c;
-                            }                                
-                            /*Vijay Uniyal added this for validate cashback offer avail by customer on perticular application on 6 jul 23 end*/
-                            List<CAM__c> camObj=[SELECT Approved_HL_Loan_Amount__c,
-                                                 		Approved_HL_Tenor__c,
-                                                 		Approved_HL_EMI__c,
-                                                    	(SELECT Id from ST_Conditions__r WHERE Expected_Time__c='2nd Tranche' AND Document_Received__c!='Yes')
-                                                    	from CAM__c where Loan_Application__c=:opp.Opportunity.Id order by CreatedDate desc limit 1];
-                            
-							if(camObj.size()>0){
-                                //added by himanshu sharma with vijay uniyal if application sanction tenure is blank then tenure will picked from cam 3 jun 2024
-                                if(opp.Opportunity.Sanctioned_Amont__c==null){
-                                    loanpara.LoanAmmount = camObj[0].Approved_HL_Loan_Amount__c;
-	                                }
-                                if(opp.Opportunity.Sanc_EMI__c==null){
-                                    loanpara.MonthlyEmi = camObj[0].Approved_HL_EMI__c;
-                                }
-                                if(opp.Opportunity.Sanctioned_Tenure__c==null){
-                                   loanpara.Term = camObj[0].Approved_HL_Tenor__c;
-                                }
-                                
-                                    
-                                    //loanpara.StDocCount = camObj[0].ST_Conditions__r!=null?camObj[0].ST_Conditions__r.size():0;
-                                }
-                            if(opp.Opportunity.Finnone_Loan_Id__c!=null){
-                                loanpara.OverDueAmmout = opp.Opportunity.Principal_Overdue__c;
-                        		loanpara.NextEmiDate = opp.Opportunity.ECS_Presentation_Date__c; //EMI DATE 8 May 2024
-                                
-                                DynamicParameters pro=new DynamicParameters();
-                                    pro.label ='EMI date';
-                                    pro.value=DateTime.newInstance(loanpara.NextEmiDate, Time.newInstance(0, 0, 0, 0)).format('dd-MM-yyyy');
-                                    pro.sequenceNumber=4;
-                                loanpara.loanDetailsList.add(pro);
-                                loanpara.FinOneLoanId = opp.Opportunity.Finnone_Loan_Id__c;
-                                 /*Vijay Uniyal added on * May 2024 for Populating EMI DATE,Last Payment Date, Disbursemnt Amount,First Disbursal Date*/
-                                for(Disbursement__c disbur:[Select Id,Date_of_Disbursement__c,Disb_Status__c from Disbursement__c where Application__c=:opp.Opportunity.Id and Disb_Status__c in ('Payment Processed','Handed over customer') order by Id asc limit 1]){ 
-                                    loanpara.firstDisbursementdate=disbur.Date_of_Disbursement__c;
-                                    DynamicParameters pr=new DynamicParameters();
-                                    if(disbur.Date_of_Disbursement__c!=null){
-                                    	
-                                        pr.label ='First disbursement date';
-                                        pr.value=DateTime.newInstance(loanpara.firstDisbursementdate, Time.newInstance(0, 0, 0, 0)).format('dd-MM-yyyy');
-                                        pr.sequenceNumber=1;
-                                        loanpara.loanDetailsList.add(pr);
-                                            
-                                    }
-                                    loanpara.Disbursementamount=opp.Opportunity.Disbursed_Amount__c;
-                                    if(opp.Opportunity.Disbursed_Amount__c!=null){
-                                    	pr=new DynamicParameters();
-                                        pr.label ='Disbursed Amount';
-                                        pr.value=String.valueOf(loanpara.Disbursementamount);
-                                        pr.sequenceNumber=2;
-                                        loanpara.loanDetailsList.add(pr);    
-                                    }
-                                    
-                                
-                                }
-                               // List<Collection__c> collectionpaymnetData=[SELECT Date_of_Collection__c FROM Collection__c WHERE Nature_of_Collection__c='L&T Charge' AND Status__c='Active' AND  SFDC_Customer__c=:opp.Opportunity.Id order by Id desc];
-                                List<Collection__c> collectionpaymnetData=[SELECT Date_of_Collection__c FROM Collection__c WHERE Status__c='Active' AND  SFDC_Customer__c=:opp.Opportunity.Id order by Date_of_Collection__c  desc];
-                                if(collectionpaymnetData!=null && collectionpaymnetData.Size()>0){
-                                    loanpara.lastPaymnetdate=collectionpaymnetData[0].Date_of_Collection__c;
-                                    DynamicParameters pr=new DynamicParameters();
-                                    pr.label ='Last payment date';
-                                    pr.value=DateTime.newInstance(loanpara.lastPaymnetdate, Time.newInstance(0, 0, 0, 0)).format('dd-MM-yyyy');
-                                    pr.sequenceNumber=3;
-                                    loanpara.loanDetailsList.add(pr);
-                                }
-                                
-                            }
-                            if(opp.Opportunity.Id != null){
-                                    
-                                    /*comment this code on 23 june 2023 because service not showing in customer app because we are added record type id operatiob for all service request as per discussion with himanshu sharma. now we fetch data based on service name*/
-                                    /*Set<Id> ids=new Set<Id>();
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Update Personal Info').getRecordTypeId());
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Update Kyc').getRecordTypeId());
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Generate Statement of Accounts').getRecordTypeId());
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Generate Repayment Schedule').getRecordTypeId());
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Generate Interest Certificate').getRecordTypeId());
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Generate Foreclosure Statement').getRecordTypeId());
-                                    ids.add(Schema.SObjectType.Case.getRecordTypeInfosByName().get('Part Payment').getRecordTypeId());*/
-                                    /*
-									 List<Case> servicedata = [SELECT RecordTypeId,Is_Show_Foreclosure__c,Service_Name__c,CreatedDate,Valid_Till__c,RequestStatus__c,stmt_url__c from Case
-                                                              where Application_Name__c =:opp.Opportunity.Id AND CreatedDate>=:filterDateTime AND RecordTypeId in :ids order by CreatedDate desc];
-                                   
-									*/
-                                    // added this for view case status in customer app on 26 Jun 2023 vijay uniyal
-                                    Set<String> ids=new Set<String>();
-                                    /*ids.add('Update Email Id');
-                                    ids.add('Update Correspondence Address');
-                                    ids.add('Generate Statement of Accounts');
-                                    ids.add('Repayment Schedule Fee');
-                                    ids.add('Generate Interest Certificate');
-                                    ids.add('Generate Foreclosure Statement');
-                                    ids.add('Part Payment');
-                 					ids.add('Subsequent Disbursement Pending');
-                					ids.add('Welcome Letter');
-                                    ids.add('Insurance Certificate Copy'); //Vijay Added on 6 April 2024
-                					ids.add('ACH Account Change');  //Vijay Added on 9 April 2024
-                                    ids.add('Critical illness Insurance');  //Vijay Added on 20 Aug 2024
-                                    ids.add('Life Insurance');  //Vijay Added on 20 Aug 2024
-                                    ids.add('Property Insurance');  //Vijay Added on 20 Aug 2024
-                                    ids.add('Health Insurance');  //Vijay Added on 20 Aug 2024
-                                	ids.add('E-Mandate'); //vijay added on 12 Sep 2024*/
-                                ids.add('Update Personal Info');
-                                ids.add('Update KYC');
-                                ids.add('Statement of Account (SOA)');
-                                ids.add('Repayment Schedule');
-                                ids.add('Interest Certificate');
-                                ids.add('Fore Closure Amount');
-                                ids.add('Part Payment');
-                                ids.add('Disbursement');
-                                ids.add('EMI Date Change');
-                                ids.add('Welcome Letter');
-                                ids.add('Insurance');
-                                ids.add('ACH');
-                                ids.add('Critical illness Insurance');
-                                ids.add('Life Insurance');
-                                ids.add('Property Insurance');
-                                ids.add('Health Insurance');
-                                ids.add('E-Mandate');
-                                 ids.add('Interest Certificate');
-                                    system.debug('ids------------------'+ids);
-                                    Datetime filterDateTime=Datetime.now().addDays(-Integer.valueOf(Label.configureServiceRequestListDay));
-                                /*1 April 2024 vijay upal added for SOA*/
-                                Datetime servicefilterDateTime=Datetime.now().addDays(-Integer.valueOf(90));
-                                List<Case> serviceQuerydata = [SELECT RecordTypeId,Is_Show_Foreclosure__c,Service_Name__c,Sub_Request_Type__c,Request__c,CreatedDate,Valid_Till__c,RequestStatus__c,stmt_url__c,CaseNumber,Status from Case
-                                                                 where Application_Name__c =:opp.Opportunity.Id AND CreatedDate>=:servicefilterDateTime AND RequestStatus__c='Closed' AND Request__c='Statement of Account (SOA)' order by CreatedDate desc];
-                                System.debug(opp.Opportunity.Id+' AND '+serviceQuerydata.Size());
-                                
-                                /*1 April 2024 vijay upal added for SOA*/
-                                
-                                 /*Vijay Uniyal added for show/hide service card in iserve app on 15 Jul 2025*/
-                                List<Case> serviceCasedata = [SELECT CaseNumber,Status from Case
-                                                                 where Application_Name__c =:opp.Opportunity.Id AND Request__c='Critical illness Insurance' AND (RequestStatus__c='Pending' or RequestStatus__c='In Progess')  order by CreatedDate desc limit 1];
-                                System.debug(opp.Opportunity.Id+' AND '+serviceCasedata.Size());
-                                if( serviceCasedata.size()>0) {
-                                  	loanpara.CriticalillnessInsurance=false;  
-                                }
-                                
-                                serviceCasedata = [SELECT CaseNumber,Status from Case
-                                                                 where Application_Name__c =:opp.Opportunity.Id AND Request__c='Health Insurance' AND (RequestStatus__c='Pending' or RequestStatus__c='In Progess')  order by CreatedDate desc limit 1];
-                                System.debug(opp.Opportunity.Id+' AND '+serviceCasedata.Size());
-                                if(serviceCasedata.size()>0) {
-                                  	loanpara.HealthInsurance=false;  
-                                }
-                                serviceCasedata = [SELECT CaseNumber,Status from Case
-                                                                 where Application_Name__c =:opp.Opportunity.Id AND Request__c='Interest Certificate' AND (RequestStatus__c='Pending' or RequestStatus__c='In Progess')  order by CreatedDate desc limit 1];
-                                System.debug(opp.Opportunity.Id+' AND '+serviceCasedata.Size());
-                                if(serviceCasedata.size()>0) {
-                                  	loanpara.InterestCertificate=false;  
-                                }
-                                
-                                serviceCasedata = [SELECT CaseNumber,Status from Case
-                                                                 where Application_Name__c =:opp.Opportunity.Id AND Request__c='Life Insurance' AND (RequestStatus__c='Pending' or RequestStatus__c='In Progess')  order by CreatedDate desc limit 1];
-                                System.debug(opp.Opportunity.Id+' AND '+serviceCasedata.Size());
-                                if(serviceCasedata.size()>0) {
-                                  	loanpara.LifeInsurance=false;  
-                                }
-                                
-                                serviceCasedata = [SELECT CaseNumber,Status from Case
-                                                                 where Application_Name__c =:opp.Opportunity.Id AND Request__c='Property Insurance' AND (RequestStatus__c='Pending' or RequestStatus__c='In Progess')  order by CreatedDate desc limit 1];
-                                System.debug(opp.Opportunity.Id+' AND '+serviceCasedata.Size());
-                                if(serviceCasedata.size()>0) {
-                                  	loanpara.PropertyInsurance=false;  
-                                }
-                                /*Vijay Uniyal added for show/hide service card in iserve app on 15 Jul 2025*/
-                                
-                                
-                                List<Case> servicedata = [SELECT Status,Request__c,RecordTypeId,Is_Show_Foreclosure__c,Service_Name__c,Sub_Request_Type__c,CreatedDate,Valid_Till__c,RequestStatus__c,stmt_url__c,CaseNumber from Case
-                                                                                     where Application_Name__c =:opp.Opportunity.Id AND CreatedDate>=:filterDateTime AND Request__c in :ids order by CreatedDate desc];
-                    			
-                                    
-                                    system.debug(opp.Opportunity.Id+' servicedata size'+servicedata.size());
-                                    if(servicedata.size()>0) {
-                                        for(Case data : servicedata) {                                            
-                                            if(serviceQuerydata!=null && serviceQuerydata.Size()>0 && data.Request__c=='Statement of Account (SOA)')  {                                                
-                                                	//loanpara.SOAPaymentAllowed=true;                                                                                                    
-                                                	if (serviceQuerydata.size() > 0) {
-                                                        loanpara.SOAPaymentAllowed = true;
-                                                    } else {
-                                                        // Handle the case where there's only one or no cases within the 90 days
-                                                        loanpara.SOAPaymentAllowed = false;
-                                                    }
-                                            }
-                                            
-                                            if(data.RequestStatus__c == 'Approved'||data.Status == 'Closed'){
-                                                loanpara.CompletedServiceRequest +=1;
-                                            }
-                                            else if(data.RequestStatus__c == 'Pending' || data.RequestStatus__c == 'In Progress'){
-                                                loanpara.PendingServiceRequest +=1;
-                                            }
-                                            
-                                        }
-                                    }
-                                }
-                            
-                        }
-                        else if(!opp.Opportunity.LM_Loan_Status__c.containsIgnoreCase('Reject')&&!opp.Opportunity.LM_Loan_Status__c.containsIgnoreCase('Cancelled')){
-                           loanpara.LoanAmmount = opp.Opportunity.Loan_Amount_Applied__c;
-                           loanpara.CompletionPercentage = checkCompletionPercentage(opp.Opportunity.Id, opp.Opportunity.LM_Loan_Status__c,opp.Opportunity.AccountId,opp.Opportunity.Loan_Amount_Required__c);
-                           if(loanpara.CompletionPercentage==100){
-                                //Service Query Count
-                                    List<Service_Query__c> serviceQueriesList=[Select Id From Service_Query__c 
-                                    											Where Action__c!='Answered' and Related_To__c=:opp.Opportunity.Id];
-                                    loanpara.ServiceQueryCount=serviceQueriesList.size();
-                                //Service Query Count
-                           }
-                        }
-                        
-                        LoanTimeLine timeline=new LoanTimeLine();
-                        
-                        timeline.LoanCreationDate=loanpara.LoanCreationDate;
-                        timeline.LoanSanctionDate=loanpara.SanctionDate;
-                        timeline.Disbursementdate=loanpara.firstDisbursementdate;
-                        List<TimelineParameters> listtimeline=new List<TimelineParameters>();
-                        TimelineParameters tp =new TimelineParameters();
-                       // {public String label; public Date value;public Integer sequenceNumber;
-                        tp.label='Loan Initiation';
-                        tp.value=loanpara.LoanCreationDate;
-                        tp.sequenceNumber=1;
-                        listtimeline.add(tp);
-                        
-                         tp =new TimelineParameters();
-                       // {public String label; public Date value;public Integer sequenceNumber;
-                        tp.label='Loan Sanction';
-                        tp.value=loanpara.SanctionDate;
-                        tp.sequenceNumber=2;
-                        listtimeline.add(tp);
-                        
-                         tp =new TimelineParameters();
-                       // {public String label; public Date value;public Integer sequenceNumber;
-                        tp.label='Loan Disbursed';
-                        tp.value=loanpara.firstDisbursementdate;
-                        tp.sequenceNumber=3;
-                        listtimeline.add(tp);
-                        
-                        List<Collection__c> collectionpaymnetData=[SELECT Date_of_Collection__c FROM Collection__c WHERE Nature_of_Collection__c='Emi/Advances/Part Payment' AND Status__c='Active' AND  SFDC_Customer__c=:opp.Opportunity.Id order by Id];
-                        if(collectionpaymnetData!=null && collectionpaymnetData.Size()>0){
-                             timeline.FirstEmiDate=collectionpaymnetData[0].Date_of_Collection__c;
-                            tp =new TimelineParameters();
-                           // {public String label; public Date value;public Integer sequenceNumber;
-                            tp.label='First EMI On';
-                            tp.value=collectionpaymnetData[0].Date_of_Collection__c;
-                            tp.sequenceNumber=4;
-                            listtimeline.add(tp);
-                        }
-                        loanpara.timeline=timeline;
-                        loanpara.loanTimelineList=listtimeline;
-                        
-                        /*added featurs for insurces 24 dec 2024*/
-                        for(Customer_App_Offers_visibility__c notification :[select  Life_Insurance__c,Life_Insurance_Document__c,Property_Insurance__c,Property_Insurance_Document__c,	Health_Insurance_Premium__c,Health_Insurance_Premium_Document__c,Critical_Illness_Premium__c,Critical_Illness_Premium_Document__c,Interest_Certificate__c,Interest_Certificate_Document__c from Customer_App_Offers_visibility__c where Loan_Number__c=:loanpara.LoanAccountNumber]){
-                            if(notification.Life_Insurance__c==true){
-                                InsuranceParameters ins=new InsuranceParameters();
-                                ins.label='Life Insurance';
-                                ins.document=notification.Life_Insurance_Document__c;
-                                loanpara.insuranceList.add(ins);
-                            }
-                            if(notification.Property_Insurance__c==true){
-                                InsuranceParameters ins=new InsuranceParameters();
-                                ins.label='Property Insurance';
-                                ins.document=notification.Property_Insurance_Document__c;
-                                loanpara.insuranceList.add(ins);
-                            }
-                            if(notification.Health_Insurance_Premium__c==true){
-                                InsuranceParameters ins=new InsuranceParameters();
-                                ins.label='Health Insurance';
-                                ins.document=notification.Health_Insurance_Premium_Document__c;
-                                loanpara.insuranceList.add(ins);
-                            }
-                            if(notification.Critical_Illness_Premium__c==true){
-                                InsuranceParameters ins=new InsuranceParameters();
-                                ins.label='Critical Illness Insurance';
-                                ins.document=notification.Critical_Illness_Premium_Document__c;
-                                loanpara.insuranceList.add(ins);
-                            }
-                            
-                            if(notification.Interest_Certificate__c==true){
-                                InsuranceParameters ins=new InsuranceParameters();
-                                ins.label='Interest Certificate';
-                                ins.document=notification.Interest_Certificate_Document__c;
-                                loanpara.insuranceList.add(ins);
-                            }
-                		}
-                         /*added featurs for insurance 24 dec 2024 end*/
-                        
-                        wrapper.loanList.add(loanpara);
-                    }
-                }
-                
-                boolean iscashback=false;
-                for(Integer i = 0; i < wrapper.loanList.size(); i++){
-                    if(wrapper.loanList[i].cashbackAvail==true){
-                        iscashback=true;
-                        break;
-                    }
-                }
-                system.debug('iscashback-->'+iscashback);
-                if(iscashback==true){
-                	for(Integer j = 0; j < wrapper.loanList.size(); j++){
-                        wrapper.loanList[j].cashbackAvail=true;                                            
-                	}    
-                }
-                
-                
-
-                
-                wrapper.response.resMessage = 'success';
-                wrapper.response.resCode = '200';
-            }
-            else {
-                wrapper.response.resMessage = 'required parameter is empty';
-                wrapper.response.resCode= '400';
-            }
-            return wrapper;
-        }
-        catch(exception e){
-            WrapperClass wrapper = new WrapperClass();
-            wrapper.response.resMessage=e.getMessage()+' line number '+e.getLineNumber();
-            wrapper.response.resCode='400';
-            return wrapper;
-        }
+        // Opp 2: Partially Disbursed
+        Opportunity oppDisb = new Opportunity(
+            Name = 'Disbursed Opp',
+            AccountId = testAcc.Id,
+            Household__c = testCustomer.Id,
+            StageName = 'Qualification',
+            CloseDate = Date.today().addDays(30),
+            LM_Loan_Status__c = 'Partially Disbursed',
+            Loan_Number__c = 'LN-002',
+            Finnone_Loan_Id__c = 'FIN-001',
+            Disbursed_Amount__c = 200000,
+            Principal_Overdue__c = 0,
+            ECS_Presentation_Date__c = Date.today().addDays(5)
+        );
+        oppList.add(oppDisb);
+        
+        // Opp 3: New Login
+        Opportunity oppNew = new Opportunity(
+            Name = 'New Login Opp',
+            AccountId = testAcc.Id,
+            Household__c = testCustomer.Id,
+            StageName = 'Qualification',
+            CloseDate = Date.today().addDays(30),
+            LM_Loan_Status__c = 'New Login',
+            Loan_Number__c = 'LN-003',
+            Loan_Amount_Applied__c = 100000,
+            Loan_Amount_Required__c = 100000
+        );
+        oppList.add(oppNew);
+        
+        insert oppList;
+        
+        // 7. Setup OpportunityContactRoles
+        List<OpportunityContactRole> ocrList = new List<OpportunityContactRole>();
+        ocrList.add(new OpportunityContactRole(OpportunityId = oppSanc.Id, ContactId = testCon.Id, Role = 'Main Applicant'));
+        ocrList.add(new OpportunityContactRole(OpportunityId = oppDisb.Id, ContactId = testCon.Id, Role = 'Main Applicant'));
+        ocrList.add(new OpportunityContactRole(OpportunityId = oppNew.Id, ContactId = testCon.Id, Role = 'Loan - Co-Applicant'));
+        insert ocrList;
+        
+        // 8. Setup Collections, Legality, Disbursements & CAMs
+        List<Collection__c> collections = new List<Collection__c>();
+        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Processing Fee (incl. Service tax)', Status__c = 'Active', Amount__c = 2000));
+        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Stamp Duty Amount', Status__c = 'Active', Amount__c = 1000));
+        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Stamp Duty Service Charge', Status__c = 'Active', Amount__c = 500));
+        collections.add(new Collection__c(SFDC_Customer__c = oppDisb.Id, Nature_of_Collection__c = 'L&T Charge', Status__c = 'Active', Date_of_Collection__c = Date.today().addDays(-5)));
+        collections.add(new Collection__c(SFDC_Customer__c = oppDisb.Id, Nature_of_Collection__c = 'Emi/Advances/Part Payment', Status__c = 'Active', Date_of_Collection__c = Date.today().addDays(-5)));
+        insert collections;
+        
+        insert new Legality__c(Application__c = oppSanc.Id, Leegality_Status__c = 'Accepted');
+        
+        insert new Disbursement__c(Application__c = oppDisb.Id, Date_of_Disbursement__c = Date.today().addDays(-20), Disb_Status__c = 'Payment Processed');
+        
+        CAM__c testCam = new CAM__c(Loan_Application__c = oppDisb.Id, Approved_HL_Loan_Amount__c = 200000, Approved_HL_EMI__c = 2500, Approved_HL_Tenor__c = 60);
+        insert testCam;
+        
+        insert new ST_Condition__c(CAM__c = testCam.Id, Expected_Time__c = '2nd Tranche', Document_Received__c = 'No');
+        
+        // 9. Setup Cases (Service Requests)
+        List<Case> caseList = new List<Case>();
+        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Statement of Account (SOA)', RequestStatus__c = 'Closed'));
+        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Critical illness Insurance', RequestStatus__c = 'Pending'));
+        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Health Insurance', RequestStatus__c = 'Pending'));
+        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Interest Certificate', RequestStatus__c = 'Pending'));
+        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Life Insurance', RequestStatus__c = 'Pending'));
+        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Property Insurance', RequestStatus__c = 'Pending'));
+        insert caseList;
+        
+        // 10. Setup App Visibility Offers
+        insert new Customer_App_Offers_visibility__c(
+            Mobile_Number__c = '9999999999',
+            Loan_Number__c = 'LN-001',
+            Offer_Key__c = 'TestOffer',
+            isOfferAvail__c = false,
+            offerValidtill__c = Date.today().addDays(10),
+            offerTitle__c = 'Special Offer',
+            Life_Insurance__c = true,
+            Property_Insurance__c = true,
+            Health_Insurance_Premium__c = true,
+            Critical_Illness_Premium__c = true,
+            Interest_Certificate__c = true
+        );
+        
+        // 11. Custom App Offers (Cashback logic)
+        insert new Customer_App_Offers__c(Application_Id__c = oppDisb.Id, Cashback_Avail__c = true);
     }
     
-    
-    
-    public static Integer checkCompletionPercentage(Id oppertunityId, String LoanStatus, String AccountId, Decimal LoanAmmount) {
-        LoanParameter loanpara = new LoanParameter();
-        Integer CompletionPercentage =0;
-        //Basic Form Status
-        List<Account> accInfo=[SELECT Name,Sex__pc,Date_Of_Birth__pc,Property_Status__c, (Select Id From Reference_Informations__r) From Account Where Id=:AccountId];
+    @isTest
+    static void testGetDetail_SuccessPath() {
+        // Mocks a valid GET request with a matching phone number
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
         
-        if(accInfo[0].Reference_Informations__r.size()!=0&&accInfo[0].Sex__pc!=null&&accInfo[0].Date_Of_Birth__pc!=null){
-            CompletionPercentage+=25;
-            //Applicant Status
-            Boolean ApplicantFormStatus=true;
-            List<OpportunityContactRole> applicants=[Select Contact.Account.Id,Contact.Account.Smart_Input_Flow__c From OpportunityContactRole Where OpportunityId=:oppertunityId ORDER BY Role ASC NULLS LAST];
-            
-            if(applicants.size()==0){
-                ApplicantFormStatus=false;
-            }
-            else{
-                for(OpportunityContactRole opporContact:applicants){
-                    //system.debug(Opp.Opportunity.Loan_Number__c + ' '+ 'test');
-                    if(opporContact.Contact.Account.Smart_Input_Flow__c){
-                        Account applicantInfo=[Select Mother_s_Name__pc,Pan_Card_No__pc,
-                                                        Identity_Proof__pc,Aadhar_Card__pc,Drv_Licn__pc,
-                                                        Voter_Card__pc,Passport_No__pc,Other_Document_Name__pc
-                                                        From Account Where Id=:opporContact.Contact.AccountId];
-                        if(String.isBlank(applicantInfo.Mother_s_Name__pc)){
-                            ApplicantFormStatus=false;
-                        }
-                        
-                        if(!String.isBlank(applicantInfo.Pan_Card_No__pc)||!String.isBlank(applicantInfo.Identity_Proof__pc)||
-                           !String.isBlank(applicantInfo.Aadhar_Card__pc)||!String.isBlank(applicantInfo.Drv_Licn__pc)||
-                           !String.isBlank(applicantInfo.Voter_Card__pc)||!String.isBlank(applicantInfo.Passport_No__pc)||
-                           !String.isBlank(applicantInfo.Other_Document_Name__pc)){}
-                        else{
-                            ApplicantFormStatus=false;
-                        }
-                        //system.debug(Opp.Opportunity.Loan_Number__c + ' '+ ApplicantFormStatus);
-                    }
-                    else{
-                        ApplicantFormStatus=false;
-                    }
-                }
-            }
-            if(ApplicantFormStatus || Test.isrunningTest()){
-                CompletionPercentage+=25;
-                //Property Status
-                if(accInfo[0].Property_Status__c){
-                    CompletionPercentage+=25;
-                    //Payment Status
-                    Boolean PaymentStatus=true;
-                    
-                    List<Collection__c> collectionData=[SELECT Amount__c,Coupon_Used__c
-                                                                FROM Collection__c WHERE Nature_of_Collection__c='L&T Charge'
-                                                                AND (ClearenceStatus__c='Handover pending' OR ClearenceStatus__c='Cleared') 
-                                                                AND  SFDC_Customer__c=:oppertunityId];
-                    if(collectionData.size()==0){
-                        PaymentStatus=false;
-                    }
-                    else {
-                        Decimal PaidAmount=0.0;
-                        Decimal CouponAmount=0.0;
-                        Decimal ProcessingFees=LoanAmmount<Decimal.valueOf(Label.Loan_Amount_For_Processing_Fee)?Decimal.valueOf(Label.Processing_Fee_Amount1):Decimal.valueOf(Label.Processing_Fee_Amount2);
-                        for(Integer i=0;i<collectionData.size();i++){
-                            PaidAmount+=collectionData[i].Amount__c;
-                            List<Coupon__c> couponData=[SELECT Coupon_Amount__c from Coupon__c where Id=:collectionData[i].Coupon_Used__c];
-                            if(couponData.size()!=0){
-                                CouponAmount+=Decimal.valueOf(couponData[0].Coupon_Amount__c);
-                            }
-                        }
-                        if(!(ProcessingFees==(PaidAmount+CouponAmount))){
-                            PaymentStatus=false;
-                        }
-                    }
-                    if(PaymentStatus){
-                        CompletionPercentage+=25;
-                    }
-                    //Payment Status
-                }
-                //Property Status
-            }
-            //Applicant Status
-        }
-        //Basic Form Status
-        else{}
-        return CompletionPercentage;
+        req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
+        req.httpMethod = 'GET';
+        // Note: Supplying the raw number. If DecryptionUtil fails during test context, 
+        // you might need to supply the pre-encrypted string depending on your Decryption logic.
+        req.params.put('Mobile', '9999999999'); 
+        req.params.put('Source', 'TestApp');
+        req.params.put('currentVersion', '1.0');
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        Test.startTest();
+        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
+        Test.stopTest();
+        
+        // Assertions
+        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
+        System.assertEquals('200', responseWrapper.response.resCode, 'Response Code should be 200 Success');
+        System.assertEquals('success', responseWrapper.response.resMessage, 'Message should be success');
+        System.assert(responseWrapper.loanList.size() > 0, 'Loan list should have records populated');
+        System.assertEquals(true, responseWrapper.EaseBuzzPayment, 'EaseBuzzPayment should be true');
+        System.assertEquals(true, responseWrapper.PayUPayment, 'PayUPayment should be true');
     }
     
-    public static Integer checkSTDocCount(Id opportunityId,String expectedTime) {
-        Integer stCount=0;
-        List<CAM__c> camObj=[SELECT Id FROM CAM__c where Loan_Application__c=:opportunityId order by CreatedDate desc limit 1];
-        if(camObj.size()>0){
-            List<ST_Condition__c> stConditionList=[SELECT Id,Name,Document_Name__c,CreatedDate FROM ST_Condition__c WHERE Expected_Time__c=:expectedTime AND Document_Received__c!='Yes' AND CAM__c=:camObj[0].Id];
-            stCount=stConditionList.size();
-        }
-        return stCount;
+    @isTest
+    static void testGetDetail_MissingMobileParam() {
+        // Mocks a request where Mobile parameter is missing to hit the ELSE block (400)
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        
+        req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
+        req.httpMethod = 'GET';
+        // Intentionally leaving 'Mobile' param blank/missing
+        req.params.put('currentVersion', '1.0'); 
+        
+        RestContext.request = req;
+        RestContext.response = res;
+        
+        Test.startTest();
+        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
+        Test.stopTest();
+        
+        // Assertions
+        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
+        System.assertEquals('400', responseWrapper.response.resCode, 'Response Code should be 400');
+        System.assertEquals('required parameter is empty', responseWrapper.response.resMessage, 'Appropriate error message expected');
+    }
+    
+    @isTest
+    static void testGetDetail_ExceptionCatchBlock() {
+        // Setting RestContext.request to null forces a NullPointerException 
+        // when the controller executes mapdata=request.params; covering the Catch block.
+        RestContext.request = null;
+        RestContext.response = new RestResponse();
+        
+        Test.startTest();
+        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
+        Test.stopTest();
+        
+        // Assertions
+        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
+        System.assertEquals('400', responseWrapper.response.resCode, 'Response Code should be 400 from exception catch block');
+        System.assert(responseWrapper.response.resMessage.contains('line number'), 'Exception message should be captured');
     }
 }
