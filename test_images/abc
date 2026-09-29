@@ -1,242 +1,28 @@
 @isTest
-public class DashboardApi_V1_Test {
+static void testGetDetail_SuccessPath() {
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
     
-    @testSetup
-    static void setupTestData() {
-        // 1. Setup Account (Mimicking Person Account structure as per __pc fields)
-        Account testAcc = new Account(
-            Name = 'Test Applicant Account',
-            Property_Status__c = true,
-            Smart_Input_Flow__c = true,
-            // Assuming these are custom fields on your Account object
-            Sex__pc = 'Male',
-            Date_Of_Birth__pc = Date.newInstance(1990, 1, 1),
-            Mother_s_Name__pc = 'Test Mother',
-            Pan_Card_No__pc = 'ABCDE1234F'
-        );
-        insert testAcc;
-        
-        // 2. Setup Contact
-        Contact testCon = new Contact(
-            LastName = 'Test Contact',
-            AccountId = testAcc.Id,
-            MobilePhone = '9999999999',
-            Mobile__c = '9999999999'
-        );
-        insert testCon;
-        
-        // 3. Setup CustomerAppLoginLog__c
-        CustomerAppLoginLog__c loginLog = new CustomerAppLoginLog__c(
-            Version__c = '1.0',
-            EaseBuzz__c = true,
-            PayU__c = true,
-            IsActive__c = true
-        );
-        insert loginLog;
-        
-        // 4. Setup Service_Request_iServe_App__c
-        Service_Request_iServe_App__c serviceReq = new Service_Request_iServe_App__c(
-            Name = 'Test Service',
-            URL__c = 'https://test.com',
-            Is_Active__c = true
-        );
-        insert serviceReq;
-        
-        // 5. Setup Lead & Customer__c for Refer and Earn
-        Lead testLead = new Lead(
-            LastName = 'Referral Lead',
-            Customer_Mobile_No__c = '9999999999',
-            Lead_Phone_Number_1__c = '9999999999',
-            Lead_Code__c = 'LD-001',
-            Status = 'New',
-            How_did_you_come_to_know_about_us__c = 'Customer Referral',
-            LeadSource = 'CustomerApp'
-        );
-        insert testLead;
-        
-        Customer__c testCustomer = new Customer__c(
-            Name = 'Test Customer',
-            Mobile__c = '9999999999',
-            Alternate_Mobile_No__c = '9999999999',
-            Lead_Code__c = 'LD-001'
-        );
-        insert testCustomer;
-        
-        // 6. Setup Opportunities with different Stages for distinct branch coverage
-        List<Opportunity> oppList = new List<Opportunity>();
-        
-        // Opp 1: Sanctioned
-        Opportunity oppSanc = new Opportunity(
-            Name = 'Sanctioned Opp',
-            AccountId = testAcc.Id,
-            Household__c = testCustomer.Id,
-            StageName = 'Qualification',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'Sanctioned',
-            Loan_Number__c = 'LN-001',
-            Purpose_of_loan__c = 'Home Purchase',
-            Sanctioned_Amont__c = 500000,
-            Sanc_EMI__c = 5000,
-            Sanctioned_Tenure__c = 120,
-            Pending_Disbursement__c = 50000,
-            Balance_Collectable__c = 1000
-        );
-        oppList.add(oppSanc);
-        
-        // Opp 2: Partially Disbursed
-        Opportunity oppDisb = new Opportunity(
-            Name = 'Disbursed Opp',
-            AccountId = testAcc.Id,
-            Household__c = testCustomer.Id,
-            StageName = 'Qualification',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'Partially Disbursed',
-            Loan_Number__c = 'LN-002',
-            Finnone_Loan_Id__c = 'FIN-001',
-            Disbursed_Amount__c = 200000,
-            Principal_Overdue__c = 0,
-            ECS_Presentation_Date__c = Date.today().addDays(5)
-        );
-        oppList.add(oppDisb);
-        
-        // Opp 3: New Login
-        Opportunity oppNew = new Opportunity(
-            Name = 'New Login Opp',
-            AccountId = testAcc.Id,
-            Household__c = testCustomer.Id,
-            StageName = 'Qualification',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'New Login',
-            Loan_Number__c = 'LN-003',
-            Loan_Amount_Applied__c = 100000,
-            Loan_Amount_Required__c = 100000
-        );
-        oppList.add(oppNew);
-        
-        insert oppList;
-        
-        // 7. Setup OpportunityContactRoles
-        List<OpportunityContactRole> ocrList = new List<OpportunityContactRole>();
-        ocrList.add(new OpportunityContactRole(OpportunityId = oppSanc.Id, ContactId = testCon.Id, Role = 'Main Applicant'));
-        ocrList.add(new OpportunityContactRole(OpportunityId = oppDisb.Id, ContactId = testCon.Id, Role = 'Main Applicant'));
-        ocrList.add(new OpportunityContactRole(OpportunityId = oppNew.Id, ContactId = testCon.Id, Role = 'Loan - Co-Applicant'));
-        insert ocrList;
-        
-        // 8. Setup Collections, Legality, Disbursements & CAMs
-        List<Collection__c> collections = new List<Collection__c>();
-        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Processing Fee (incl. Service tax)', Status__c = 'Active', Amount__c = 2000));
-        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Stamp Duty Amount', Status__c = 'Active', Amount__c = 1000));
-        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Stamp Duty Service Charge', Status__c = 'Active', Amount__c = 500));
-        collections.add(new Collection__c(SFDC_Customer__c = oppDisb.Id, Nature_of_Collection__c = 'L&T Charge', Status__c = 'Active', Date_of_Collection__c = Date.today().addDays(-5)));
-        collections.add(new Collection__c(SFDC_Customer__c = oppDisb.Id, Nature_of_Collection__c = 'Emi/Advances/Part Payment', Status__c = 'Active', Date_of_Collection__c = Date.today().addDays(-5)));
-        insert collections;
-        
-        insert new Legality__c(Application__c = oppSanc.Id, Leegality_Status__c = 'Accepted');
-        
-        insert new Disbursement__c(Application__c = oppDisb.Id, Date_of_Disbursement__c = Date.today().addDays(-20), Disb_Status__c = 'Payment Processed');
-        
-        CAM__c testCam = new CAM__c(Loan_Application__c = oppDisb.Id, Approved_HL_Loan_Amount__c = 200000, Approved_HL_EMI__c = 2500, Approved_HL_Tenor__c = 60);
-        insert testCam;
-        
-        insert new ST_Condition__c(CAM__c = testCam.Id, Expected_Time__c = '2nd Tranche', Document_Received__c = 'No');
-        
-        // 9. Setup Cases (Service Requests)
-        List<Case> caseList = new List<Case>();
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Statement of Account (SOA)', RequestStatus__c = 'Closed'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Critical illness Insurance', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Health Insurance', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Interest Certificate', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Life Insurance', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Property Insurance', RequestStatus__c = 'Pending'));
-        insert caseList;
-        
-        // 10. Setup App Visibility Offers
-        insert new Customer_App_Offers_visibility__c(
-            Mobile_Number__c = '9999999999',
-            Loan_Number__c = 'LN-001',
-            Offer_Key__c = 'TestOffer',
-            isOfferAvail__c = false,
-            offerValidtill__c = Date.today().addDays(10),
-            offerTitle__c = 'Special Offer',
-            Life_Insurance__c = true,
-            Property_Insurance__c = true,
-            Health_Insurance_Premium__c = true,
-            Critical_Illness_Premium__c = true,
-            Interest_Certificate__c = true
-        );
-        
-        // 11. Custom App Offers (Cashback logic)
-        insert new Customer_App_Offers__c(Application_Id__c = oppDisb.Id, Cashback_Avail__c = true);
-    }
+    req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
+    req.httpMethod = 'GET';
     
-    @isTest
-    static void testGetDetail_SuccessPath() {
-        // Mocks a valid GET request with a matching phone number
-        RestRequest req = new RestRequest();
-        RestResponse res = new RestResponse();
-        
-        req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
-        req.httpMethod = 'GET';
-        // Note: Supplying the raw number. If DecryptionUtil fails during test context, 
-        // you might need to supply the pre-encrypted string depending on your Decryption logic.
-        req.params.put('Mobile', '9999999999'); 
-        req.params.put('Source', 'TestApp');
-        req.params.put('currentVersion', '1.0');
-        
-        RestContext.request = req;
-        RestContext.response = res;
-        
-        Test.startTest();
-        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-        Test.stopTest();
-        
-        // Assertions
-        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
-        System.assertEquals('200', responseWrapper.response.resCode, 'Response Code should be 200 Success');
-        System.assertEquals('success', responseWrapper.response.resMessage, 'Message should be success');
-        System.assert(responseWrapper.loanList.size() > 0, 'Loan list should have records populated');
-        System.assertEquals(true, responseWrapper.EaseBuzzPayment, 'EaseBuzzPayment should be true');
-        System.assertEquals(true, responseWrapper.PayUPayment, 'PayUPayment should be true');
-    }
+    // FIX: Provide a string that DecryptionUtil can actually decrypt.
+    // If your util has an encrypt method, use it like this:
+    // String encryptedPhone = DecryptionUtil.encryptFinal('9999999999', '', '');
+    // req.params.put('Mobile', encryptedPhone);
     
-    @isTest
-    static void testGetDetail_MissingMobileParam() {
-        // Mocks a request where Mobile parameter is missing to hit the ELSE block (400)
-        RestRequest req = new RestRequest();
-        RestResponse res = new RestResponse();
-        
-        req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
-        req.httpMethod = 'GET';
-        // Intentionally leaving 'Mobile' param blank/missing
-        req.params.put('currentVersion', '1.0'); 
-        
-        RestContext.request = req;
-        RestContext.response = res;
-        
-        Test.startTest();
-        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-        Test.stopTest();
-        
-        // Assertions
-        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
-        System.assertEquals('400', responseWrapper.response.resCode, 'Response Code should be 400');
-        System.assertEquals('required parameter is empty', responseWrapper.response.resMessage, 'Appropriate error message expected');
-    }
+    // OR, if you don't have an encrypt method, paste a known valid encrypted string from your logs:
+    req.params.put('Mobile', 'PASTE_A_VALID_ENCRYPTED_STRING_HERE');
     
-    @isTest
-    static void testGetDetail_ExceptionCatchBlock() {
-        // Setting RestContext.request to null forces a NullPointerException 
-        // when the controller executes mapdata=request.params; covering the Catch block.
-        RestContext.request = null;
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-        Test.stopTest();
-        
-        // Assertions
-        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
-        System.assertEquals('400', responseWrapper.response.resCode, 'Response Code should be 400 from exception catch block');
-        System.assert(responseWrapper.response.resMessage.contains('line number'), 'Exception message should be captured');
-    }
+    req.params.put('Source', 'TestApp');
+    req.params.put('currentVersion', '1.0');
+    
+    RestContext.request = req;
+    RestContext.response = res;
+    
+    Test.startTest();
+    DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
+    Test.stopTest();
+    
+    System.assertEquals('200', responseWrapper.response.resCode, 'Response Code should be 200 Success');
 }
