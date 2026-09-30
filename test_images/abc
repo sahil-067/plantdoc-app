@@ -1,235 +1,987 @@
+Here is an apex class
+
+
+public with sharing class CAMSanctionAmountLimit {
+    public static void doValidate(List<CAM__c> camList){
+       
+        Set<String> camIdSet = new Set<String>();
+        for(CAM__c camObj : camList) {
+            camIdSet.add(camObj.Id);
+        }
+        
+        Map<String, Approval_Matrix__c> approvalMatrixMap = new Map<String, Approval_Matrix__c>();
+        List<Approval_Matrix__c> mlist = [Select Id, Recommended_For__c, Recommended_For__r.UserName, Status__c from Approval_Matrix__c];
+        System.debug('Point 1 debug: '+mlist);
+        System.debug('Point 2 getUserName()==>'+UserInfo.getUserId());
+        
+        for(Approval_Matrix__c appMat : [SELECT Id, HL__c, LAP__c, Recommended_For__c, Recommended_For__r.UserName FROM Approval_Matrix__c where Status__c = 'Approved'
+                                         AND Recommended_For__r.UserName =: UserInfo.getUserName()]){
+                                             approvalMatrixMap.put(appMat.Recommended_For__c, appMat);
+                                         }
+        System.debug('UserInfo.getUserName()==>'+UserInfo.getUserName());
+        System.debug('approvalMatrixMap==>'+approvalMatrixMap.containskey(UserInfo.getUserId()));
+        
+        if(camIdSet.size() > 0){
+            List<ProcessInstance> pi = [SELECT Id, LastActor.Name, (SELECT Id, ActorId, ProcessInstanceId FROM Workitems LIMIT 1) FROM ProcessInstance where TargetObjectId IN: camIdSet order by CompletedDate DESC LIMIT 1];
+            //System.debug('pi[0].Workitems==>'+pi[0].Workitems.size());
+            for(CAM__c camObj : camList) {
+                
+                if(pi != null && pi.size() > 0) {
+                    if(pi[0].Workitems.size() > 0){
+                    System.debug('pi[0].Workitems[0].ActorId==>'+pi[0].Workitems[0].ActorId);
+                    if(approvalMatrixMap.get(pi[0].Workitems[0].ActorId) != null && UserInfo.getUserId() == pi[0].Workitems[0].ActorId){
+                        if(camObj.Final_Decision__c == 'Approved' && camObj.Loan_Type__c.contains('LAP') && camObj.Combined_Exposure__c > approvalMatrixMap.get(pi[0].Workitems[0].ActorId).LAP__c) {
+                            //camObj.addError('You don\'t have permission to approve above ' + approvalMatrixMap.get(pi[0].LastActor.Id).LAP__c + ' LAP Loan Type amount');
+                            camObj.addError(Label.CAMSanctionAmountLimitValidation);
+                        } 
+                        if(camObj.Final_Decision__c == 'Approved' && camObj.Loan_Type__c.contains('HL') && camObj.Combined_Exposure__c > approvalMatrixMap.get(pi[0].Workitems[0].ActorId).HL__c) {
+                            //camObj.addError('You don\'t have permission to approve above ' + approvalMatrixMap.get(pi[0].LastActor.Id).HL__c + ' HL Loan Type amount');
+                            camObj.addError(Label.CAMSanctionAmountLimitValidation); 
+                        }
+                    }
+                    else{
+                        camObj.addError(Label.CAMSanctionAmountLimitValidation);
+                    }
+                }
+                }
+                
+            }
+            
+            
+        }
+    }
+}
+
+
+
+and here is its test class
+
+
+
 @isTest
-public class DashboardApi_V1_Test {
+public class CAMSanctionAmountLimitTest {
+   @isTest
+    public static void setupTestData(){
+        
+        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
+        tbypass.isActive__c=false;
+        tbypass.Name='Deactivate';
+        insert tbypass;
+        
+        Trigger_BYPass__c triggerWhatsappApplication = new Trigger_BYPass__c();
+        triggerWhatsappApplication.isActive__c=true;
+        triggerWhatsappApplication.Name='WhatsappApplication';
+        insert triggerWhatsappApplication;
+        
+        // Code to insert User Record
+        
+       /* Profile p = [SELECT Id FROM Profile WHERE Name='Standard User']; 
+        
+        User u = new User(Alias = 'sysu', Email='standarduser1@testorg.com', 
+                          EmailEncodingKey='UTF-8', LastName='Testing1', LanguageLocaleKey='en_US', 
+                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0001',
+                          TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9079@testorg.com');
+        insert u;
+        User u = [select Id, username from User where Id= :UserInfo.getUserId()];
+        System.runAs(u){*/
+        User u = [select Id, username from User where Id= :UserInfo.getUserId()];
+            Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+            insert cf;
+
+        	Branch__c br = new Branch__c();
+            br.Name = 'Ajmer-1';
+            br.Branch_ACM__c = u.Id;
+            br.Branch_City__c = 'Ajmer';
+            br.Branch_State__c = 'Rajasthan';
+            br.Branch_Code__c ='5000049';
+            br.Branch_PinCode__c='305001';
+            br.Branch_User__c = u.id;
+            br.Branch_Approver__c = userinfo.getUserId();
+            br.Branch_Location__Latitude__s = 28.5849485;
+            br.Branch_Location__Longitude__s = 77.3149885;
+            br.Finnone_Branch_Code__c='test6';
+            insert br; 
+            
+            Approval_Matrix__c apro = new Approval_Matrix__c();
+            apro.Name='sujeet';
+            apro.Amount__c=876;
+            apro.HL__c=87600;
+            apro.LAP__c=87600;
+            apro.Recommended_For__c=u.Id;
+            apro.Status__c='Approved';
+            apro.Branch__c=br.Id;
+        	apro.Recommended_For__c=u.Id;
+            insert apro;
+            
+            String recTypeId = [select Id from RecordType where (SobjectType='Account') and IsPersonType=True limit 1].Id;
+            Account acc = new Account();
+            acc.FirstName='Test';
+            acc.LastName='Account';
+            acc.Mobile__pc = '1234567897';
+            acc.Is_this_WhatsApp_Number__pc=true;
+            acc.RecordTypeId = recTypeId;
+            
+            insert acc;
+            Contact cc = [Select id, AccountId,LastName From Contact where AccountId =: acc.Id Limit 1];
+            
+            List<CAM__c> CamList = new List<CAM__c>();
+            List<Customer__c> CustList = new List<Customer__c>();
+            
+            Customer__c customerObj= new Customer__c();
+            customerObj.Name = 'test';
+            customerObj.Property_Status__c = 'Owned';
+            customerObj.Father_Husband_Name__c = 'test1';
+            customerObj.Customer_Address__c = 'c-125';
+            customerObj.Customer_Status__c = 'Pending';
+            customerObj.Mobile__c = '1234567890';
+            customerObj.Customer_Type__c ='Normal' ;
+            customerObj.Loan_Amount_Applied__c = 1234.45;
+            customerObj.Alternate_Mobile_No__c = '0987654321';
+            customerObj.Address_Line_1__c = 'noida';
+            customerObj.Comfortable_EMI__c = 300.99;
+            customerObj.Is_Property_Identified__c ='Yes' ;
+            customerObj.Number_of_years_at_current_residence__c = 2;
+            customerObj.Is_the_above_address_Native_place_also__c = true;
+            customerObj.Total_number_of_family_members__c = 5;
+            customerObj.Total_number_of_family_members_met__c = 3;
+            customerObj.Pucca_House__c = 'Yes';
+            customerObj.Electricity__c = true;
+            customerObj.TV__c = true;
+            customerObj.Fridge__c = True;
+            customerObj.SmartPhone__c = true;
+            customerObj.Car__c ='yes';
+            customerObj.Toilet__c = true;
+            customerObj.Gas_Connection__c = true;
+            customerObj.Cooler__c =true;
+            customerObj.Two_Wheeler__c = true;
+            customerObj.Pucca_House__c = 'yes';
+            customerObj.Washing_Machine__c = 'yes';
+            customerObj.Name_of_the_Neighbour__c = 'test2';
+            customerObj.Contact_number_of_Neighbour__c = '123456765';
+            customerObj.Feedback__c = 'Positive';
+            customerObj.Neighbour_Comments__c ='good';
+            customerObj.Food__c = 234;
+            customerObj.Electricity_Expense__c = 123.90;
+            customerObj.Medicine__c = 123456;
+            customerObj.Children_Fees_Education__c =87465;
+            customerObj.Rent__c = 12345;
+            customerObj.Petrol_Conveyance__c =763;
+            customerObj.Approach_of_residence_with_Road__c =true;
+            customerObj.Front_portion_of_residence__c = true;
+            customerObj.One_inside_photograph__c = true;
+            customerObj.X1_inside_photograph_Kitchen__c =true;
+            customerObj.Photo_Toilet__c = true;
+            customerObj.Credit_PD_Comments__c = 'alkjhdlksac';
+            customerObj.LnApp__c =874387;
+            customerObj.Landmark__c = 'tmc';
+            customerObj.City__c = 'Agra';
+            customerObj.State__c = 'Uttar Pradesh';
+            customerObj.Location_Type__c ='Urban';
+            customerObj.Hindsight_Approval__c='Approved';
+            customerObj.Customer_Name__c = 'xadf';
+            customerObj.Mobile__c = '1234567898';
+            //customerObj.LoanAppID__c = oppObj.Id;
+            customerObj.Contact_number_of_Neighbour__c = '9876543212';
+            CustList.add(customerObj);
+            insert CustList;
+            
+            Loan_Product__c loan = new Loan_Product__c();
+            loan.Name='MIG01';
+            loan.Loan_Type__c  = 'LAP';
+            loan.Status__c = 'Active';
+            //loan.loan_type__c = 'Home Loan (HL)' ;
+            insert loan;        
+            
+            Opportunity oppObj = new Opportunity();
+            oppObj.Name = 'testT';
+            oppObj.Current_Mobile_Number__c = '9112323432';
+            //oppObj.Customer_Mobile__c = '12323432';
+            oppObj.Household__c = customerObj.Id;
+            oppObj.StageName = 'Active';
+            oppObj.CloseDate = date.valueOf('2021-10-10');
+            oppObj.Loan_Number__c = 'AP'+cf.Value__c;
+            oppObj.Religion__c = 'Hindu';
+            oppObj.Location_Type__c = 'Urban';
+            oppObj.Purpose_of_taking_the_loan__c ='LAP' ;
+            oppObj.Purpose_of_loan__c ='Loan Against Property enhancement' ;
+            oppObj.Caste__c= 'Genral';
+            oppObj.Owner_of_Property__c = 'Male';
+            oppObj.MFN__c = 'test2';
+            oppObj.Is_Owner_2__c = true;
+            oppObj.Add_L1__c = 'test3';
+            oppObj.Add_L2__c = 'test4';
+            oppObj.Add_L3__c = 'test5';
+            oppObj.A_District__c = 'Test6';
+            oppObj.Address_City__c = 'Ajmer';
+            oppObj.Address_State__c = 'Rajasthan';
+            oppObj.AddPin_Code__c = 123345;
+            oppObj.CollAdd1__c = 'Test7';
+            oppObj.CollAdd2__c = 'test8';
+            oppObj.CollAdd3__c = 'test9';
+            oppObj.ColPin__c = 654321;
+            oppObj.Units__c ='Sq. Feet' ;
+            oppObj.Is_Owner_1__c = true;
+            oppObj.CFN2__c = 'Test10';
+            oppObj.Area_of_property__c =9838 ;
+            oppObj.Present_Condition_of_the_Property__c ='Rented' ; 
+            oppObj.CO_Applicant_1_First_Name__c = 'test11';
+            oppObj.COApplicant_1_Last_Name__c = 'test12';
+            oppObj.NHB_Categories__c ='mortgage/property/home equity loans	' ;
+            oppObj.BM_PD_Status__c ='Positive' ;
+            oppObj.Welcome_Call__c =true ;
+            oppObj.isPhoneVerified__c= true ;
+            oppObj.isAltPhVerified__c = true;
+            oppObj.Loan_Product_Type__c ='LAP' ; 
+            oppObj.Whatsapp_Number1__c='565566877';
+            oppObj.Whatsapp_Number2__c='565566877';
+            oppObj.Whatsapp_Number3__c='565566877';
+            oppObj.Whatsapp_Number4__c='565566877';
+            oppObj.Whatsapp_Number5__c='565566877';
+            oppObj.Description = 'hyyyy';
+            oppObj.AccountId = acc.Id;
+            oppObj.LM_Loan_Status__c = 'Sanctioned';
+            insert oppObj;
+            
+            CAM__c camObj = new CAM__c();
+            //Loan_Application__r.Household__c
+            camObj.Total_Number_of_Family_Members__c=12;
+            camObj.RHExpenses__c =123;
+        	camObj.Credit_Approval_Status__c='Approved';
+            camObj.Radial_Low_Count__c=234;
+            camObj.Radial_Low__c=235;
+            camObj.Radial_High_Count__c=234; 
+            camObj.Radial_High__c=234; 
+            camObj.Proposed_Construction_Value__c=234; 
+            camObj.Proposed_Construction_area__c=456; 
+            camObj.Property_Location__c='Gram Panchayat Area'; 
+            camObj.Property_is_self_occupied_residential_pr__c=true;
+            camObj.Property_is_not_in_Negative_area__c=true; 
+            camObj.property_is_not_identified__c=true; 
+            camObj.PropArea_Units__c='sq meters'; 
+            camObj.Product__c='Home Extension'; 
+            camObj.No_Applicant_in_Caution_profile_list__c=false; 
+            camObj.NHB_Categories__c='Construction/purchase of new units'; 
+            camObj.Loan_Type__c='LAP'; 
+            //camObj.Loan_Product__r.Name
+            camObj.LnApp__c =80000;
+            camObj.LAP_End_use_Comment__c='eee'; 
+            camObj.LAP_End_use__c='Marriage'; 
+            camObj.Land_Value__c=231; 
+            camObj.Land_Area_Units__c='Sq meters'; 
+            camObj.Land_area_is_more_than_minimum_norms__c=false; 
+            camObj.Land_Area__c=5645; 
+            camObj.Is_DedupePositive__c=true; 
+            camObj.Income_Type__c ='Undocumented'; 
+            camObj.Income__c=668;
+            camObj.Income_2__c =668;
+            camObj.Income_3__c=668;
+            camObj.Income_4__c=668;
+            camObj.Income_5__c=668;
+            camObj.Income_6__c=234234;
+            camObj.House_Type__c='Independent'; 
+            camObj.HL_Tenor__c=55; 
+            camObj.HLROI__c=12; 
+            camObj.Exposure_Type__c='Individual'; 
+            camObj.Education__c='Post Graduate'; 
+            camObj.Education_2__c ='Graduate';
+            camObj.Education_3__c='12th Pass';
+            camObj.Education_4__c='10th Pass';
+            camObj.Doc_Value_of_Prop__c=123; 
+            camObj.Credit_PD__c='Field Visit'; 
+            camObj.ComEMI__c=23423;
+            camObj.Citizenship__c = 'Resident Indian';
+            camObj.Build_Up_Construction_Value__c=34234; 
+            camObj.Build_Up_Area_Units__c = 'sq meters';
+            camObj.Build_Up_Area__c=1234;
+            camObj.Approval_Date__c = system.today();         
+            camObj.Name_of_Account_Holder_1__c  = 'xzc'; 
+            camObj.Bank_name__c  = 'xzc'; 
+            camObj.Bank_Cheque_Bounces__c = 23423;
+            camObj.Name_of_Account_Holder_2__c  = 'xzc'; 
+            camObj.Bank_Name_2__c = 'xxxvv'; 
+           camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+            camObj.Bank_Cheque_Bounces_2__c=2342;  
+            camObj.Name_of_Account_Holder_3__c = 'xzc'; 
+            camObj.Bank_Name_3__c  ='xyz';
+            camObj.Bank_Cheque_Bounces_3__c =234;  
+            camObj.Name_of_Account_Holder_4__c = 'test';
+            camObj.Bank_Name_4__c = 'werwer';  
+            camObj.Bank_Cheque_Bounces_4__c = 7553; 
+            camObj.Saving_Method_1__c ='rerw';
+            camObj.Saving_Method_1_Amount__c = 2334;
+            camObj.Saving_Method_2__c = 'rtry'; 
+            camObj.Saving_Method_2_Amount__c = 234;
+            camObj.Saving_Method_3__c  = 'new';
+            camObj.Saving_Method_3_Amount__c = 12321;
+           
+            camObj.Highmark_Score_of_Main_applicant__c = '1234'; 
+            camObj.Branch_Name__c = 'Ajmer-1';
+            camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch_Manager_Name__c = 'Gaurav';
+              camObj.Purpose_of_Loan__c = 'Construction Loan';
+            camObj.Land_Area__c = 22;
+            camObj.Build_Up_Area__c = 44;
+            camObj.Final_Decision__c = 'Pending';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch__c = br.id;
+            camObj.Loan_Product__c = loan.Id;
+            camObj.UnderWriter__c = u.Id;
+            
+            insert camObj;
+            Test.startTest();
+            camObj.Loan_Type__c='LAP'; 
+            camObj.LnApp__c =100000;
+            camObj.Existing_Loan_Amount__c = 150000;
+            camObj.Is_there_any_ST_Condition__c = 'No';
+            update camObj;
+                
+            apro.LAP__c = -1;
+            update apro;
+
+            camObj.Loan_Type__c = 'LAP'; 
+            camObj.LnApp__c = 100000;
+            camObj.Existing_Loan_Amount__c = 150000;
+            camObj.Is_there_any_ST_Condition__c = 'No';
+            update camObj;
+            
+            Approval.ProcessSubmitRequest apreq = new Approval.ProcessSubmitRequest();
+            apreq.setComments('for approval');
+            apreq.setObjectId(camObj.Id);
+            apreq.setSubmitterId(UserInfo.getUserId());
+            apreq.setSkipEntryCriteria(true);            
+            apreq.setProcessDefinitionNameOrId('Cam_Approval');
+            apreq.setNextApproverIds(new List<Id>{ UserInfo.getUserId() });
+            Approval.process(apreq);
+
+            if(Approval.isLocked(camObj.Id)){
+                Approval.unlock(camObj.Id);
+            }
+            
+            camObj.Final_Decision__c = 'Approved';
+            try {
+                update camObj; 
+            } catch(Exception e) {
+                System.debug('LAP COVERAGE HIT: ' + e.getMessage());
+            }
+            
+            Test.stopTest();
+        
+    }
     
-    @testSetup
-    static void setupTestData() {
-        // 1. Setup Account 
-        Account testAcc = new Account(
-            Name = 'Test Applicant Account',
-            Property_Status__c = true,
-            Smart_Input_Flow__c = true,
-            Sex__pc = 'Male',
-            Date_Of_Birth__pc = Date.newInstance(1990, 1, 1),
-            Mother_s_Name__pc = 'Test Mother',
-            Pan_Card_No__pc = 'ABCDE1234F'
-        );
-        insert testAcc;
+   @isTest
+    public static void setupTestData2(){
         
-        // 2. Setup Contact
-        Contact testCon = new Contact(
-            LastName = 'Test Contact',
-            AccountId = testAcc.Id,
-            MobilePhone = '9999999999',
-            Mobile__c = '9999999999'
-        );
-        insert testCon;
+        Trigger_BYPass__c tbypass= new Trigger_BYPass__c();
+        tbypass.isActive__c=false;
+        tbypass.Name='Deactivate';
+        insert tbypass;
         
-        // 3. Setup CustomerAppLoginLog__c
-        CustomerAppLoginLog__c loginLog = new CustomerAppLoginLog__c(
-            Version__c = '1.0',
-            EaseBuzz__c = true,
-            PayU__c = true,
-            IsActive__c = true
-        );
-        insert loginLog;
+        Trigger_BYPass__c triggerWhatsappApplication = new Trigger_BYPass__c();
+        triggerWhatsappApplication.isActive__c=true;
+        triggerWhatsappApplication.Name='WhatsappApplication';
+        insert triggerWhatsappApplication;
         
-        // 4. Setup Service_Request_iServe_App__c
-        Service_Request_iServe_App__c serviceReq = new Service_Request_iServe_App__c(
-            Name = 'Test Service',
-            URL__c = 'https://test.com',
-            Is_Active__c = true
-        );
-        insert serviceReq;
+        // Code to insert User Record
         
-        // 5. Setup Lead & Customer__c for Refer and Earn
-        Lead testLead = new Lead(
-            LastName = 'Referral Lead',
-            Customer_Mobile_No__c = '9999999999',
-            Lead_Phone_Number_1__c = '9999999999',
-            Lead_Code__c = 'LD-001',
-            Status = 'New',
-            How_did_you_come_to_know_about_us__c = 'Customer Referral',
-            LeadSource = 'CustomerApp'
-        );
-        insert testLead;
+//        Profile p = [SELECT Id FROM Profile WHERE Name='Standard User']; 
         
-        Customer__c testCustomer = new Customer__c(
-            Name = 'Test Customer',
-            Mobile__c = '9999999999',
-            Alternate_Mobile_No__c = '9999999999',
-            Lead_Code__c = 'LD-001'
-        );
-        insert testCustomer;
+        /*User u = new User(Alias = 'sysu', Email='standarduser1@testorg.com', 
+                          EmailEncodingKey='UTF-8', LastName='Testing1', LanguageLocaleKey='en_US', 
+                          LocaleSidKey='en_US', ProfileId = p.Id, EmployeeNumber = 'ISFC0001',
+                          TimeZoneSidKey='America/Los_Angeles', UserName='standarduser9079@testorg.com');
+        insert u;
+        User u = [select Id, username from User where Id= :UserInfo.getUserId()];
+        System.runAs(u){*/
+        User u = [select Id, username from User where Id= :UserInfo.getUserId()];
+            Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+            insert cf;
+            
+            Branch__c br = new Branch__c();
+            br.Name = 'Ajmer-1';
+            br.Branch_ACM__c = u.Id;
+            br.Branch_City__c = 'Ajmer';
+            br.Branch_State__c = 'Rajasthan';
+            br.Branch_Code__c ='5000049';
+            br.Branch_PinCode__c='305001';
+            br.Branch_User__c = u.id;
+            br.Branch_Approver__c = userinfo.getUserId();
+            br.Branch_Location__Latitude__s = 28.5849485;
+            br.Branch_Location__Longitude__s = 77.3149885;
+            br.Finnone_Branch_Code__c='test6';
+            insert br; 
+            
+            Approval_Matrix__c apro = new Approval_Matrix__c();
+            apro.Name='sujeet';
+            apro.Amount__c=876;
+            apro.HL__c=87600;
+            apro.LAP__c=87600;
+            apro.Recommended_For__c=u.Id;
+            apro.Status__c='Approved';
+            apro.Branch__c=br.Id;
+            insert apro;
+            
+            String recTypeId = [select Id from RecordType where (SobjectType='Account') and IsPersonType=True limit 1].Id;
+            Account acc = new Account();
+            acc.FirstName='Test';
+            acc.LastName='Account';
+            acc.Mobile__pc = '1234567897';
+            acc.Is_this_WhatsApp_Number__pc=true;
+            acc.RecordTypeId = recTypeId;
+            
+            insert acc;
+            Contact cc = [Select id, AccountId,LastName From Contact where AccountId =: acc.Id Limit 1];
+            
+            List<CAM__c> CamList = new List<CAM__c>();
+            List<Customer__c> CustList = new List<Customer__c>();
+            
+            Customer__c customerObj= new Customer__c();
+            customerObj.Name = 'test';
+            customerObj.Property_Status__c = 'Owned';
+            customerObj.Father_Husband_Name__c = 'test1';
+            customerObj.Customer_Address__c = 'c-125';
+            customerObj.Customer_Status__c = 'Pending';
+            customerObj.Mobile__c = '1234567890';
+            customerObj.Customer_Type__c ='Normal' ;
+            customerObj.Loan_Amount_Applied__c = 1234.45;
+            customerObj.Alternate_Mobile_No__c = '0987654321';
+            customerObj.Address_Line_1__c = 'noida';
+            customerObj.Comfortable_EMI__c = 300.99;
+            customerObj.Is_Property_Identified__c ='Yes' ;
+            customerObj.Number_of_years_at_current_residence__c = 2;
+            customerObj.Is_the_above_address_Native_place_also__c = true;
+            customerObj.Total_number_of_family_members__c = 5;
+            customerObj.Total_number_of_family_members_met__c = 3;
+            customerObj.Pucca_House__c = 'Yes';
+            customerObj.Electricity__c = true;
+            customerObj.TV__c = true;
+            customerObj.Fridge__c = True;
+            customerObj.SmartPhone__c = true;
+            customerObj.Car__c ='yes';
+            customerObj.Toilet__c = true;
+            customerObj.Gas_Connection__c = true;
+            customerObj.Cooler__c =true;
+            customerObj.Two_Wheeler__c = true;
+            customerObj.Pucca_House__c = 'yes';
+            customerObj.Washing_Machine__c = 'yes';
+            customerObj.Name_of_the_Neighbour__c = 'test2';
+            customerObj.Contact_number_of_Neighbour__c = '123456765';
+            customerObj.Feedback__c = 'Positive';
+            customerObj.Neighbour_Comments__c ='good';
+            customerObj.Food__c = 234;
+            customerObj.Electricity_Expense__c = 123.90;
+            customerObj.Medicine__c = 123456;
+            customerObj.Children_Fees_Education__c =87465;
+            customerObj.Rent__c = 12345;
+            customerObj.Petrol_Conveyance__c =763;
+            customerObj.Approach_of_residence_with_Road__c =true;
+            customerObj.Front_portion_of_residence__c = true;
+            customerObj.One_inside_photograph__c = true;
+            customerObj.X1_inside_photograph_Kitchen__c =true;
+            customerObj.Photo_Toilet__c = true;
+            customerObj.Credit_PD_Comments__c = 'alkjhdlksac';
+            customerObj.LnApp__c =874387;
+            customerObj.Landmark__c = 'tmc';
+            customerObj.City__c = 'Agra';
+            customerObj.State__c = 'Uttar Pradesh';
+            customerObj.Location_Type__c ='Urban';
+            customerObj.Hindsight_Approval__c='Approved';
+            customerObj.Customer_Name__c = 'xadf';
+            customerObj.Mobile__c = '1234567898';
+            //customerObj.LoanAppID__c = oppObj.Id;
+            customerObj.Contact_number_of_Neighbour__c = '9876543212';
+            CustList.add(customerObj);
+            insert CustList;
+            
+            Loan_Product__c loan = new Loan_Product__c();
+            loan.Name='MIG01';
+            loan.Loan_Type__c  = 'Home Loan (HL)';
+            loan.Status__c = 'Active';
+            //loan.loan_type__c = 'Home Loan (HL)' ;
+            insert loan;        
+            
+            Opportunity oppObj = new Opportunity();
+            oppObj.Name = 'testT';
+            oppObj.Current_Mobile_Number__c = '9112323432';
+            //oppObj.Customer_Mobile__c = '12323432';
+            oppObj.Household__c = customerObj.Id;
+            oppObj.StageName = 'Active';
+            oppObj.CloseDate = date.valueOf('2021-10-10');
+            oppObj.Loan_Number__c = 'AP'+cf.Value__c;
+            oppObj.Religion__c = 'Hindu';
+            oppObj.Location_Type__c = 'Urban';
+            oppObj.Purpose_of_taking_the_loan__c ='LAP' ;
+            oppObj.Purpose_of_loan__c ='Loan Against Property enhancement' ;
+            oppObj.Caste__c= 'Genral';
+            oppObj.Owner_of_Property__c = 'Male';
+            oppObj.MFN__c = 'test2';
+            oppObj.Is_Owner_2__c = true;
+            oppObj.Add_L1__c = 'test3';
+            oppObj.Add_L2__c = 'test4';
+            oppObj.Add_L3__c = 'test5';
+            oppObj.A_District__c = 'Test6';
+            oppObj.Address_City__c = 'Ajmer';
+            oppObj.Address_State__c = 'Rajasthan';
+            oppObj.AddPin_Code__c = 123345;
+            oppObj.CollAdd1__c = 'Test7';
+            oppObj.CollAdd2__c = 'test8';
+            oppObj.CollAdd3__c = 'test9';
+            oppObj.ColPin__c = 654321;
+            oppObj.Units__c ='Sq. Feet' ;
+            oppObj.Is_Owner_1__c = true;
+            oppObj.CFN2__c = 'Test10';
+            oppObj.Area_of_property__c =9838 ;
+            oppObj.Present_Condition_of_the_Property__c ='Rented' ; 
+            oppObj.CO_Applicant_1_First_Name__c = 'test11';
+            oppObj.COApplicant_1_Last_Name__c = 'test12';
+            oppObj.NHB_Categories__c ='mortgage/property/home equity loans	' ;
+            oppObj.BM_PD_Status__c ='Positive' ;
+            oppObj.Welcome_Call__c =true ;
+            oppObj.isPhoneVerified__c= true ;
+            oppObj.isAltPhVerified__c = true;
+            oppObj.Loan_Product_Type__c ='LAP' ; 
+            oppObj.Whatsapp_Number1__c='565566877';
+            oppObj.Whatsapp_Number2__c='565566877';
+            oppObj.Whatsapp_Number3__c='565566877';
+            oppObj.Whatsapp_Number4__c='565566877';
+            oppObj.Whatsapp_Number5__c='565566877';
+            oppObj.Description = 'hyyyy';
+            oppObj.AccountId = acc.Id;
+            oppObj.LM_Loan_Status__c = 'Sanctioned';
+            insert oppObj;
+            
+            CAM__c camObj = new CAM__c();
+            //Loan_Application__r.Household__c
+            camObj.Total_Number_of_Family_Members__c=12;
+            camObj.RHExpenses__c =123;
+            camObj.Radial_Low_Count__c=234;
+            camObj.Radial_Low__c=235;
+            camObj.Radial_High_Count__c=234; 
+            camObj.Radial_High__c=234; 
+            camObj.Proposed_Construction_Value__c=234; 
+            camObj.Proposed_Construction_area__c=456; 
+            camObj.Property_Location__c='Gram Panchayat Area'; 
+            camObj.Property_is_self_occupied_residential_pr__c=true;
+            camObj.Property_is_not_in_Negative_area__c=true; 
+            camObj.property_is_not_identified__c=true; 
+            camObj.PropArea_Units__c='sq meters'; 
+            camObj.Product__c='Home Extension'; 
+            camObj.No_Applicant_in_Caution_profile_list__c=false; 
+            camObj.NHB_Categories__c='Construction/purchase of new units'; 
+            camObj.Loan_Type__c='Home Loan (HL)'; 
+            //camObj.Loan_Product__r.Name
+            camObj.LnApp__c =80000;
+            camObj.LAP_End_use_Comment__c='eee'; 
+            camObj.LAP_End_use__c='Marriage'; 
+            camObj.Land_Value__c=231; 
+            camObj.Land_Area_Units__c='Sq meters'; 
+            camObj.Land_area_is_more_than_minimum_norms__c=false; 
+            camObj.Land_Area__c=5645; 
+            camObj.Is_DedupePositive__c=true; 
+            camObj.Income_Type__c ='Undocumented'; 
+            camObj.Income__c=668;
+            camObj.Income_2__c =668;
+            camObj.Income_3__c=668;
+            camObj.Income_4__c=668;
+            camObj.Income_5__c=668;
+            camObj.Income_6__c=234234;
+            camObj.House_Type__c='Independent'; 
+            camObj.HL_Tenor__c=55; 
+            camObj.HLROI__c=12; 
+            camObj.Exposure_Type__c='Individual'; 
+            camObj.Education__c='Post Graduate'; 
+            camObj.Education_2__c ='Graduate';
+            camObj.Education_3__c='12th Pass';
+            camObj.Education_4__c='10th Pass';
+            camObj.Doc_Value_of_Prop__c=123; 
+            camObj.Credit_PD__c='Field Visit'; 
+            camObj.ComEMI__c=23423;
+            camObj.Citizenship__c = 'Resident Indian';
+            camObj.Build_Up_Construction_Value__c=34234; 
+            camObj.Build_Up_Area_Units__c = 'sq meters';
+            camObj.Build_Up_Area__c=1234;
+            camObj.Approval_Date__c = system.today();         
+            camObj.Name_of_Account_Holder_1__c  = 'xzc'; 
+            camObj.Bank_name__c  = 'xzc'; 
+            camObj.Bank_Cheque_Bounces__c = 23423;
+            camObj.Name_of_Account_Holder_2__c  = 'xzc'; 
+            camObj.Bank_Name_2__c = 'xxxvv'; 
+           camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+            camObj.Bank_Cheque_Bounces_2__c=2342;  
+            camObj.Name_of_Account_Holder_3__c = 'xzc'; 
+            camObj.Bank_Name_3__c  ='xyz';
+            camObj.Bank_Cheque_Bounces_3__c =234;  
+            camObj.Name_of_Account_Holder_4__c = 'test';
+            camObj.Bank_Name_4__c = 'werwer';  
+            camObj.Bank_Cheque_Bounces_4__c = 7553; 
+            camObj.Saving_Method_1__c ='rerw';
+            camObj.Saving_Method_1_Amount__c = 2334;
+            camObj.Saving_Method_2__c = 'rtry'; 
+            camObj.Saving_Method_2_Amount__c = 234;
+            camObj.Saving_Method_3__c  = 'new';
+            camObj.Saving_Method_3_Amount__c = 12321;
+           
+            camObj.Highmark_Score_of_Main_applicant__c = '1234'; 
+            camObj.Branch_Name__c = 'Ajmer-1';
+            camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch_Manager_Name__c = 'Gaurav';
+              camObj.Purpose_of_Loan__c = 'Construction Loan';
+            camObj.Land_Area__c = 22;
+            camObj.Build_Up_Area__c = 44;
+            camObj.Final_Decision__c = 'Pending';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch__c = br.id;
+            camObj.Loan_Product__c = loan.Id;
+            camObj.UnderWriter__c = u.Id;
+           
+            insert camObj;
+            Test.startTest();
+            camObj.Loan_Type__c='Home Loan (HL)'; 
+            camObj.LnApp__c =100000;
+            camObj.Existing_Loan_Amount__c = 150000;
+            camObj.Is_there_any_ST_Condition__c = 'No';
+            update camObj;
+
+            apro.HL__c = -1;
+            update apro;
+
+            camObj.Loan_Type__c = 'Home Loan (HL)'; 
+            camObj.LnApp__c = 100000;
+            camObj.Existing_Loan_Amount__c = 150000;
+            camObj.Is_there_any_ST_Condition__c = 'No';
+            update camObj;
+            
+            Approval.ProcessSubmitRequest apreq = new Approval.ProcessSubmitRequest();
+            apreq.setComments('for approval');
+            apreq.setObjectId(camObj.Id);
+            apreq.setSubmitterId(UserInfo.getUserId());
+            apreq.setSkipEntryCriteria(true);            
+            apreq.setProcessDefinitionNameOrId('Cam_Approval');
+            apreq.setNextApproverIds(new List<Id>{ UserInfo.getUserId() });
+            Approval.process(apreq);
+
+            if(Approval.isLocked(camObj.Id)){
+                Approval.unlock(camObj.Id);
+            }
+            
+            
+            camObj.Final_Decision__c = 'Approved';
+            try {
+                update camObj; 
+            } catch(Exception e) {
+                System.debug('HL COVERAGE HIT: ' + e.getMessage());
+            }
+            
+            Test.stopTest();
         
-        // 6. Setup Opportunities with different Stages for distinct branch coverage
-        List<Opportunity> oppList = new List<Opportunity>();
-        
-        Opportunity oppSanc = new Opportunity(
-            Name = 'Sanctioned Opp',
-            AccountId = testAcc.Id,
-            Household__c = testCustomer.Id,
-            StageName = 'Qualification',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'Sanctioned',
-            Loan_Number__c = 'LN-001',
-            Purpose_of_loan__c = 'Home Purchase',
-            Sanctioned_Amont__c = 500000,
-            Sanc_EMI__c = 5000,
-            Sanctioned_Tenure__c = 120,
-            Pending_Disbursement__c = 50000,
-            Balance_Collectable__c = 1000
-        );
-        oppList.add(oppSanc);
-        
-        Opportunity oppDisb = new Opportunity(
-            Name = 'Disbursed Opp',
-            AccountId = testAcc.Id,
-            Household__c = testCustomer.Id,
-            StageName = 'Qualification',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'Partially Disbursed',
-            Loan_Number__c = 'LN-002',
-            Finnone_Loan_Id__c = 'FIN-001',
-            Disbursed_Amount__c = 200000,
-            Principal_Overdue__c = 0,
-            ECS_Presentation_Date__c = Date.today().addDays(5)
-        );
-        oppList.add(oppDisb);
-        
-        Opportunity oppNew = new Opportunity(
-            Name = 'New Login Opp',
-            AccountId = testAcc.Id,
-            Household__c = testCustomer.Id,
-            StageName = 'Qualification',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'New Login',
-            Loan_Number__c = 'LN-003',
-            Loan_Amount_Applied__c = 100000,
-            Loan_Amount_Required__c = 100000
-        );
-        oppList.add(oppNew);
-        
-        insert oppList;
-        
-        // 7. Setup OpportunityContactRoles
-        List<OpportunityContactRole> ocrList = new List<OpportunityContactRole>();
-        ocrList.add(new OpportunityContactRole(OpportunityId = oppSanc.Id, ContactId = testCon.Id, Role = 'Main Applicant'));
-        ocrList.add(new OpportunityContactRole(OpportunityId = oppDisb.Id, ContactId = testCon.Id, Role = 'Main Applicant'));
-        ocrList.add(new OpportunityContactRole(OpportunityId = oppNew.Id, ContactId = testCon.Id, Role = 'Loan - Co-Applicant'));
-        insert ocrList;
-        
-        // 8. Setup Collections, Legality, Disbursements & CAMs
-        List<Collection__c> collections = new List<Collection__c>();
-        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Processing Fee (incl. Service tax)', Status__c = 'Active', Amount__c = 2000));
-        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Stamp Duty Amount', Status__c = 'Active', Amount__c = 1000));
-        collections.add(new Collection__c(SFDC_Customer__c = oppSanc.Id, Nature_of_Collection__c = 'Stamp Duty Service Charge', Status__c = 'Active', Amount__c = 500));
-        collections.add(new Collection__c(SFDC_Customer__c = oppDisb.Id, Nature_of_Collection__c = 'L&T Charge', Status__c = 'Active', Date_of_Collection__c = Date.today().addDays(-5)));
-        collections.add(new Collection__c(SFDC_Customer__c = oppDisb.Id, Nature_of_Collection__c = 'Emi/Advances/Part Payment', Status__c = 'Active', Date_of_Collection__c = Date.today().addDays(-5)));
-        insert collections;
-        
-        insert new Legality__c(Application__c = oppSanc.Id, Leegality_Status__c = 'Accepted');
-        
-        insert new Disbursement__c(Application__c = oppDisb.Id, Date_of_Disbursement__c = Date.today().addDays(-20), Disb_Status__c = 'Payment Processed');
-        
-        CAM__c testCam = new CAM__c(Loan_Application__c = oppDisb.Id, Approved_HL_Loan_Amount__c = 200000, Approved_HL_EMI__c = 2500, Approved_HL_Tenor__c = 60);
-        insert testCam;
-        
-        insert new ST_Condition__c(CAM__c = testCam.Id, Expected_Time__c = '2nd Tranche', Document_Received__c = 'No');
-        
-        // 9. Setup Cases (Service Requests)
-        List<Case> caseList = new List<Case>();
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Statement of Account (SOA)', RequestStatus__c = 'Closed'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Critical illness Insurance', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Health Insurance', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Interest Certificate', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Life Insurance', RequestStatus__c = 'Pending'));
-        caseList.add(new Case(Application_Name__c = oppDisb.Id, Request__c = 'Property Insurance', RequestStatus__c = 'Pending'));
-        insert caseList;
-        
-        // 10. Setup App Visibility Offers
-        insert new Customer_App_Offers_visibility__c(
-            Mobile_Number__c = '9999999999',
-            Loan_Number__c = 'LN-001',
-            Offer_Key__c = 'TestOffer',
-            isOfferAvail__c = false,
-            offerValidtill__c = Date.today().addDays(10),
-            offerTitle__c = 'Special Offer',
-            Life_Insurance__c = true,
-            Property_Insurance__c = true,
-            Health_Insurance_Premium__c = true,
-            Critical_Illness_Premium__c = true,
-            Interest_Certificate__c = true
-        );
-        
-        // 11. Custom App Offers
-        insert new Customer_App_Offers__c(Application_Id__c = oppDisb.Id, Cashback_Avail__c = true);
     }
     
     @isTest
-    static void testGetDetail_SuccessPath() {
-        RestRequest req = new RestRequest();
-        RestResponse res = new RestResponse();
-        
-        req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
-        req.httpMethod = 'GET';
-        
-        // Use DecryptionUtil to generate the encrypted payload exactly as the app would
-        // The hardcoded key '1234567890123456' matches what DecryptionUtil.decryptFinal uses.
-        Map<String, String> encryptedData = DecryptionUtil.encrypt('9999999999', '1234567890123456');
-        String safeEncryptedMobile = encryptedData.get('base64Ciphertext');
-        
-        req.params.put('Mobile', safeEncryptedMobile); 
-        req.params.put('Source', 'TestApp');
-        req.params.put('currentVersion', '1.0');
-        
-        RestContext.request = req;
-        RestContext.response = res;
-        
-        Test.startTest();
-        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-        Test.stopTest();
-        
-        // Assertions
-        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
-        System.assertEquals('200', responseWrapper.response.resCode, 'Response Code should be 200 Success');
-        System.assertEquals('success', responseWrapper.response.resMessage, 'Message should be success');
-        System.assert(responseWrapper.loanList.size() > 0, 'Loan list should have records populated');
-        System.assertEquals(true, responseWrapper.EaseBuzzPayment, 'EaseBuzzPayment should be true');
-        System.assertEquals(true, responseWrapper.PayUPayment, 'PayUPayment should be true');
-    }
+public static void testCombinedExposureLAPBranch(){
+
+    Trigger_BYPass__c tbypass = new Trigger_BYPass__c();
+    tbypass.isActive__c = false;
+    tbypass.Name = 'Deactivate';
+    insert tbypass;
+
+    Trigger_BYPass__c triggerWhatsappApplication = new Trigger_BYPass__c();
+    triggerWhatsappApplication.isActive__c = true;
+    triggerWhatsappApplication.Name = 'WhatsappApplication';
+    insert triggerWhatsappApplication;
+
+    User runningUser = [SELECT Id, UserName FROM User WHERE Id = :UserInfo.getUserId()];
+
+    Config__c cf = new Config__c(Name__c='Loanapp', value__c='025140');
+    insert cf;
+
+    Branch__c br = new Branch__c();
+    br.Name = 'Ajmer-1';
+    br.Branch_ACM__c = runningUser.Id;
+    br.Branch_City__c = 'Ajmer';
+    br.Branch_State__c = 'Rajasthan';
+    br.Branch_Code__c = '5000049';
+    br.Branch_PinCode__c = '305001';
+    br.Branch_User__c = runningUser.Id;
+    br.Branch_Approver__c = runningUser.Id;
+    br.Branch_Location__Latitude__s = 28.5849485;
+    br.Branch_Location__Longitude__s = 77.3149885;
+    br.Finnone_Branch_Code__c = 'test6';
+    insert br;
+
+    // Placeholder matrix so the object isn't empty for running-user context;
+    // the REAL matrix used for the branch check gets built after we know the actor.
+    Approval_Matrix__c apro = new Approval_Matrix__c();
+    apro.Name = 'sujeet';
+    apro.Amount__c = 876;
+    apro.HL__c = 87600;
+    apro.LAP__c = 87600;
+    apro.Recommended_For__c = runningUser.Id;
+    apro.Status__c = 'Approved';
+    apro.Branch__c = br.Id;
+    insert apro;
+
+    String recTypeId = [SELECT Id FROM RecordType WHERE SobjectType='Account' AND IsPersonType=True LIMIT 1].Id;
+    Account acc = new Account();
+    acc.FirstName = 'Test';
+    acc.LastName = 'Account';
+    acc.Mobile__pc = '1234567897';
+    acc.Is_this_WhatsApp_Number__pc = true;
+    acc.RecordTypeId = recTypeId;
+    insert acc;
+
+    Customer__c customerObj = new Customer__c();
+    customerObj.Name = 'test';
+    customerObj.Property_Status__c = 'Owned';
+    customerObj.Father_Husband_Name__c = 'test1';
+    customerObj.Customer_Address__c = 'c-125';
+    customerObj.Customer_Status__c = 'Pending';
+    customerObj.Mobile__c = '1234567890';
+    customerObj.Customer_Type__c = 'Normal';
+    customerObj.Loan_Amount_Applied__c = 1234.45;
+    customerObj.Alternate_Mobile_No__c = '0987654321';
+    customerObj.Address_Line_1__c = 'noida';
+    customerObj.Comfortable_EMI__c = 300.99;
+    customerObj.Is_Property_Identified__c = 'Yes';
+    customerObj.Number_of_years_at_current_residence__c = 2;
+    customerObj.Is_the_above_address_Native_place_also__c = true;
+    customerObj.Total_number_of_family_members__c = 5;
+    customerObj.Total_number_of_family_members_met__c = 3;
+    customerObj.Electricity__c = true;
+    customerObj.TV__c = true;
+    customerObj.Fridge__c = true;
+    customerObj.SmartPhone__c = true;
+    customerObj.Car__c = 'yes';
+    customerObj.Toilet__c = true;
+    customerObj.Gas_Connection__c = true;
+    customerObj.Cooler__c = true;
+    customerObj.Two_Wheeler__c = true;
+    customerObj.Pucca_House__c = 'yes';
+    customerObj.Washing_Machine__c = 'yes';
+    customerObj.Name_of_the_Neighbour__c = 'test2';
+    customerObj.Contact_number_of_Neighbour__c = '9876543212';
+    customerObj.Feedback__c = 'Positive';
+    customerObj.Neighbour_Comments__c = 'good';
+    customerObj.Food__c = 234;
+    customerObj.Electricity_Expense__c = 123.90;
+    customerObj.Medicine__c = 123456;
+    customerObj.Children_Fees_Education__c = 87465;
+    customerObj.Rent__c = 12345;
+    customerObj.Petrol_Conveyance__c = 763;
+    customerObj.Approach_of_residence_with_Road__c = true;
+    customerObj.Front_portion_of_residence__c = true;
+    customerObj.One_inside_photograph__c = true;
+    customerObj.X1_inside_photograph_Kitchen__c = true;
+    customerObj.Photo_Toilet__c = true;
+    customerObj.Credit_PD_Comments__c = 'alkjhdlksac';
+    customerObj.LnApp__c = 874387;
+    customerObj.Landmark__c = 'tmc';
+    customerObj.City__c = 'Agra';
+    customerObj.State__c = 'Uttar Pradesh';
+    customerObj.Location_Type__c = 'Urban';
+    customerObj.Hindsight_Approval__c = 'Approved';
+    customerObj.Customer_Name__c = 'xadf';
+    insert customerObj;
+
+    Loan_Product__c loan = new Loan_Product__c();
+    loan.Name = 'MIG01';
+    loan.Loan_Type__c = 'LAP';
+    loan.Status__c = 'Active';
+    insert loan;
+
+    Opportunity oppObj = new Opportunity();
+    oppObj.Name = 'testT';
+    oppObj.Current_Mobile_Number__c = '9112323432';
+    oppObj.Household__c = customerObj.Id;
+    oppObj.StageName = 'Active';
+    oppObj.CloseDate = Date.valueOf('2021-10-10');
+    oppObj.Loan_Number__c = 'AP'+cf.Value__c;
+    oppObj.Religion__c = 'Hindu';
+    oppObj.Location_Type__c = 'Urban';
+    oppObj.Purpose_of_taking_the_loan__c = 'LAP';
+    oppObj.Purpose_of_loan__c = 'Loan Against Property enhancement';
+    oppObj.Caste__c = 'Genral';
+    oppObj.Owner_of_Property__c = 'Male';
+    oppObj.MFN__c = 'test2';
+    oppObj.Is_Owner_2__c = true;
+    oppObj.Add_L1__c = 'test3';
+    oppObj.Add_L2__c = 'test4';
+    oppObj.Add_L3__c = 'test5';
+    oppObj.A_District__c = 'Test6';
+    oppObj.Address_City__c = 'Ajmer';
+    oppObj.Address_State__c = 'Rajasthan';
+    oppObj.AddPin_Code__c = 123345;
+    oppObj.CollAdd1__c = 'Test7';
+    oppObj.CollAdd2__c = 'test8';
+    oppObj.CollAdd3__c = 'test9';
+    oppObj.ColPin__c = 654321;
+    oppObj.Units__c = 'Sq. Feet';
+    oppObj.Is_Owner_1__c = true;
+    oppObj.CFN2__c = 'Test10';
+    oppObj.Area_of_property__c = 9838;
+    oppObj.Present_Condition_of_the_Property__c = 'Rented';
+    oppObj.CO_Applicant_1_First_Name__c = 'test11';
+    oppObj.COApplicant_1_Last_Name__c = 'test12';
+    oppObj.NHB_Categories__c = 'mortgage/property/home equity loans ';
+    oppObj.BM_PD_Status__c = 'Positive';
+    oppObj.Welcome_Call__c = true;
+    oppObj.isPhoneVerified__c = true;
+    oppObj.isAltPhVerified__c = true;
+    oppObj.Loan_Product_Type__c = 'LAP';
+    oppObj.Whatsapp_Number1__c = '565566877';
+    oppObj.Description = 'hyyyy';
+    oppObj.AccountId = acc.Id;
+    oppObj.LM_Loan_Status__c = 'Sanctioned';
+    insert oppObj;
+ CAM__c camObj = new CAM__c();
+            //Loan_Application__r.Household__c
+            camObj.Total_Number_of_Family_Members__c=12;
+            camObj.RHExpenses__c =123;
+            camObj.Radial_Low_Count__c=234;
+            camObj.Radial_Low__c=235;
+            camObj.Radial_High_Count__c=234; 
+            camObj.Radial_High__c=234; 
+            camObj.Proposed_Construction_Value__c=234; 
+            camObj.Proposed_Construction_area__c=456; 
+            camObj.Property_Location__c='Gram Panchayat Area'; 
+            camObj.Property_is_self_occupied_residential_pr__c=true;
+            camObj.Property_is_not_in_Negative_area__c=true; 
+            camObj.property_is_not_identified__c=true; 
+            camObj.PropArea_Units__c='sq meters'; 
+            camObj.Product__c='Home Extension'; 
+            camObj.No_Applicant_in_Caution_profile_list__c=false; 
+            camObj.NHB_Categories__c='Construction/purchase of new units'; 
+            camObj.Loan_Type__c='LAP'; 
+            //camObj.Loan_Product__r.Name
+            camObj.LnApp__c =80000;
+            camObj.LAP_End_use_Comment__c='eee'; 
+            camObj.LAP_End_use__c='Marriage'; 
+            camObj.Land_Value__c=231; 
+            camObj.Land_Area_Units__c='Sq meters'; 
+            camObj.Land_area_is_more_than_minimum_norms__c=false; 
+            camObj.Land_Area__c=5645; 
+            camObj.Is_DedupePositive__c=true; 
+            camObj.Income_Type__c ='Undocumented'; 
+            camObj.Income__c=668;
+            camObj.Income_2__c =668;
+            camObj.Income_3__c=668;
+            camObj.Income_4__c=668;
+            camObj.Income_5__c=668;
+            camObj.Income_6__c=234234;
+            camObj.House_Type__c='Independent'; 
+            camObj.HL_Tenor__c=55; 
+            camObj.HLROI__c=12; 
+            camObj.Exposure_Type__c='Individual'; 
+            camObj.Education__c='Post Graduate'; 
+            camObj.Education_2__c ='Graduate';
+            camObj.Education_3__c='12th Pass';
+            camObj.Education_4__c='10th Pass';
+            camObj.Doc_Value_of_Prop__c=123; 
+            camObj.Credit_PD__c='Field Visit'; 
+            camObj.ComEMI__c=23423;
+            camObj.Citizenship__c = 'Resident Indian';
+            camObj.Build_Up_Construction_Value__c=34234; 
+            camObj.Build_Up_Area_Units__c = 'sq meters';
+            camObj.Build_Up_Area__c=1234;
+            camObj.Approval_Date__c = system.today();         
+            camObj.Name_of_Account_Holder_1__c  = 'xzc'; 
+            camObj.Bank_name__c  = 'xzc'; 
+            camObj.Bank_Cheque_Bounces__c = 23423;
+            camObj.Name_of_Account_Holder_2__c  = 'xzc'; 
+            camObj.Bank_Name_2__c = 'xxxvv'; 
+           camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+            camObj.Bank_Cheque_Bounces_2__c=2342;  
+                camObj.Is_there_any_ST_Condition__c = 'No';
+
+            camObj.Name_of_Account_Holder_3__c = 'xzc'; 
+            camObj.Bank_Name_3__c  ='xyz';
+            camObj.Bank_Cheque_Bounces_3__c =234;  
+            camObj.Name_of_Account_Holder_4__c = 'test';
+            camObj.Bank_Name_4__c = 'werwer';  
+            camObj.Bank_Cheque_Bounces_4__c = 7553; 
+            camObj.Saving_Method_1__c ='rerw';
+            camObj.Saving_Method_1_Amount__c = 2334;
+            camObj.Saving_Method_2__c = 'rtry'; 
+            camObj.Saving_Method_2_Amount__c = 234;
+            camObj.Saving_Method_3__c  = 'new';
+            camObj.Saving_Method_3_Amount__c = 12321;
+           
+            camObj.Highmark_Score_of_Main_applicant__c = '1234'; 
+            camObj.Branch_Name__c = 'Ajmer-1';
+            camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch_Manager_Name__c = 'Gaurav';
+              camObj.Purpose_of_Loan__c = 'Construction Loan';
+            camObj.Land_Area__c = 22;
+            camObj.Build_Up_Area__c = 44;
+            camObj.Final_Decision__c = 'Pending';
+            camObj.Loan_Application__c = oppObj.Id;
+            camObj.Branch__c = br.id;
+            camObj.Loan_Product__c = loan.Id;
+           // camObj.UnderWriter__c = u.Id;
+            
+            insert camObj;
+
+    Test.startTest();
+
+    Approval.ProcessSubmitRequest apreq = new Approval.ProcessSubmitRequest();
+    apreq.setComments('for approval');
+    apreq.setObjectId(camObj.Id);
+    apreq.setSubmitterId(runningUser.Id);
+    apreq.setSkipEntryCriteria(true);
+    apreq.setProcessDefinitionNameOrId('Cam_Approval');
+    apreq.setNextApproverIds(new List<Id>{ runningUser.Id });
+    Approval.process(apreq);
+
+    // Find out who the workitem was actually assigned to
+    ProcessInstanceWorkitem wi = [
+        SELECT Id, ActorId
+        FROM ProcessInstanceWorkitem
+        WHERE ProcessInstance.TargetObjectId = :camObj.Id
+        ORDER BY CreatedDate DESC LIMIT 1
+    ];
+
+    User actorUser = [SELECT Id, UserName FROM User WHERE Id = :wi.ActorId];
+    User cu = [select Id, username from User where Id= :UserInfo.getUserId()];
+    System.debug('abbx: '+ actorUser); 
+    System.debug('abbxx: '+ cu); //both same
     
-    @isTest
-    static void testGetDetail_MissingMobileParam() {
-        RestRequest req = new RestRequest();
-        RestResponse res = new RestResponse();
-        
-        req.requestURI = '/services/apexrest/dashboardApiV1/getDetail';
-        req.httpMethod = 'GET';
-        req.params.put('currentVersion', '1.0'); 
-        
-        RestContext.request = req;
-        RestContext.response = res;
-        
-        Test.startTest();
-        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-        Test.stopTest();
-        
-        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
-        System.assertEquals('400', responseWrapper.response.resCode, 'Response Code should be 400');
-        System.assertEquals('required parameter is empty', responseWrapper.response.resMessage, 'Appropriate error message expected');
-    }
     
-    @isTest
-    static void testGetDetail_ExceptionCatchBlock() {
-        RestContext.request = null;
-        RestContext.response = new RestResponse();
-        
-        Test.startTest();
-        DashboardApi_V1.WrapperClass responseWrapper = DashboardApi_V1.getDetail();
-        Test.stopTest();
-        
-        System.assertNotEquals(null, responseWrapper, 'Wrapper should not be null');
-        System.assertEquals('400', responseWrapper.response.resCode, 'Response Code should be 400 from exception catch block');
-        System.assert(responseWrapper.response.resMessage.contains('line number'), 'Exception message should be captured');
-    }
+    // Matrix recommended for the REAL actor, with a limit low enough to force the addError
+    Approval_Matrix__c actorMatrix = new Approval_Matrix__c();
+    actorMatrix.Name = 'ActorMatrixLAP';
+    actorMatrix.Recommended_For__c = actorUser.Id;
+    actorMatrix.Status__c = 'Approved';
+    actorMatrix.Branch__c = br.Id;
+    actorMatrix.LAP__c = -1;
+    actorMatrix.HL__c = 87600;
+    insert actorMatrix;
+
+    //System.runAs(actorUser){
+        /*Approval.ProcessWorkitemRequest pwr = new Approval.ProcessWorkitemRequest();
+        pwr.setComments('approving as actual actor');
+        pwr.setAction('Approve');
+        pwr.setWorkitemId(wi.Id);
+        Approval.process(pwr);*/
+
+        if(Approval.isLocked(camObj.Id)){
+            Approval.unlock(camObj.Id);
+        }
+
+        CAM__c toUpdate = [SELECT Id, Loan_Type__c, Final_Decision__c FROM CAM__c WHERE Id = :camObj.Id];
+        toUpdate.Loan_Type__c = 'LAP';
+        toUpdate.Final_Decision__c = 'Approved';
+        try {
+            update toUpdate;
+            System.assert(false, 'Expected addError from CAMSanctionAmountLimit was not thrown');
+        } catch(Exception e) {
+            System.assert(e.getMessage().contains(Label.CAMSanctionAmountLimitValidation),
+                'Unexpected exception: ' + e.getMessage());
+        }
+    //}
+
+    Test.stopTest();
+}
+    
+ 
 }
