@@ -10,9 +10,6 @@ public with sharing class CAMSanctionAmountLimit {
         }
         
         Map<String, Approval_Matrix__c> approvalMatrixMap = new Map<String, Approval_Matrix__c>();
-        List<Approval_Matrix__c> mlist = [Select Id, Recommended_For__c, Recommended_For__r.UserName, Status__c from Approval_Matrix__c];
-        System.debug('Point 1 debug: '+mlist);
-        System.debug('Point 2 getUserName()==>'+UserInfo.getUserId());
         
         for(Approval_Matrix__c appMat : [SELECT Id, HL__c, LAP__c, Recommended_For__c, Recommended_For__r.UserName FROM Approval_Matrix__c where Status__c = 'Approved'
                                          AND Recommended_For__r.UserName =: UserInfo.getUserName()]){
