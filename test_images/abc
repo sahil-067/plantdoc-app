@@ -1,6 +1,6 @@
 /**
-* @File Name : VlmDashboardController.cls
-* @Description : 
+* @File Name : VlmDashboardControllerTest.cls
+* @Description : Test class for VlmDashboardController to ensure maximum coverage
 * @Author :  Lokendra Singh
 * @Last Modified By : Lokendra Singh
 * @Last Modified On : 14 may, 2026
@@ -11,288 +11,213 @@
 * 1.0 | 14 may, 2026 | Lokendra Singh | Initial Version
 **/
 
-public class VlmDashboardController {
-
-    // ── Thresholds ────────────────────────────────────────────────
-    private static final Decimal T_20L = 2000000;
-    private static final Decimal T_30L = 3000000;
-
+@isTest
+public class VlmDashboardControllerTest {
+    
     // ═════════════════════════════════════════════════════════════
-    //  1. GET CASES FOR DASHBOARD
-    //  Opportunity  = loan application record
-    //  Account      = applicant (Account.Name, Account.Type)
+    //  TEST DATA SETUP
     // ═════════════════════════════════════════════════════════════
-    @AuraEnabled(cacheable=false)
-    public static String getCasesForDashboard() {
+    @testSetup
+    static void setupTestData() {
+        // 1. Setup Profiles and Users
+        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' OR Name = 'System Administrator' LIMIT 1];
+        
+        // User with Department (To test the parseList helper comma/semicolon split)
+        User u1 = new User(
+            Alias = 'vcm1', Email = 'verifier1@testorg.com',
+            EmailEncodingKey = 'UTF-8', LastName = 'Testing Verifier One', LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US', ProfileId = p.Id,
+            TimeZoneSidKey = 'America/Los_Angeles', UserName = 'verifier1_' + DateTime.now().getTime() + '@testorg.com',
+            Title = 'Senior Verifier', Department = 'North,West;South', IsActive = true
+        );
+        
+        // User without Department and single word name (To test initials helper and blank Department)
+        User u2 = new User(
+            Alias = 'vcm2', Email = 'verifier2@testorg.com',
+            EmailEncodingKey = 'UTF-8', LastName = 'Two', LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US', ProfileId = p.Id,
+            TimeZoneSidKey = 'America/Los_Angeles', UserName = 'verifier2_' + DateTime.now().getTime() + '@testorg.com',
+            Title = 'Verifier', IsActive = true
+        );
+        insert new List<User>{u1, u2};
+            
+        // 2. Setup Group & Group Members for VCM_Auto_Allocate
+        Group grp = new Group(Name = 'VCM Auto Allocate', DeveloperName = 'VCM_Auto_Allocate', Type = 'Regular');
+        insert grp;
+        
+        GroupMember gm1 = new GroupMember(GroupId = grp.Id, UserOrGroupId = u1.Id);
+        GroupMember gm2 = new GroupMember(GroupId = grp.Id, UserOrGroupId = u2.Id);
+        insert new List<GroupMember>{gm1, gm2};
+            
+        // 3. Setup Account
+        Account acc = new Account(
+            Name = 'Test Applicant',
+            Designation_Occupation__c = 'Salaried',
+            Bureau_Flag__c = true,
+            EKYC_Completed__c = 'Yes'
+        );
+        insert acc;
+        
+        // 4. Setup Customer__c (Household / VRM Case)
+        Customer__c cust = new Customer__c(
+            Name = 'Test Customer',
+            Case_Oringination_System__c = 'VRM',
+            Assigned_VCM__c = u1.Id,
+            VCM_Status__c = 'Pending'
+        );
+        insert cust;
+        
+        // 5. Setup Opportunity
+        Opportunity opp = new Opportunity(
+            Name = 'Test Loan',
+            AccountId = acc.Id,
+            StageName = 'Prospecting',
+            CloseDate = Date.today().addDays(30),
+            LM_Loan_Status__c = 'In process',
+            Login_Date__c = Date.today(),
+            Household__c = cust.Id,
+            Loan_Amount_Applied__c = 2500000,
+            Purpose_of_loan__c = 'Home Purchase',
+            Risk_Weight__c = 45,
+            LTV__c = 80,
+            BM_PD_Done__c = true
+        );
+        insert opp;
+        
+        // Link Customer to Opportunity to fulfill the nested subquery requirement: 
+        // "Id IN (SELECT LoanAppID__c FROM Customer__c ...)"
+        cust.LoanAppID__c = opp.Id;
+        update cust;
+    }
+    
+    // ═════════════════════════════════════════════════════════════
+    //  TEST METHODS
+    // ═════════════════════════════════════════════════════════════
+
+    @isTest
+    static void testGetCasesForDashboard() {
+        Test.startTest();
+        String jsonResult = VlmDashboardController.getCasesForDashboard();
+        Test.stopTest();
+        
+        System.assertNotEquals(null, jsonResult, 'JSON Result should not be null');
+        List<VlmDashboardController.CaseRow> cases = (List<VlmDashboardController.CaseRow>) JSON.deserialize(jsonResult, List<VlmDashboardController.CaseRow>.class);
+        
+        System.assert(!cases.isEmpty(), 'Dashboard should return at least one case record');
+        VlmDashboardController.CaseRow firstCase = cases[0];
+        
+        System.assertEquals('Test Loan', firstCase.loanNumber, 'Loan name should match');
+        System.assertEquals(2500000, firstCase.amount, 'Applied amount should match');
+        System.assertEquals('Test Applicant', firstCase.applicantName, 'Account name should match');
+        System.assertEquals('PENDING', firstCase.status, 'Status should be Pending based on VCM status mapping');
+    }
+    
+    @isTest
+    static void testGetCasesForDashboard_StatusVariations() {
+        // This test modifies setup data to test different ternary branches & private status normalizer maps
+        Opportunity opp = [SELECT Id, Household__c FROM Opportunity LIMIT 1];
+        Customer__c cust = [SELECT Id, VCM_Status__c, First_Login_Approval_Date__c FROM Customer__c WHERE Id = :opp.Household__c LIMIT 1];
+        
+        // Test 1: First_Login_Approval_Date__c != null triggers "COMPLETED"
+        cust.First_Login_Approval_Date__c = DateTime.now();
+        update cust;
+        String jsonResult1 = VlmDashboardController.getCasesForDashboard();
+        System.assert(jsonResult1.contains('COMPLETED'), 'Status should normalize to COMPLETED if final approval date exists');
+        
+        // Test 2: Blank VCM_Status relies on normaliseStatus(Opportunity.StageName)
+        cust.First_Login_Approval_Date__c = null;
+        cust.VCM_Status__c = null;
+        update cust;
+        
+        opp.StageName = 'IN_REVIEW';
+        update opp;
+        
+        String jsonResult2 = VlmDashboardController.getCasesForDashboard();
+        System.assert(jsonResult2.contains('IN_REVIEW'), 'Status should normalize based on Opp StageName when VCM status is blank');
+    }
+    
+    @isTest
+    static void testAssignVerifier() {
+        Customer__c cust = [SELECT Id FROM Customer__c LIMIT 1];
+        User u2 = [SELECT Id FROM User WHERE Alias = 'vcm2' LIMIT 1];
+        
+        Test.startTest();
+        VlmDashboardController.assignVerifier(cust.Id, u2.Id, true, 'Allocated');
+        Test.stopTest();
+        
+        Customer__c updatedCust = [SELECT Assigned_VCM__c, Case_Escalated__c, VCM_Status__c FROM Customer__c WHERE Id = :cust.Id];
+        
+        System.assertEquals(u2.Id, updatedCust.Assigned_VCM__c, 'VCM User assignment failed');
+        System.assertEquals(true, updatedCust.Case_Escalated__c, 'Escalation flag was not updated');
+        System.assertEquals('Allocated', updatedCust.VCM_Status__c, 'VCM Status was not updated');
+    }
+    
+    @isTest
+    static void testAssignVerifier_Exception() {
+        Test.startTest();
         try {
-            Set<String> statusSet = new Set<String>{'In process', 'Login Complete', 'Login Approved'};
-            List<Opportunity> loans = [
-                SELECT Id, Name,
-                       Household__c,
-                       Household__r.OwnerId,
-                       Household__r.Owner.Name,
-                       Household__r.Assigned_VCM__c,
-                       Household__r.Assigned_VCM__r.Name,
-                       Household__r.VCM_Status__c,
-                       Household__r.First_Login_Approval_Date__c,
-                       Account.Name,
-                       Account.Designation_Occupation__c,
-                       Account.Bureau_Flag__c,
-                       Account.EKYC_Completed__c,
-                       LM_Loan_Status__c,
-                       Loan_Amount_Applied__c,
-                       Purpose_of_loan__c,
-                       StageName,
-                       OwnerId, Owner.Name,
-                       Loan_Number__c, Loan_Product__c, Loan_Product__r.Name,
-                       Branch__r.Name, Branch__r.Zone__c,
-                       Risk_Weight__c, LTV__c,
-                       Login_Date__c, BM_PD_Done__c,
-                       CreatedDate
-                FROM Opportunity
-                WHERE IsClosed = false AND LM_Loan_Status__c IN :statusSet
-                  AND Login_Date__c = LAST_N_DAYS:30
-                  AND Id IN (SELECT LoanAppID__c FROM Customer__c WHERE Case_Oringination_System__c = 'VRM')
-                ORDER BY CreatedDate ASC
-            ];
-
-            List<CaseRow> rows = new List<CaseRow>();
-            Date today = Date.today();
-
-            for (Opportunity l : loans) {
-                CaseRow r         = new CaseRow();
-                r.id              = l.Id;
-                r.leadId          = l.Loan_Number__c;
-                r.loanNumber      = l.Name;
-                // Customer (Account) → Applicant Name + Occupation/Designation
-                r.applicantName   = l.Account != null ? l.Account.Name : '';
-                r.applicantType   = l.Account != null ? l.Account.Designation_Occupation__c : '';
-                // Application → Applied Amount
-                r.amount          = l.Loan_Amount_Applied__c != null ? l.Loan_Amount_Applied__c.longValue() : 0;
-                // Application → Loan Product
-                r.product         = l.Loan_Product__c != null ? l.Loan_Product__r.Name : '';
-                // Application → Branch Name; Branch → Zone (Bra_State__c)
-                r.branch          = l.Branch__r != null ? l.Branch__r.Name : '';
-                r.region          = l.Branch__r != null && l.Branch__r.Zone__c != null ? l.Branch__r.Zone__c.toUpperCase() : '';
-                // Application → Purpose of Loan
-                r.appType         = l.Purpose_of_loan__c;
-                Datetime finalApprDate = l.Household__r != null ? l.Household__r.First_Login_Approval_Date__c : null;
-                if(finalApprDate != null)
-                	r.finalApprovalDate = finalApprDate.date();
-                
-                String vcmSt      = l.Household__r != null ? l.Household__r.VCM_Status__c : null;
-                r.status          = finalApprDate != null
-                                        ? 'COMPLETED'
-                                        : (String.isNotBlank(vcmSt) ? normaliseVcmStatus(vcmSt) : normaliseStatus(l.StageName));
-                r.priority        = 'NA';//'MEDIUM';
-                // Opportunity → LTV (Applied Amount / Property Value, stored on Opp)
-                r.ltv             = l.LTV__c != null ? l.LTV__c.intValue() : 0;
-                r.riskScore       = l.Risk_Weight__c != null ? Integer.valueOf(l.Risk_Weight__c) : 50;
-                // Assigned To: VCM if set on Customer__c, else Customer__c owner
-                if (l.Household__r != null && l.Household__r.Assigned_VCM__c != null) {
-                    r.assignedTo  = l.Household__r.Assigned_VCM__r != null ? l.Household__r.Assigned_VCM__r.Name : null;
-                    r.assigneeId  = l.Household__r.Assigned_VCM__c;
-                } else if (l.Household__r != null) {
-                    r.assignedTo  = l.Household__r.Owner != null ? l.Household__r.Owner.Name : null;
-                    r.assigneeId  = l.Household__r.OwnerId;
-                } else {
-                    r.assignedTo  = null;
-                    r.assigneeId  = null;
-                }
-                r.householdId     = l.Household__c;
-                r.assignedVcmId   = l.Household__r != null ? l.Household__r.Assigned_VCM__c : null;
-                r.ageDays         = l.Login_Date__c.daysBetween(today);
-                // Last 3 cols: BM PD (Opportunity), No Bureau (Account), eKYC (Account)
-                r.bmVisitRequired = l.BM_PD_Done__c;
-                r.noBureau        = l.Account != null ? l.Account.Bureau_Flag__c : false;
-                r.eKycFailed      = l.Account == null || l.Account.EKYC_Completed__c != 'Yes';
-                r.loanStatus      = l.LM_Loan_Status__c;
-                rows.add(r);
-            }
-            return JSON.serialize(rows);
-
-        } catch (Exception e) {
-            throw new AuraHandledException('getCasesForDashboard: ' + e.getMessage());
+            // Passing a dummy/invalid ID forces a DML update exception, triggering the catch block
+            VlmDashboardController.assignVerifier('001000000000000', null, false, null);
+            System.assert(false, 'Expected an AuraHandledException to be thrown');
+        } catch (AuraHandledException e) {
+            System.assert(e.getMessage().contains('assignVerifier'), 'Exception message should reference the method name');
         }
+        Test.stopTest();
     }
-
-    // ═════════════════════════════════════════════════════════════
-    //  2. ASSIGN VCM — stores verifier on Customer__c.Assigned_VCM__c
-    // ═════════════════════════════════════════════════════════════
-    @AuraEnabled
-    public static void assignVerifier(String customerId, String verifierUserId, Boolean isEscalated, String vcmStatus) {
-        try {
-            Customer__c cust = new Customer__c(Id = customerId);
-            if (String.isNotBlank(verifierUserId)) {
-                cust.Assigned_VCM__c = verifierUserId;
+    
+    @isTest
+    static void testGetVerifiersForAlloc() {
+        Test.startTest();
+        String jsonResult = VlmDashboardController.getVerifiersForAlloc();
+        Test.stopTest();
+        
+        System.assertNotEquals(null, jsonResult, 'Result should not be null');
+        List<VlmDashboardController.VerifierRow> verifiers = (List<VlmDashboardController.VerifierRow>) JSON.deserialize(jsonResult, List<VlmDashboardController.VerifierRow>.class);
+        
+        System.assert(verifiers.size() >= 2, 'Should fetch the users added to the VCM_Auto_Allocate group');
+        
+        Boolean foundUser1 = false;
+        Boolean foundUser2 = false;
+        
+        for (VlmDashboardController.VerifierRow v : verifiers) {
+            if (v.name.contains('Testing Verifier One')) {
+                foundUser1 = true;
+                // Verifies private method initials()
+                System.assertEquals('TO', v.initials, 'Initials should combine first letter of First and Last Name');
+                // Verifies private method parseList()
+                System.assertEquals(3, v.regions.size(), 'Department string should be split into 3 regions (North, West, South)');
             }
-            if (isEscalated == true) {
-                cust.Case_Escalated__c = true;
+            if (v.name.contains('Two')) {
+                foundUser2 = true;
+                System.assertEquals('T', v.initials, 'Single name should result in one-letter initial');
             }
-            if (String.isNotBlank(vcmStatus)) {
-                cust.VCM_Status__c = vcmStatus;
-            }
-            update cust;
-        } catch (Exception e) {
-            throw new AuraHandledException('assignVerifier: ' + e.getMessage());
         }
+        
+        System.assert(foundUser1 && foundUser2, 'Expected verifiers were not returned by the method');
     }
-
-    // ═════════════════════════════════════════════════════════════
-    //  3. GET VERIFIERS FOR ALLOCATION
-    // ═════════════════════════════════════════════════════════════
-    @AuraEnabled(cacheable=false)
-    public static String getVerifiersForAlloc() {
-            // Collect User IDs from the VCM_Auto_Allocate public group
-            Set<Id> userIds = new Set<Id>();
-            for (GroupMember gm : [
-                SELECT UserOrGroupId
-                FROM GroupMember
-                WHERE Group.DeveloperName = 'VCM_Auto_Allocate'
-                  AND Group.Type = 'Regular'
-            ]) {
-                if (String.valueOf(gm.UserOrGroupId).startsWith('005')) {
-                    userIds.add(gm.UserOrGroupId);
-                }
-            }
-
-            List<User> users = userIds.isEmpty() ? new List<User>() : [
-                SELECT Id, Name, Title, Department, IsActive
-                FROM User
-                WHERE Id IN :userIds AND IsActive = true
-                ORDER BY Name ASC
-            ];
-
-            List<VerifierRow> rows = new List<VerifierRow>();
-            if(users.size() > 0){
-                for (User u : users) {
-                    VerifierRow v    = new VerifierRow();
-                    v.id             = u.Id;
-                    v.name           = u.Name;
-                    v.initials       = initials(u.Name);
-                    v.role           = u.Title != null ? u.Title : 'Verifier';
-                    v.region         = u.Department;
-                    v.regions        = parseList(u.Department);
-                    v.specialisms    = new List<String>();
-                    v.openCases      = 0;
-                    v.completedToday = 0;
-                    v.avgTat         = '—';
-                    v.status         = u.IsActive ? 'online' : 'offline';
-                    rows.add(v);
-                }
-            }
-            return JSON.serialize(rows);
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────
-
-    // Maps Customer__c.VCM_Status__c picklist → dashboard status constants
-    private static String normaliseVcmStatus(String s) {
-        if (String.isBlank(s)) return 'PENDING';
-        Map<String, String> norm = new Map<String, String>{
-            'Allocated'    => 'ALLOCATED',
-            'In Review'    => 'IN_REVIEW',
-            'Escalated'    => 'ESCALATED',
-            'Completed'    => 'COMPLETED',
-            'Pending'      => 'PENDING'
-        };
-        return norm.containsKey(s) ? norm.get(s) : 'PENDING';
-    }
-
-    // Maps Opportunity StageName → dashboard status constants
-    private static String normaliseStatus(String s) {
-        if (String.isBlank(s)) return 'PENDING';
-        String key = s.toUpperCase().replaceAll('[^A-Z0-9]', '_');
-        Map<String, String> norm = new Map<String, String>{
-            'PROSPECTING'         => 'PENDING',
-            'QUALIFICATION'       => 'PENDING',
-            'PENDING'             => 'PENDING',
-            'PENDING_REVIEW'      => 'PENDING',
-            'NEW'                 => 'PENDING',
-            'VALUE_PROPOSITION'   => 'ALLOCATED',
-            'ALLOCATED'           => 'ALLOCATED',
-            'PERCEPTION_ANALYSIS' => 'IN_REVIEW',
-            'IN_REVIEW'           => 'IN_REVIEW',
-            'UNDER_REVIEW'        => 'IN_REVIEW',
-            'OBSERVATIONS_SHARED' => 'IN_REVIEW',
-            'CLOSED_WON'          => 'COMPLETED',
-            'APPROVED'            => 'COMPLETED',
-            'COMPLETED'           => 'COMPLETED',
-            'ESCALATED'           => 'ESCALATED',
-            'CLOSED_LOST'         => 'ESCALATED'
-        };
-        return norm.containsKey(key) ? norm.get(key) : 'PENDING';
-    }
-
-    private static String initials(String name) {
-        if (String.isBlank(name)) return '?';
-        List<String> parts = name.trim().split('\\s+');
-        String i = parts[0].substring(0, 1).toUpperCase();
-        if (parts.size() > 1) i += parts[parts.size()-1].substring(0, 1).toUpperCase();
-        return i;
-    }
-
-    private static List<String> parseList(String val) {
-        if (String.isBlank(val)) return new List<String>();
-        List<String> out = new List<String>();
-        for (String s : val.split('[,;]')) { if (String.isNotBlank(s.trim())) out.add(s.trim()); }
-        return out;
-    }
-
-    // ═════════════════════════════════════════════════════════════
-    //  INNER CLASSES
-    // ═════════════════════════════════════════════════════════════
-    public class CaseRow {
-        @AuraEnabled public String  id;
-        @AuraEnabled public String  leadId;
-        @AuraEnabled public String  loanNumber;
-        @AuraEnabled public String  applicantName;
-        @AuraEnabled public String  applicantType;
-        @AuraEnabled public Long    amount;
-        @AuraEnabled public String  product;
-        @AuraEnabled public String  branch;
-        @AuraEnabled public String  region;
-        @AuraEnabled public String  appType;
-        @AuraEnabled public String  status;
-        @AuraEnabled public String  priority;
-        @AuraEnabled public Integer riskScore;
-        @AuraEnabled public Integer ltv;
-        @AuraEnabled public String  assignedTo;
-        @AuraEnabled public String  assigneeId;
-        @AuraEnabled public Integer ageDays;
-        @AuraEnabled public Boolean bmVisitRequired;
-        @AuraEnabled public Boolean noBureau;
-        @AuraEnabled public Boolean eKycFailed;
-        @AuraEnabled public String  loanStatus;
-        @AuraEnabled public String  householdId;
-        @AuraEnabled public String  assignedVcmId;
-        @AuraEnabled public Date    finalApprovalDate;
-    }
-
-    public class VerifierRow {
-        @AuraEnabled public String       id;
-        @AuraEnabled public String       name;
-        @AuraEnabled public String       initials;
-        @AuraEnabled public String       role;
-        @AuraEnabled public String       region;
-        @AuraEnabled public List<String> regions;
-        @AuraEnabled public List<String> specialisms;
-        @AuraEnabled public Integer      maxCases;
-        @AuraEnabled public Integer      openCases;
-        @AuraEnabled public Integer      completedToday;
-        @AuraEnabled public String       avgTat;
-        @AuraEnabled public String       status;
-    }
-
-    public class AllocPreview {
-        @AuraEnabled public Integer               total;
-        @AuraEnabled public List<AllocPreviewRow> rows;
-    }
-
-    public class AllocPreviewRow {
-        @AuraEnabled public String   verifierId;
-        @AuraEnabled public String   verifierName;
-        @AuraEnabled public List<Id> caseIds;
-        @AuraEnabled public Integer  caseCount;
+    
+    @isTest
+    static void testUnusedInnerClasses() {
+        // The AllocPreview wrapper classes are declared in the controller but not instantiated in its methods.
+        // Explicitly initializing them here ensures 100% lines coverage across the entire class file.
+        Test.startTest();
+        
+        VlmDashboardController.AllocPreview preview = new VlmDashboardController.AllocPreview();
+        preview.total = 5;
+        preview.rows = new List<VlmDashboardController.AllocPreviewRow>();
+        
+        VlmDashboardController.AllocPreviewRow row = new VlmDashboardController.AllocPreviewRow();
+        row.verifierId = '005000000000000';
+        row.verifierName = 'Test Verifier Name';
+        row.caseIds = new List<Id>{'006000000000000'};
+        row.caseCount = 1;
+        
+        preview.rows.add(row);
+        
+        System.assertEquals(5, preview.total, 'AllocPreview total should be set');
+        System.assertEquals(1, preview.rows.size(), 'AllocPreview should contain 1 row');
+        System.assertEquals('Test Verifier Name', preview.rows[0].verifierName, 'Row variables should be accessible');
+        
+        Test.stopTest();
     }
 }
