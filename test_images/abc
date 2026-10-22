@@ -1,362 +1,8 @@
-here is an apex class
-
-
-public class OzonetelIntegration {
-        @future(callout=true)
-        public static void callOzonetelAPI(Set<Id> leadIds) {
-            List<Ozonetel_Tracker__c> ozonetelTrackerList = new List<Ozonetel_Tracker__c>();
-            String leadSource = System.Label.OzoneteLeadSource;
-        
-            //End Here
-            System.debug('leadSource'+leadSource);
-            List<String> listleadSource = leadSource.split(',');
-            System.debug('listleadSource'+listleadSource);
-            String leadSubSource = System.Label.OzoneteLeadSubSource;
-            System.debug('leadSubSource'+leadSubSource);
-            List<String> listleadSubSource = leadSubSource.split(',');
-            System.debug('listleadSubSource'+listleadSubSource);
-            String leadId; //This is used for Skill
-            String campaignId; // This is Used for campaign Name
-            Integer temp=0;
-            
-            
-            try {
-                // Fetch necessary metadata
-            
-                OzonetelNewSetting__c ozonetelSettings = OzonetelNewSetting__c.getValues('OZonetel');
-                if (ozonetelSettings == null) {
-                    System.debug('Ozonetel settings not found for OZonetel.');
-                    // throw new CustomException('Ozonetel settings are missing. Please configure the required custom settings.');
-                }
-                
-                // Organize metadata into a map keyed by campaign__c for easy lookup
-            
-                Time initialTime;
-                Time endTime;
-                String currentDay;
-                Datetime now = System.now();
-                Time curTime;
-                    initialTime = Time.newInstance(9, 30, 0, 0);
-                    endTime = Time.newInstance(18, 30, 0, 0);
-                    currentDay = now.format('EEEE');
-                    curTime = now.time();
-            
-                System.debug('INITIAL TIME::::'+initialTime);
-                System.debug('END TIME::::'+endTime);
-                System.debug('Current Time:::'+now);
-                
-                
-                
-                List<Pincode_Master__c> pinList = [
-                    SELECT Name FROM Pincode_Master__c WHERE Region__c = 'South'
-                ];
-                Set<String> southPincodes = new Set<String>();
-                for (Pincode_Master__c pin : pinList) {
-                    southPincodes.add(pin.Name);
-                }
-                System.debug('southPincodes '+southPincodes);
-                List<Lead> leadList=[ SELECT Id,Name, Lead_Phone_Number_1__c, PostalCode,How_did_you_come_to_know_about_us__c
-                    FROM Lead WHERE Id IN :leadIds];
-                // Fetch leads to process
-             
-                for(Lead ld : leadList){
-                //Added by Ankit Tiwari 29-04-2025
-                String priority,customfield;
-                    if(curTime >= initialTime && curTime <= endTime)
-                    {
-                        priority=ozonetelSettings.priority__c;
-                            customfield=ozonetelSettings.CustomFields1__c;
-                    }
-                    else
-                    {
-                        priority=ozonetelSettings.Priority_Non_Business_Hour__c;
-                             customfield=ozonetelSettings.CustomFields2__c;
-                    }
-                    if(ld.How_did_you_come_to_know_about_us__c=='Cibil Trigger' || ld.How_did_you_come_to_know_about_us__c=='Retention'){
-                     if(ld.How_did_you_come_to_know_about_us__c=='Cibil Trigger' && !southPincodes.contains(ld.PostalCode)){
-                         temp=1;
-                         
-                              campaignId = ozonetelSettings.North_Digital_Topup_Ret_Cib__c != null
-                                ? String.valueOf(ozonetelSettings.North_Digital_Topup_Ret_Cib__c)
-                                : null;
-                            	leadId = ozonetelSettings.Digital_Sales_Topup_Rest_of_India_OTS__c != null
-                                ? String.valueOf(ozonetelSettings.Digital_Sales_Topup_Rest_of_India_OTS__c)
-                                : null;
-                       
-                         
-                       System.debug('campaignId '+campaignId);
-                          System.debug('leadId '+leadId);
-                    }
-                    System.debug('campaignId '+campaignId);
-                          System.debug('leadId '+leadId);
-                     if(ld.How_did_you_come_to_know_about_us__c=='Retention'){
-                         temp=1;
-                         if(southPincodes.contains(ld.PostalCode))
-                         {
-                              campaignId = ozonetelSettings.RetentionCampaignId__c != null
-                                ? String.valueOf(ozonetelSettings.RetentionCampaignId__c)
-                                : null;
-                            leadId = ozonetelSettings.RetentionSkillId__c != null
-                                ? String.valueOf(ozonetelSettings.RetentionSkillId__c)
-                                : null;
-                         }
-                         else
-                         {
-                              campaignId = ozonetelSettings.North_Digital_Topup_Ret_Cib__c != null
-                                ? String.valueOf(ozonetelSettings.North_Digital_Topup_Ret_Cib__c)
-                                : null;
-                            	leadId = ozonetelSettings.Digital_Sales_Topup_Rest_of_India_OTS__c != null
-                                ? String.valueOf(ozonetelSettings.Digital_Sales_Topup_Rest_of_India_OTS__c)
-                                : null;
-                         }
-                       
-                    }
-                    }
-                    else{
-                    //End Here
-                    // Determine leadId and campaignId based on business hours, region, and day
-                    if (southPincodes.contains(ld.PostalCode)) {
-                        if (currentDay == 'Sunday') {
-                            campaignId = ozonetelSettings.Campain__c != null
-                                ? String.valueOf(ozonetelSettings.Campain__c)
-                                : null;
-                            leadId = ozonetelSettings.leadWithPostalMatchSunday__c != null
-                                ? String.valueOf(ozonetelSettings.leadWithPostalMatchSunday__c)
-                                : null;
-                        } 
-                        else if (curTime >= initialTime && curTime <= endTime) {
-                            leadId = ozonetelSettings.leadWithinTimeDurationSouthZone__c != null
-                                ? String.valueOf(ozonetelSettings.leadWithinTimeDurationSouthZone__c)
-                                : null;
-                            campaignId = ozonetelSettings.campaignWithinTimeDurationSouthZone__c != null
-                                ? String.valueOf(ozonetelSettings.campaignWithinTimeDurationSouthZone__c)
-                                : null;
-                        } else{
-                            leadId = ozonetelSettings.leadWithoutTimeDurationSouthZone__c != null
-                                ? String.valueOf(ozonetelSettings.leadWithoutTimeDurationSouthZone__c)
-                                : null;
-                            campaignId = ozonetelSettings.campaignWithoutTimeDurationSouthZone__c != null
-                                ? String.valueOf(ozonetelSettings.campaignWithoutTimeDurationSouthZone__c)
-                                : null;
-                        }
-                    } 
-                    else {
-                        if (currentDay == 'Sunday') {
-                            leadId = ozonetelSettings.leadWithoutPostalMatchSunday__c != null
-                                ? String.valueOf(ozonetelSettings.leadWithoutPostalMatchSunday__c)
-                                : null;
-                            campaignId = ozonetelSettings.campaignWithoutPostalMatchSunday__c != null
-                                ? String.valueOf(ozonetelSettings.campaignWithoutPostalMatchSunday__c)
-                                : null;
-                        } else if (curTime >= initialTime && curTime <= endTime) {
-                            leadId = ozonetelSettings.leadWithinTimeDuration__c != null
-                                ? String.valueOf(ozonetelSettings.leadWithinTimeDuration__c)
-                                : null;
-                            campaignId = ozonetelSettings.campaignWithinTimeDuration__c != null
-                                ? String.valueOf(ozonetelSettings.campaignWithinTimeDuration__c)
-                                : null;
-                        } else{
-                            leadId = ozonetelSettings.leadWithoutTimeDuration__c != null
-                                ? String.valueOf(ozonetelSettings.leadWithoutTimeDuration__c)
-                                : null;
-                            campaignId = ozonetelSettings.campaignWithoutTimeDuration__c != null
-                                ? String.valueOf(ozonetelSettings.campaignWithoutTimeDuration__c)
-                                : null;
-                        }
-                    }
-                    }
-                    
-                        System.debug('campaignId '+campaignId);
-                        System.debug('leadId '+leadId);
-                            // Prepare API request
-                            Map<String, Object> jsonMap = new Map<String, Object>{
-                                'campaignName' => campaignId,//matchedMetadata.campaign__c
-                                    'phoneNumber' => ld.Lead_Phone_Number_1__c,
-                                    'Name' => ld.Name,
-                                    'skill' => leadId,//matchedMetadata.skill__c
-                                    'userName' => 'indiashelter',
-                                    'priority'=>priority,
-                                    'CustomFields1'=>customfield
-                                    };
-                                         if(temp==1)
-                        {
-                            jsonMap.put('action','start');
-                        }
-                                        String requestBody = JSON.serialize(jsonMap);
-                            System.debug('Generated JSON: ' + requestBody);
-                            
-                            HttpRequest request = new HttpRequest();
-                            request.setEndpoint(ozonetelSettings.Upload_Contact_API_Url__c);
-                            request.setMethod('POST');
-                            request.setHeader('apiKey', ozonetelSettings.Hash_key__c);
-                            request.setHeader('Content-Type', ozonetelSettings.Content_Type__c);
-                            request.setBody(requestBody);
-                            System.debug('requestBody '+requestBody);
-                            Http http = new Http();
-                            HttpResponse response = http.send(request);
-                            System.debug('Response: ' + response.getBody());
-                            
-                            // Track API call
-                            Ozonetel_Tracker__c tracker = new Ozonetel_Tracker__c();
-                            tracker.Lead__c = ld.Id;
-                            tracker.Request_Url__c = requestBody;
-                            tracker.Response__c = response.getBody();
-                            ozonetelTrackerList.add(tracker);
-                        System.debug('ozonetelTrackerList'+ozonetelTrackerList);
-                }
-                
-                // Insert tracker records
-                if (!ozonetelTrackerList.isEmpty()) {
-                    insert ozonetelTrackerList;
-                }
-                 /*if(Test.isRunningTest())
-                   {
-            
-            Integer i = 0;
-            
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                        i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                i++;
-                       
-            
-                       
-                }*/
-                
-                          } catch (Exception e) {
-                System.debug('Exception: ' + e.getMessage());
-                              
-            }
-        }
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-and here is its test class
-
-
 @isTest
 public class OzonetelIntegrationTest {
 
  @isTest
     static void testCallOzonetelAPIOne() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
         
@@ -380,9 +26,13 @@ public class OzonetelIntegrationTest {
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
             Content_Type__c = 'application/json',
             RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb'
-
-           
+            RetentionSkillId__c='njudhb',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;
         
@@ -401,7 +51,6 @@ public class OzonetelIntegrationTest {
         );
         insert customSetting2;
         
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -413,7 +62,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster;
         
         Lead le = new Lead();
-        //System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -440,19 +88,15 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560038';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-           // le.Call_Center_Employee__c = u.id;
             insert le;
 
         Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); // Corrected line
-        //OzonetelIntegration.callOzonetelApiOnUpdate(new Set<Id>{le.Id});
-
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
         Test.stopTest();
         }
     
 	@isTest
     static void testCallOzonetelAPIOnecopy1() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
         
@@ -461,8 +105,6 @@ public class OzonetelIntegrationTest {
         OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
             Campain__c='A',
             leadWithPostalMatchSunday__c='A',
-            //leadWithinTimeDurationSouthZone__c='A',
-            //campaignWithinTimeDurationSouthZone__c='A',
             leadWithoutTimeDurationSouthZone__c='A',
             campaignWithoutTimeDurationSouthZone__c='A',
             leadWithoutPostalMatchSunday__c='A',
@@ -476,9 +118,13 @@ public class OzonetelIntegrationTest {
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
             Content_Type__c = 'application/json',
             RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb'
-
-           
+            RetentionSkillId__c='njudhb',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;
         
@@ -497,7 +143,6 @@ public class OzonetelIntegrationTest {
         );
         insert customSetting2;
         
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -509,7 +154,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster;
         
         Lead le = new Lead();
-        //System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -536,19 +180,15 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560055';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-           // le.Call_Center_Employee__c = u.id;
             insert le;
 
         Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); // Corrected line
-        //OzonetelIntegration.callOzonetelApiOnUpdate(new Set<Id>{le.Id});
-
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
         Test.stopTest();
         }
 
 	@isTest
     static void testCallOzonetelAPIOnecopy2() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
         
@@ -557,8 +197,6 @@ public class OzonetelIntegrationTest {
         OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
             Campain__c='A',
             leadWithPostalMatchSunday__c='A',
-            //leadWithinTimeDurationSouthZone__c='A',
-            //campaignWithinTimeDurationSouthZone__c='A',
             leadWithoutTimeDurationSouthZone__c='A',
             campaignWithoutTimeDurationSouthZone__c='A',
             leadWithoutPostalMatchSunday__c='A',
@@ -572,9 +210,13 @@ public class OzonetelIntegrationTest {
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
             Content_Type__c = 'application/json',
             RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb'
-
-           
+            RetentionSkillId__c='njudhb',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;
         
@@ -593,7 +235,6 @@ public class OzonetelIntegrationTest {
         );
         insert customSetting2;
         
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -605,7 +246,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster;
         
         Lead le = new Lead();
-        //System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -632,23 +272,19 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560038';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-           // le.Call_Center_Employee__c = u.id;
             insert le;
 
         Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); // Corrected line
-        //OzonetelIntegration.callOzonetelApiOnUpdate(new Set<Id>{le.Id});
-
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
         Test.stopTest();
         }
 
     @isTest
     static void testCallOzonetelAPITwo() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
 
-	OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
+	    OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
             Campain__c='A',
             leadWithPostalMatchSunday__c='A',
             leadWithinTimeDurationSouthZone__c='A',
@@ -664,8 +300,13 @@ public class OzonetelIntegrationTest {
             Name = 'OZonetel',
             Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-           
+            Content_Type__c = 'application/json',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;
         
@@ -684,9 +325,6 @@ public class OzonetelIntegrationTest {
         );
         insert customSetting2;
         
-        
-        
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -707,7 +345,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster2;
         
         Lead le = new Lead();
-      //  System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead2';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -734,11 +371,9 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560038';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-            //le.Call_Center_Employee__c = u.id;
             insert le;
         
         Lead le1 = new Lead();
-      //  System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le1.LastName='testlead2';
             le1.Lead_Phone_Number_1__c='9090909090';
@@ -765,45 +400,21 @@ public class OzonetelIntegrationTest {
             le1.Branch_Name__c = 'Ajmer-1';
             le1.PostalCode='560038';
             le1.Campaign_Name__c ='North_Digital_Business_Hour';
-            //le.Call_Center_Employee__c = u.id;
             insert le1;
 
-
-        // Mock the metadata in your query logic for the test case if needed
-
-        //ads
-     
-
-        // Start test context
         Test.startTest();
-
-        // Call the method under test
-        // Replace `callOzonetelAPI` with the actual method name
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); // Corrected line
-        //OzonetelIntegration.callOzonetelApiOnUpdate(new Set<Id>{le1.Id});
-      
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
         Test.stopTest();
-
-        // Validate results
-      
-        //System.assertEquals(2, trackers.size(), 'Two tracker records should be created.');
-
-        // Validate specific tracker fields
-      //  System.assert(trackers[0].Request_Url__c != null, 'Request URL should not be null.');
-      //  System.assert(trackers[0].Response__c != null, 'Response should not be null.');
         }
     
     @isTest
     static void testCallOzonetelAPITwocopy1() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
 
-	OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
+	    OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
             Campain__c='A',
             leadWithPostalMatchSunday__c='A',
-            //leadWithinTimeDurationSouthZone__c='A',
-            //campaignWithinTimeDurationSouthZone__c='A',
             leadWithoutTimeDurationSouthZone__c='A',
             campaignWithoutTimeDurationSouthZone__c='A',
             leadWithoutPostalMatchSunday__c='A',
@@ -817,8 +428,13 @@ public class OzonetelIntegrationTest {
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
             Content_Type__c = 'application/json',
         	RetentionCampaignId__c = 'A',
-        	RetentionSkillId__c = 'A'
-           
+        	RetentionSkillId__c = 'A',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;
 
@@ -837,9 +453,6 @@ public class OzonetelIntegrationTest {
         );
         insert customSetting2;
         
-        
-        
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -860,7 +473,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster2;
         
         Lead le = new Lead();
-      //  System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead2';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -887,11 +499,9 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560055';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-            //le.Call_Center_Employee__c = u.id;
             insert le;
         
         Lead le1 = new Lead();
-      //  System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le1.LastName='testlead2';
             le1.Lead_Phone_Number_1__c='9090909090';
@@ -918,38 +528,15 @@ public class OzonetelIntegrationTest {
             le1.Branch_Name__c = 'Ajmer-1';
             le1.PostalCode='560039';
             le1.Campaign_Name__c ='North_Digital_Business_Hour';
-            //le.Call_Center_Employee__c = u.id;
             insert le1;
 
-
-        // Mock the metadata in your query logic for the test case if needed
-
-        //ads
-     
-
-        // Start test context
         Test.startTest();
-
-        // Call the method under test
-        // Replace `callOzonetelAPI` with the actual method name
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); // Corrected line
-        //OzonetelIntegration.callOzonetelApiOnUpdate(new Set<Id>{le1.Id});
-      
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
         Test.stopTest();
-
-        // Validate results
-      
-        //System.assertEquals(2, trackers.size(), 'Two tracker records should be created.');
-
-        // Validate specific tracker fields
-      //  System.assert(trackers[0].Request_Url__c != null, 'Request URL should not be null.');
-      //  System.assert(trackers[0].Response__c != null, 'Response should not be null.');
         }
-    
     
      @isTest
     static void testCallOzonetelAPIThree() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
         
@@ -969,11 +556,15 @@ public class OzonetelIntegrationTest {
             Name = 'OZonetel',
             Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-           
+            Content_Type__c = 'application/json',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;        
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -985,7 +576,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster;
         
         Lead le = new Lead();
-       // System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead3';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -1012,46 +602,25 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560038';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-          //  le.Call_Center_Employee__c = u.id;
             insert le;
         
         Datetime dt = Datetime.newInstance(2026, 2, 16);
         
-        // Step 3: CreatedDate update karo
         Test.setCreatedDate(le.Id, dt);
         Lead insertedLead = [SELECT Id, CreatedDate FROM Lead WHERE Id = :le.Id];
         system.debug('insertlead-->'+insertedLead);
 
-
-        // Mock the metadata in your query logic for the test case if needed
-
-        //ads
-     
-
-        // Start test context
         Test.startTest();
-
-        // Call the method under test
-        // Replace `callOzonetelAPI` with the actual method name
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); // Corrected line
-
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
         Test.stopTest();
-
-        // Validate results
-      
-        //System.assertEquals(2, trackers.size(), 'Two tracker records should be created.');
-
-        // Validate specific tracker fields
-      //  System.assert(trackers[0].Request_Url__c != null, 'Request URL should not be null.');
-      //  System.assert(trackers[0].Response__c != null, 'Response should not be null.');
         }
+
     @isTest
     static void testCallOzonetelAPIFour() {
-        // Set up HTTP mock for callout
          Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
         insert cf;
       
-	OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
+	    OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
             Campain__c='A',
             leadWithPostalMatchSunday__c='A',
             leadWithinTimeDurationSouthZone__c='A',
@@ -1067,12 +636,16 @@ public class OzonetelIntegrationTest {
             Name = 'OZonetel',
             Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
             Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-           
+            Content_Type__c = 'application/json',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A'
         );
         insert customSetting;
         
-      //  Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
 		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
         Pincode_Master__c pCodeMaster = new Pincode_Master__c();
         pCodeMaster.Districtname__c ='Bengaluru South';
@@ -1084,7 +657,6 @@ public class OzonetelIntegrationTest {
         insert pCodeMaster;
         
         Lead le = new Lead();
-        //System.runAs(u){ 
             Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
             le.LastName='testlead4';
             le.Lead_Phone_Number_1__c='9090909090';
@@ -1111,20 +683,115 @@ public class OzonetelIntegrationTest {
             le.Branch_Name__c = 'Ajmer-1';
             le.PostalCode='560038';
             le.Campaign_Name__c ='North_Digital_Business_Hour';
-          //  le.Call_Center_Employee__c = u.id;
             insert le;
 
+        Test.startTest();
+		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
+        Test.stopTest();
+        }
+
+    @isTest
+    static void testCallOzonetelAPINullSetting() {
+        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+        insert cf;
+        
+        Pincode_Master__c pCodeMaster = new Pincode_Master__c(
+            Name='560038', Region__c='South'
+        );
+        insert pCodeMaster;
+        
+        Lead le = new Lead(
+            LastName='testleadNull',
+            Lead_Phone_Number_1__c='9090909090',
+            How_did_you_come_to_know_about_us__c ='Digital Campaign',
+            PostalCode='560038'
+        );
+        insert le;
 
         Test.startTest();
-
-       
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
-        
-
+        OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
         Test.stopTest();
+    }
+    
+    @isTest
+    static void testCallOzonetelAPIRetentionNorth() {
+        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+        insert cf;
+        
+        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
+            Name = 'OZonetel',
+            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
+            RetentionCampaignId__c='dsfds',
+            RetentionSkillId__c='njudhb',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A',
+            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
+            Content_Type__c = 'application/json'
+        );
+        insert customSetting;
+        
+        Pincode_Master__c pCodeMaster = new Pincode_Master__c(
+            Name='110001', Region__c='North'
+        );
+        insert pCodeMaster;
+        
+        Lead le = new Lead(
+            LastName='testleadRetNorth',
+            Lead_Phone_Number_1__c='9090909090',
+            How_did_you_come_to_know_about_us__c ='Retention',
+            PostalCode='110001'
+        );
+        insert le;
 
-       
-        }
+        Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
+        Test.startTest();
+        OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testCallOzonetelAPICibilSouth() {
+        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
+        insert cf;
+        
+        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
+            Name = 'OZonetel',
+            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
+            RetentionCampaignId__c='dsfds',
+            RetentionSkillId__c='njudhb',
+            North_Digital_Topup_Ret_Cib__c='A',
+            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
+            priority__c='A',
+            CustomFields1__c='A',
+            Priority_Non_Business_Hour__c='A',
+            CustomFields2__c='A',
+            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
+            Content_Type__c = 'application/json'
+        );
+        insert customSetting;
+        
+        Pincode_Master__c pCodeMaster = new Pincode_Master__c(
+            Name='560038', Region__c='South'
+        );
+        insert pCodeMaster;
+        
+        Lead le = new Lead(
+            LastName='testleadCibSouth',
+            Lead_Phone_Number_1__c='9090909090',
+            How_did_you_come_to_know_about_us__c ='Cibil Trigger',
+            PostalCode='560038'
+        );
+        insert le;
+
+        Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
+        Test.startTest();
+        OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
+        Test.stopTest();
+    }
 
 public class OzonetelApiCalloutMock implements HttpCalloutMock {
     public HTTPResponse respond(HTTPRequest req) {
@@ -1136,8 +803,3 @@ public class OzonetelApiCalloutMock implements HttpCalloutMock {
     }
 }
 }
-
-
-
-
-make changes in the test class to increase cose coverage keep as much of my code as possible(all if possible) and add no comments in it only code changes or additions to the test class only
