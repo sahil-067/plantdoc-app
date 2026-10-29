@@ -1,5 +1,3 @@
-here is my currebnt version of code
-
 /*
      Pre-call Lead Scoring & Routing.
 */
@@ -12,6 +10,10 @@ public class LeadScoreCalculator {
     private static Integer SOUTH_TIER2_CUTOFF = 120;
     private static Integer GEN_TIER1_CUTOFF = 135;
     private static Integer GEN_TIER2_CUTOFF = 115;
+
+    private static final Set<String> SOUTH_STATES = new Set<String>{
+        'TAMIL NADU', 'TELANGANA', 'ANDHRA PRADESH', 'KARNATAKA', 'PUDUCHERRY', 'PONDI', 'OTHER - SOUTH'
+    };
 
 
     private static Map<String, Integer> SOURCE_POINTS_MAP = new Map<String, Integer>{
@@ -67,8 +69,6 @@ public class LeadScoreCalculator {
             pinToStateMap.put(pm.Name, pm.State_Name__c);
         }
 
-		//here create a check of Boolean isSouth based on state and at the last use that to rout to south agent pool
-        
         for (Lead ld : leadsToUpdate) {
 
             if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Name__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Ad_Name__c)) {
@@ -118,24 +118,17 @@ public class LeadScoreCalculator {
                     : -4;
             }
 
-            // 5. Routing Language & Call Centre (never null)
-            String resolvedLanguage = 'Unknown';
-            if (String.isNotBlank(cleanPin) && pinToLangMap.containsKey(cleanPin) && String.isNotBlank(pinToLangMap.get(cleanPin))) {
-                resolvedLanguage = pinToLangMap.get(cleanPin).trim();
+            // 5. Direct Pincode -> State -> South Call Centre Routing (with Ad/Campaign fallback if no pincode)
+            Boolean isSouth = false;
+            if (resolvedState != 'UNKNOWN (NO PINCODE)') {
+                isSouth = SOUTH_STATES.contains(resolvedState);
             } else if (String.isNotBlank(ld.Ad_Name__c)) {
-                resolvedLanguage = inferLanguageFromText(ld.Ad_Name__c);
+                isSouth = isSouthFromText(ld.Ad_Name__c);
             } else if (String.isNotBlank(rawCampName)) {
-                resolvedLanguage = inferLanguageFromText(rawCampName);
-            }
-            if (String.isBlank(resolvedLanguage)) {
-                resolvedLanguage = 'Unknown';
+                isSouth = isSouthFromText(rawCampName);
             }
 
-            String callCentre = 'General Call Centre';
-            String langLower = resolvedLanguage.toLowerCase();
-            if (langLower.contains('tamil') || langLower.contains('telugu') || langLower.contains('kannada')) {
-                callCentre = 'South Call Centre';
-            }
+            String callCentre = isSouth ? 'South Call Centre' : 'General Call Centre';
 
             // --- MODEL CALCULATIONS ---
             Integer leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
@@ -146,7 +139,7 @@ public class LeadScoreCalculator {
 
             // 6. Routing Priority Tiering
             String agentTier = 'Tier 3 (bottom agents)';
-            if (callCentre == 'South Call Centre') {
+            if (isSouth) {
                 agentTier = (routingPriority >= SOUTH_TIER1_CUTOFF) ? 'Tier 1 (top agents)'
                           : (routingPriority >= SOUTH_TIER2_CUTOFF) ? 'Tier 2 (middle agents)'
                           : 'Tier 3 (bottom agents)';
@@ -163,7 +156,6 @@ public class LeadScoreCalculator {
             ld.put('Predicted_Login_Probability__ca__c', loginProb != null ? loginProb : 0);
             ld.put('Ticket_Bonus__ca__c', ticketBonus != null ? ticketBonus : 0);
             ld.put('Routing_Priority__ca__c', routingPriority != null ? routingPriority : 0);
-            ld.put('Resolved_Language__ca__c', String.isNotBlank(resolvedLanguage) ? resolvedLanguage : 'Unknown');
             ld.put('Call_Centre_Assignment__ca__c', String.isNotBlank(callCentre) ? callCentre : 'General Call Centre');
             ld.put('Assigned_Agent_Tier__ca__c', String.isNotBlank(agentTier) ? agentTier : 'Tier 3 (bottom agents)');
         }
@@ -237,20 +229,11 @@ public class LeadScoreCalculator {
             return 'Not captured';
         }
     }
-    private static String inferLanguageFromText(String text) {
-        if (String.isBlank(text)) return 'Unknown';
+
+    private static Boolean isSouthFromText(String text) {
+        if (String.isBlank(text)) return false;
         String lower = text.toLowerCase();
-        if (lower.contains('tamil') || lower.contains('tamil nadu') || lower.contains('tamilnadu')) {
-            return 'Tamil';
-        }
-        if (lower.contains('telugu') || lower.contains('telangana') || lower.contains('andhra')) {
-            return 'Telugu';
-        }
-        if (lower.contains('kannada') || lower.contains('karnataka')) {
-            return 'Kannada';
-        }
-        return 'Hindi/General';
+        return lower.contains('tamil') || lower.contains('tamil nadu') || lower.contains('tamilnadu')
+            || lower.contains('telugu') || lower.contains('telangana') || lower.contains('andhra')
+            || lower.contains('kannada') || lower.contains('karnataka');
     }
-
-
-also note that i am working on this code currently so dont touch anything even if you get any mistake if so jkust let me know but dont change a damn character except the logic of sout agent routing
