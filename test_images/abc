@@ -1,31 +1,6 @@
-    private static String getLoanAmountBand(String rawAmount) {
-        if (String.isBlank(rawAmount)) return 'Not captured';
-
-        String cleaned = rawAmount.trim().replace('–', '-');
-
-        // 1. Direct match if field already stores band text (e.g., '10-20L', '40L+', '< 5L')
-        if (LOAN_POINTS_MAP.containsKey(cleaned)) {
-            return cleaned;
-        }
-
-        // 2. Parse numeric string (strips commas, spaces, or currency/text characters)
-        String numericStr = cleaned.replaceAll('[^0-9.]', '');
-        if (String.isBlank(numericStr)) return 'Not captured';
-
-        try {
-            Decimal amount = Decimal.valueOf(numericStr);
-            if (amount <= 0) return 'Not captured';
-
-            // Normalize to Lakhs if stored in Rupees (>= 10,000)
-            Decimal amountInLakhs = (amount >= 10000) ? (amount / 100000) : amount;
-
-            if (amountInLakhs < 5)  return '< 5L';
-            if (amountInLakhs < 10) return '5-10L';
-            if (amountInLakhs < 20) return '10-20L';
-            if (amountInLakhs < 30) return '20-30L';
-            if (amountInLakhs < 40) return '30-40L';
-            return '40L+';
-        } catch (Exception e) {
-            return 'Not captured';
-        }
-    }
+// Conceptual example if you have a Pincode Master object in Object Manager:
+Map<String, String> pinToState = new Map<String, String>();
+for (Pincode_Master__c pm : [SELECT Name, State__c FROM Pincode_Master__c WHERE Name IN :pinCodes]) {
+    pinToState.put(pm.Name, pm.State__c);
+}
+return pinToState;
