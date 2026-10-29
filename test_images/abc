@@ -1,805 +1,162 @@
-@isTest
-public class OzonetelIntegrationTest {
+i have attached a pdf with requirements and example scenario of lead scoring:
 
- @isTest
-    static void testCallOzonetelAPIOne() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
-     
-        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithinTimeDurationSouthZone__c='A',
-            campaignWithinTimeDurationSouthZone__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-            RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;
-        
-        OzonetelNewBulkSetting__c customSetting2 = new OzonetelNewBulkSetting__c(
-            South_Campaign_Name__c='A',
-            North_Campaign_Name__c='A',
-            Skill__c='A',
-            CustomFields1__c='A',
-            CustomFields2__c='A',
-            Priority_Non_Business_Hour__c='A',
-            Priority_Business_Hour__c='A',
-            Name = 'Single Ozonetel',
-            Endpoint__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting2;
-        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560038';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Digital Campaign';
-            le.LeadSource = 'Digital Campaign';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560038';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
+here iis now my current code, i have to optimmize it:
 
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
-        Test.stopTest();
-        }
-    
-	@isTest
-    static void testCallOzonetelAPIOnecopy1() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
-     
-        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-            RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;
-        
-        OzonetelNewBulkSetting__c customSetting2 = new OzonetelNewBulkSetting__c(
-            South_Campaign_Name__c='A',
-            North_Campaign_Name__c='A',
-            Skill__c='A',
-            CustomFields1__c='A',
-            CustomFields2__c='A',
-            Priority_Non_Business_Hour__c='A',
-            Priority_Business_Hour__c='A',
-            Name = 'Single Ozonetel',
-            Endpoint__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting2;
-        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560038';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Digital Campaign';
-            le.LeadSource = 'Digital Campaign';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560055';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
 
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
-        Test.stopTest();
+/*
+Pre-call Lead Scoring & Routing.
+ */
+public class LeadScoreCalculator {
+
+    private static Integer BASE_SCORE = 100;
+
+    private static Integer SOUTH_TIER1_CUTOFF = 140;
+    private static Integer SOUTH_TIER2_CUTOFF = 120;
+    private static Integer GEN_TIER1_CUTOFF = 135;
+    private static Integer GEN_TIER2_CUTOFF = 115;
+
+    private static Map<String, Integer> sourceMap = new Map<String, Integer>{
+        'retention' => 99, 'tollfree' => 97, 'north_tf_gmb' => 86, 'south_tf_gmb' => 79, 'customer service' => 48, 'fino' => 45, 
+        'website (organic)' => 38, 'chatbot' => 31, 'freo' => 28, 'google (via website)' => 25, 'tollfree - after business hrs' => 21,
+        'cibil trigger' => 21, 'missed call' => 16, 'adcounty' => 10, 'moneyview' => 10, 'facebook (via website)' => 9, 'whatsapp' => -15, 
+        'facebook' => 8, 'google' => 3, 'whatsappemitra' => 1, 'valuefirst' => 0, 'unknown' => 0, 'customer referral' => 0, 'ausha' => 0,
+        'activity-marketing' => 0, 'basichomeloan' => -2, 'customerapp' => -4, 'digialaya' => -5, 'bajajfinservemarketplace' => -11
+    };
+        
+    private static Map<String, Integer> campaignMap = new Map<String, Integer>{
+        'Google Search-Brand' => 33, 'Google DemandGen/YouTube' => 18, 'FB Meta-web (site form)' => 16, 'N/A (not FB/Google)' => 0, 
+        'Google Missing campaign' => 14, 'Google Search-Generic' => 11, 'FB Missing campaign' => 7, 'FB Lead-form CBO' => -6, 'Google PMax' => -8
+    };
+
+    private static Map<String, Integer> loanAmountMap = new Map<String, Integer>{
+        '30–40L' => 13, '10–20L' => 10, '40L+' => 9, '20–30L' => 8, 'Not captured' => 0, '5–10L' => -6, '< 5L' => -6
+    };
+
+    private static Map<String, Integer> ticketBonusMap = new Map<String, Integer>{
+        '10–20L' => 6, '20–30L' => 12, '30–40L' => 15, '40L+' => 18
+    };
+
+    private static final Map<String, Integer> statePointsMap = new Map<String, Integer>{
+        'TAMIL NADU' => 12, 'TELANGANA' => 4, 'UTTARAKHAND' => 1, 'UNKNOWN (NO PINCODE)' => 0 , 'KARNATAKA' => 0, 'GUJARAT' => 0, 
+        'ANDHRA PRADESH' => 0, 'PUNJAB' => -3, 'UTTAR PRADESH' => -4, 'OTHER – WEST' => -4, 'OTHER – SOUTH' => -4, 'MAHARASHTRA' => -4
+    };
+
+    public static void generateScore(Set<Id> leadIds) {
+        
+        if (leadIds == null || leadIds.isEmpty()) return ;
+
+        List<Lead> leadsToUpdate = [
+            SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Name__c, Loan_amount_Required_Cust__c, 
+                   PostalCode FROM Lead WHERE Id IN :leadIds
+        ];
+
+        if (leadsToUpdate.isEmpty()) return;
+
+        Set<String> pinCodes = new Set<String>();
+        for (Lead ld : leadsToUpdate) {
+            if (String.isNotBlank(ld.PostalCode)) pinCodes.add(ld.PostalCode);
         }
 
-	@isTest
-    static void testCallOzonetelAPIOnecopy2() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
-     
-        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-            RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;
-        
-        OzonetelNewBulkSetting__c customSetting2 = new OzonetelNewBulkSetting__c(
-            South_Campaign_Name__c='A',
-            North_Campaign_Name__c='A',
-            Skill__c='A',
-            CustomFields1__c='A',
-            CustomFields2__c='A',
-            Priority_Non_Business_Hour__c='A',
-            Priority_Business_Hour__c='A',
-            Name = 'Single Ozonetel',
-            Endpoint__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting2;
-        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560038';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Digital Campaign';
-            le.LeadSource = 'Digital Campaign';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560038';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
+        Map<String, String> pinToStateMap = getPincodeToStateMap(pinCodes);
+        Map<String, String> pinToLangMap = getPincodeToLanguageMap(pinCodes);
 
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
-        Test.stopTest();
+        for (Lead ld : leadsToUpdate) {
+            String campName = ld.Campaign_Name__c != null ? ld.Campaign_Name__c.toLowerCase() : '';
+            
+            // 1. Resolve Lead Source Points
+            String resolvedSource = resolveLeadSource(ld.LeadSource, campName);
+            Integer sourcePoints = sourcePointsMap.containsKey(resolvedSource.toLowerCase()) ? sourcePointsMap.get(resolvedSource.toLowerCase()) : 96;
+
+            // 2. Get Campaign Points
+            String campaignType = ld.Campaign_Name__c != null ? ld.Campaign_Name__c.trim() : 'N/A (not FB/Google)';
+            Integer campaignPoints = campaignPointsMap.containsKey(campaignType) ? campaignPointsMap.get(campaignType) : 0;
+
+            // 3. Get Loan Band Points & Ticket Bonus
+            Decimal loanBand = ld.Loan_amount_Required_Cust__c != null ? ld.Loan_amount_Required_Cust__c/*.trim()*/ : 0/*'Not captured'*/;
+            Integer loanPoints = 0;//= loanPointsMap.containsKey(loanBand) ? loanPointsMap.get(loanBand) : 0;
+            Integer ticketBonus = 0;// ticketBonusMap.containsKey(loanBand) ? ticketBonusMap.get(loanBand) : 0;
+
+            // 4. Resolve State Points
+            String resolvedState = 'UNKNOWN (NO PINCODE)';
+            if (String.isNotBlank(ld.PostalCode) && pinToStateMap.containsKey(ld.PostalCode.trim())) {
+                resolvedState = pinToStateMap.get(ld.PostalCode.trim()).toUpperCase();
+            }
+            Integer statePoints = statePointsMap.containsKey(resolvedState) ? statePointsMap.get(resolvedState) : -4;
+
+            // 5. Routing Language & Call Centre
+            String resolvedLanguage = 'Unknown';
+            if (String.isNotBlank(ld.PostalCode) && pinToLangMap.containsKey(ld.PostalCode.trim())) {
+                resolvedLanguage = pinToLangMap.get(ld.PostalCode.trim());
+            } else if (String.isNotBlank(ld.Ad_Name__c)) {
+                resolvedLanguage = ld.Ad_Name__c.trim();
+            } else {
+                resolvedLanguage = inferLanguageFromCampaign(campName);
+            }
+
+            String callCentre = 'General Call Centre';
+            String langLower = resolvedLanguage.toLowerCase();
+            if (langLower.contains('tamil') || langLower.contains('telugu') || langLower.contains('kannada')) {
+                callCentre = 'South Call Centre';
+            }
+
+            // --- MODEL CALCULATIONS ---
+            Integer leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
+            Integer routingPriority = leadScore + ticketBonus;
+            
+            String leadGrade = (leadScore >= 135) ? 'A' : (leadScore >= 115) ? 'B' : (leadScore >= 100) ? 'C' : 'D';
+            Decimal loginProb = (leadGrade == 'A') ? 5.28 : (leadGrade == 'B') ? 1.36 : (leadGrade == 'C') ? 1.02 : 0.63;
+
+            // 6. Routing Priority Tiering
+            String agentTier = 'Tier 3 (bottom agents)';
+            if (callCentre == 'South Call Centre') {
+                agentTier = (routingPriority >= SOUTH_TIER1_CUTOFF) ? 'Tier 1 (top agents)' : (routingPriority >= SOUTH_TIER2_CUTOFF) ? 'Tier 2 (middle agents)' : 'Tier 3 (bottom agents)';
+            } else {
+                agentTier = (routingPriority >= GEN_TIER1_CUTOFF) ? 'Tier 1 (top agents)' : (routingPriority >= GEN_TIER2_CUTOFF) ? 'Tier 2 (middle agents)' : 'Tier 3 (bottom agents)';
+            }
+
+            // --- RECORD EXTRACTION SAFETY ASSIGNMENTS ---
+            ld.put('Resolved_Lead_Source__ca__c', resolvedSource);
+            ld.put('Lead_Score__ca__c', leadScore);
+            ld.put('Lead_Grade__ca__c', leadGrade);
+            ld.put('Predicted_Login_Probability__ca__c', loginProb);
+            ld.put('Ticket_Bonus__ca__c', ticketBonus);
+            ld.put('Routing_Priority__ca__c', routingPriority);
+            ld.put('Resolved_Language__ca__c', resolvedLanguage);
+            ld.put('Call_Centre_Assignment__ca__c', callCentre);
+            ld.put('Assigned_Agent_Tier__ca__c', agentTier);
         }
 
-    @isTest
-    static void testCallOzonetelAPITwo() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-
-	    OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithinTimeDurationSouthZone__c='A',
-            campaignWithinTimeDurationSouthZone__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;
-        
-        OzonetelNewBulkSetting__c customSetting2 = new OzonetelNewBulkSetting__c(
-            South_Campaign_Name__c='A',
-            North_Campaign_Name__c='A',
-            Skill__c='A',
-            CustomFields1__c='A',
-            CustomFields2__c='A',
-            Priority_Non_Business_Hour__c='A',
-            Priority_Business_Hour__c='A',
-            Name = 'Single Ozonetel',
-            Endpoint__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting2;
-        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560054';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Pincode_Master__c pCodeMaster2 = new Pincode_Master__c();
-        pCodeMaster2.Districtname__c ='Bengaluru South';
-        pCodeMaster2.Name='560038';
-        pCodeMaster2.Region__c='North';
-        pCodeMaster2.State_Name__c='KARNATAKA';
-        pCodeMaster2.Sub_distname__c='Bengaluru South';
-        pCodeMaster2.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster2;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead2';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Retention';
-            le.LeadSource = 'Digital Campaign';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560038';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
-        
-        Lead le1 = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le1.LastName='testlead2';
-            le1.Lead_Phone_Number_1__c='9090909090';
-            le1.How_did_you_come_to_know_about_us__c ='Retention';
-            le1.LeadSource = 'Digital Campaign';
-            le1.Lead_Sub_Source__c = 'Facebook';
-            le1.Status = 'New';
-            le1.CPV_comment__c = 'Test';
-            le1.Comments__c = 'Testing';
-            le1.Remarks__c = 'Remarks zero';
-            le1.Final_Status__c = 'Booked';
-            le1.Loan_Reason__c = 'LAP';
-            le1.Lead_Current_Status__c = 'Sanctioned';
-            le1.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le1.Reject_Reason__c = 'not knowing';
-            le1.Rejected_reason_Description__c = 'Description';
-            le1.Rejection_Category__c = 'Income';
-            le1.Rejection_Details__c = 'Negative profile';
-            le1.Agent_Notes__c = 'test';
-            le1.Total_Household_Income__c = 5000000;
-            le1.Lead_State__c = 'Maharashtra';
-            le1.Loan_amount_Required_Cust__c  = 788787;
-            le1.Geo_Area__c  = 'Delhi';
-            le1.Branch_Name__c = 'Ajmer-1';
-            le1.PostalCode='560038';
-            le1.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le1;
-
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
-        Test.stopTest();
-        }
-    
-    @isTest
-    static void testCallOzonetelAPITwocopy1() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-
-	    OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-        	RetentionCampaignId__c = 'A',
-        	RetentionSkillId__c = 'A',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;
-
-        OzonetelNewBulkSetting__c customSetting2 = new OzonetelNewBulkSetting__c(
-            South_Campaign_Name__c='A',
-            North_Campaign_Name__c='A',
-            Skill__c='A',
-            CustomFields1__c='A',
-            CustomFields2__c='A',
-            Priority_Non_Business_Hour__c='A',
-            Priority_Business_Hour__c='A',
-            Name = 'Single Ozonetel',
-            Endpoint__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting2;
-        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560054';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Pincode_Master__c pCodeMaster2 = new Pincode_Master__c();
-        pCodeMaster2.Districtname__c ='Bengaluru South';
-        pCodeMaster2.Name='560038';
-        pCodeMaster2.Region__c='North';
-        pCodeMaster2.State_Name__c='KARNATAKA';
-        pCodeMaster2.Sub_distname__c='Bengaluru South';
-        pCodeMaster2.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster2;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead2';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Retention';
-            le.LeadSource = 'Cibil Trigger';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560055';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
-        
-        Lead le1 = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le1.LastName='testlead2';
-            le1.Lead_Phone_Number_1__c='9090909090';
-            le1.How_did_you_come_to_know_about_us__c ='Retention';
-            le1.LeadSource = 'Cibil Trigger';
-            le1.Lead_Sub_Source__c = 'Facebook';
-            le1.Status = 'New';
-            le1.CPV_comment__c = 'Test';
-            le1.Comments__c = 'Testing';
-            le1.Remarks__c = 'Remarks zero';
-            le1.Final_Status__c = 'Booked';
-            le1.Loan_Reason__c = 'LAP';
-            le1.Lead_Current_Status__c = 'Sanctioned';
-            le1.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le1.Reject_Reason__c = 'not knowing';
-            le1.Rejected_reason_Description__c = 'Description';
-            le1.Rejection_Category__c = 'Income';
-            le1.Rejection_Details__c = 'Negative profile';
-            le1.Agent_Notes__c = 'test';
-            le1.Total_Household_Income__c = 5000000;
-            le1.Lead_State__c = 'Maharashtra';
-            le1.Loan_amount_Required_Cust__c  = 788787;
-            le1.Geo_Area__c  = 'Delhi';
-            le1.Branch_Name__c = 'Ajmer-1';
-            le1.PostalCode='560039';
-            le1.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le1;
-
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
-        Test.stopTest();
-        }
-    
-     @isTest
-    static void testCallOzonetelAPIThree() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-      OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithinTimeDurationSouthZone__c='A',
-            campaignWithinTimeDurationSouthZone__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560038';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead3';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Digital Campaign';
-            le.LeadSource = 'Digital Campaign';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560038';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
-        
-        Datetime dt = Datetime.newInstance(2026, 2, 16);
-        
-        Test.setCreatedDate(le.Id, dt);
-        Lead insertedLead = [SELECT Id, CreatedDate FROM Lead WHERE Id = :le.Id];
-        system.debug('insertlead-->'+insertedLead);
-
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id}); 
-        Test.stopTest();
-        }
-
-    @isTest
-    static void testCallOzonetelAPIFour() {
-         Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-      
-	    OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Campain__c='A',
-            leadWithPostalMatchSunday__c='A',
-            leadWithinTimeDurationSouthZone__c='A',
-            campaignWithinTimeDurationSouthZone__c='A',
-            leadWithoutTimeDurationSouthZone__c='A',
-            campaignWithoutTimeDurationSouthZone__c='A',
-            leadWithoutPostalMatchSunday__c='A',
-            campaignWithoutPostalMatchSunday__c='A',
-            leadWithinTimeDuration__c='A',
-            campaignWithinTimeDuration__c='A',
-            leadWithoutTimeDuration__c='A',
-            campaignWithoutTimeDuration__c='A',
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A'
-        );
-        insert customSetting;
-        
-		id RecordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Call Centre').getRecordTypeId();
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c();
-        pCodeMaster.Districtname__c ='Bengaluru South';
-        pCodeMaster.Name='560038';
-        pCodeMaster.Region__c='South';
-        pCodeMaster.State_Name__c='KARNATAKA';
-        pCodeMaster.Sub_distname__c='Bengaluru South';
-        pCodeMaster.Village_Locality_name__c='Bengaluru South';
-        insert pCodeMaster;
-        
-        Lead le = new Lead();
-            Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-            le.LastName='testlead4';
-            le.Lead_Phone_Number_1__c='9090909090';
-            le.How_did_you_come_to_know_about_us__c ='Digital Campaign';
-            le.LeadSource = 'Digital Campaign';
-            le.Lead_Sub_Source__c = 'Facebook';
-            le.Status = 'New';
-            le.CPV_comment__c = 'Test';
-            le.Comments__c = 'Testing';
-            le.Remarks__c = 'Remarks zero';
-            le.Final_Status__c = 'Booked';
-            le.Loan_Reason__c = 'LAP';
-            le.Lead_Current_Status__c = 'Sanctioned';
-            le.Rejected_reason_Categories__c = 'Title Deed Not Available';
-            le.Reject_Reason__c = 'not knowing';
-            le.Rejected_reason_Description__c = 'Description';
-            le.Rejection_Category__c = 'Income';
-            le.Rejection_Details__c = 'Negative profile';
-            le.Agent_Notes__c = 'test';
-            le.Total_Household_Income__c = 5000000;
-            le.Lead_State__c = 'Maharashtra';
-            le.Loan_amount_Required_Cust__c  = 788787;
-            le.Geo_Area__c  = 'Delhi';
-            le.Branch_Name__c = 'Ajmer-1';
-            le.PostalCode='560038';
-            le.Campaign_Name__c ='North_Digital_Business_Hour';
-            insert le;
-
-        Test.startTest();
-		OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
-        Test.stopTest();
-        }
-
-    @isTest
-    static void testCallOzonetelAPINullSetting() {
-        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c(
-            Name='560038', Region__c='South'
-        );
-        insert pCodeMaster;
-        
-        Lead le = new Lead(
-            LastName='testleadNull',
-            Lead_Phone_Number_1__c='9090909090',
-            How_did_you_come_to_know_about_us__c ='Digital Campaign',
-            PostalCode='560038'
-        );
-        insert le;
-
-        Test.startTest();
-        OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
-        Test.stopTest();
-    }
-    
-    @isTest
-    static void testCallOzonetelAPIRetentionNorth() {
-        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting;
-        
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c(
-            Name='110001', Region__c='North'
-        );
-        insert pCodeMaster;
-        
-        Lead le = new Lead(
-            LastName='testleadRetNorth',
-            Lead_Phone_Number_1__c='9090909090',
-            How_did_you_come_to_know_about_us__c ='Retention',
-            PostalCode='110001'
-        );
-        insert le;
-
-        Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-        Test.startTest();
-        OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
-        Test.stopTest();
-    }
-    
-    @isTest
-    static void testCallOzonetelAPICibilSouth() {
-        Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-        insert cf;
-        
-        OzonetelNewSetting__c customSetting = new OzonetelNewSetting__c(
-            Name = 'OZonetel',
-            Upload_Contact_API_Url__c = 'https://in1-ccaas-api.ozonetel.com/ca_apis/AddCampaignData',
-            RetentionCampaignId__c='dsfds',
-            RetentionSkillId__c='njudhb',
-            North_Digital_Topup_Ret_Cib__c='A',
-            Digital_Sales_Topup_Rest_of_India_OTS__c='A',
-            priority__c='A',
-            CustomFields1__c='A',
-            Priority_Non_Business_Hour__c='A',
-            CustomFields2__c='A',
-            Hash_key__c = 'KK9c667d0c7f0c8ad3bad0b0c34e7fdc70',
-            Content_Type__c = 'application/json'
-        );
-        insert customSetting;
-        
-        Pincode_Master__c pCodeMaster = new Pincode_Master__c(
-            Name='560038', Region__c='South'
-        );
-        insert pCodeMaster;
-        
-        Lead le = new Lead(
-            LastName='testleadCibSouth',
-            Lead_Phone_Number_1__c='9090909090',
-            How_did_you_come_to_know_about_us__c ='Cibil Trigger',
-            PostalCode='560038'
-        );
-        insert le;
-
-        Test.setMock(HttpCalloutMock.class, new OzonetelApiCalloutMock());
-        Test.startTest();
-        OzonetelIntegration.callOzonetelAPI(new Set<Id>{le.Id});
-        Test.stopTest();
+        update leadsToUpdate;
     }
 
-public class OzonetelApiCalloutMock implements HttpCalloutMock {
-    public HTTPResponse respond(HTTPRequest req) {
-        HttpResponse res = new HttpResponse();
-        res.setHeader('Content-Type', 'application/json');
-        res.setBody('{"status": "success", "message": "Mocked API call successful"}');
-        res.setStatusCode(200);
-        return res;
+    private static String resolveLeadSource(String rawSource, String campName) {
+        if (String.isBlank(rawSource)) return 'unknown';
+        String cleanSource = rawSource.trim();
+        if (cleanSource.equalsIgnoreCase('website') || cleanSource.equalsIgnoreCase('website (organic)')) {
+            if (campName.contains('ag_') || campName.contains('gclid')) return 'google (via website)';
+            if (campName.contains('unb_metaweb')) return 'facebook (via website)';
+            return 'website (organic)';
+        }
+        return cleanSource;
     }
+
+    private static String inferLanguageFromCampaign(String campName) {
+        if (campName.contains('tamil')) return 'Tamil';
+        if (campName.contains('telugu')) return 'Telugu';
+        if (campName.contains('kannada')) return 'Kannada';
+        return 'Hindi/General';
+    }
+
+    private static Map<String, String> getPincodeToStateMap(Set<String> pinCodes) { return new Map<String, String>(); }
+ 
+private static Map<String, String> getPincodeToLanguageMap(Set<String> pinCodes) { return new Map<String, String>(); }
 }
-}
+
+
+
+
+problems:
+1. name mismatch of maps
+2. i think the pdf doesnt say to use thresholds to assign agent tier
+
+also i think the approach is correct but there may be some mistakes read it all
