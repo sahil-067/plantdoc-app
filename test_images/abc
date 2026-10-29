@@ -3,55 +3,24 @@
 */
 public class LeadScoreCalculator {
 
-    private static Integer BASE_SCORE = 100;
+    private static Map<String, Lead_Score_Tiers__mdt> CUTTOFFS_MAP = Lead_Score_Tiers__mdt.getAll();
+    
+    private static Decimal BASE_SCORE = CUTTOFFS_MAP.get('BASE_SCORE').Score__c; 
+    
+    private static Map<String, Lead_Source_Scores__mdt> SOURCE_POINTS_MAP = Lead_Source_Scores__mdt.getAll();
+    private static Map<String, Lead_Campaign_Scores__mdt> CAMPAIGN_POINTS_MAP = Lead_Campaign_Scores__mdt.getAll();
+    private static Map<String, Lead_State_Scores__mdt> STATE_POINTS_MAP = Lead_State_Scores__mdt.getAll();
+    private static Map<String, Lead_South_Region_States__mdt> SOUTH_STATES = Lead_South_Region_States__mdt.getAll();
+    private static Map<String, Lead_Loan_Bands__mdt> LOAN_POINTS_MAP = Lead_Loan_Bands__mdt.getAll(); //Loan_Amount_Points__c
+    private static Map<String, Lead_Grade_Tiers__mdt> LEADS_GRADE_MAP = Lead_Grade_Tiers__mdt.getAll();
 
-    private static Integer SOUTH_TIER1_CUTOFF = 140;
-    private static Integer SOUTH_TIER2_CUTOFF = 120;
-    private static Integer GEN_TIER1_CUTOFF = 135;
-    private static Integer GEN_TIER2_CUTOFF = 115;
-
-    private static Set<String> SOUTH_STATES = new Set<String>{
-        'TAMIL NADU', 'TELANGANA', 'ANDHRA PRADESH', 'KARNATAKA', 'PUDUCHERRY', 'PONDI', 'OTHER - SOUTH'
-    };
-
-
-    private static Map<String, Integer> SOURCE_POINTS_MAP = new Map<String, Integer>{
-        'retention' => 99, 'tollfree' => 97, 'other' => 96, 'north_tf_gmb' => 86, 'south_tf_gmb' => 79, 'csc' => 55,
-        'customer service' => 48, 'fino' => 45, 'website (organic)' => 38, 'chatbot' => 31, 'freo' => 28, 'google (via website)' => 25,
-        'tollfree - after business hrs' => 21, 'tollfree after business hrs' => 21, 'cibil trigger' => 21, 'missed call' => 16, 'adcounty' => 10, 
-        'moneyview' => 10, 'facebook (via website)' => 9, 'iserve_to_' => 8, 'e-mitra' => 8, 'facebook' => 8, 'google' => 3,
-        'whatsappemitra' => 1, 'valuefirst' => 0, 'unknown' => 0, 'customer referral' => 0, 'ausha' => 0, 'activity-marketing' => 0,
-        'basichomeloan' => -2, 'customerapp' => -4, 'digialaya' => -5, 'bajajfinservemarketplace' => -11, 'whatsapp' => -15
-    };
-
-    private static Map<String, Integer> CAMPAIGN_POINTS_MAP = new Map<String, Integer>{
-        'google search-brand' => 33, 'google demandgen/youtube' => 18, 'google demandgen/you tube' => 18,
-        'fb meta-web (site form)' => 16, 'google missing campaign' => 14, 'google search-generic' => 11,
-        'fb missing campaign' => 7, 'fb test' => 5, 'n/a (not fb/google)' => 0, 'fb lead-form cbo' => -6, 'google pmax' => -8
-    };
-
-    private static Map<String, Integer> LOAN_POINTS_MAP = new Map<String, Integer>{
-        '30-40L' => 13, '10-20L' => 10, '40L+' => 9, '20-30L' => 8, 'Not captured' => 0, '5-10L' => -6, '< 5L' => -6
-    };
-
-    private static Map<String, Integer> TICKET_BONUS_MAP = new Map<String, Integer>{
-        '40L+' => 18, '30-40L' => 15, '20-30L' => 12, '10-20L' => 6, '5-10L' => 0, '< 5L' => 0, 'Not captured' => 0
-    };
-
-    private static Map<String, Integer> STATE_POINTS_MAP = new Map<String, Integer>{
-        'TAMIL NADU' => 12, 'TELANGANA' => 4, 'UTTARAKHAND' => 1, 'UNKNOWN (NO PINCODE)' => 0, 'KARNATAKA' => 0,
-        'GUJARAT' => 0, 'ANDHRA PRADESH' => 0, 'PUNJAB' => -3, 'UTTAR PRADESH' => -4, 'OTHER - WEST' => -4,
-        'OTHER - SOUTH' => -4, 'MAHARASHTRA' => -4, 'RAJASTHAN' => -5, 'OTHER - NORTH-HINDI' => -5, 'JHARKHAND' => -5,
-        'CHHATTISGARH' => -6, 'MADHYA PRADESH' => -7, 'HARYANA' => -7, 'CHANDIGARH' => -7, 'DELHI' => -8, 'ODISHA' => -21,
-        'OTHER - NE & ISLANDS' => -45, 'OTHER - NE & ISLANDS- REJECTION' => -45, 'WEST BENGAL' => -45,
-        'WEST BENGAL - REJECTION' => -45, 'BIHAR' => -45, 'BIHAR- REJECTION' => -45
-    };
-
+    
     public static void generateScore(Set<Id> leadIds) {
         
         if (leadIds == null || leadIds.isEmpty()) return;
 
-        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Name__c, //Lead_Score__c
+        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Name__c, Lead_Score__c,
+                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c,
                                     Ad_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
 
         if (leadsToUpdate.isEmpty()) return;
@@ -59,7 +28,7 @@ public class LeadScoreCalculator {
         Set<String> pinCodes = new Set<String>();
         for (Lead ld : leadsToUpdate) {
             if (String.isNotBlank(ld.PostalCode)) {
-                pinCodes.add(ld.PostalCode.trim());
+                pinCodes.add(ld.PostalCode);
             }
         }
 
@@ -71,7 +40,7 @@ public class LeadScoreCalculator {
         for (Lead ld : leadsToUpdate) {
 
             if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Name__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Ad_Name__c)) {
-                //ld.Lead_Score=0;
+                ld.Lead_Score__c=0;
                 continue;
             }
 
@@ -81,68 +50,76 @@ public class LeadScoreCalculator {
 
             String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c, campNameLower);
             String sourceKey = Source.toLowerCase();
-            Integer sourcePoints = 0;
+            Decimal sourcePoints = 0;
             if (SOURCE_POINTS_MAP.containsKey(sourceKey) && SOURCE_POINTS_MAP.get(sourceKey) != null) {
-                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey);
+                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey).Points__c;
             } else {
-                Source = 'Other';
-                sourcePoints = 96;
+                sourcePoints = SOURCE_POINTS_MAP.get('Other').Points__c;
             }
 
             String CampaignType = resolveCampaignType(Source, CampName);
             String campaignKey = CampaignType.toLowerCase();
-            Integer campaignPoints = 0;
+            Decimal campaignPoints = 0;
             if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
-                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey);
-            }
-            else {
-                campaignPoints=0;
+                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
             }
 
             String loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c));
-            Integer loanPoints = LOAN_POINTS_MAP.get(loanBand);
-            Integer ticketBonus = TICKET_BONUS_MAP.get(loanBand);
+            Decimal loanPoints = LOAN_POINTS_MAP.get(loanBand).Loan_Amount_Points__c;
+            Decimal ticketBonus = LOAN_POINTS_MAP.get(loanBand).Ticket_Bonus_Points__c;
 
             String resolvedState = 'UNKNOWN (NO PINCODE)';
             if (String.isNotBlank(Pin) && pinToStateMap.containsKey(Pin) && String.isNotBlank(pinToStateMap.get(Pin))) {
                 resolvedState = pinToStateMap.get(Pin).toUpperCase();
             }
-            Integer statePoints = 0;
+            Decimal statePoints = 0;
             if (resolvedState != 'UNKNOWN (NO PINCODE)' && STATE_POINTS_MAP.containsKey(resolvedState) && STATE_POINTS_MAP.get(resolvedState) != null) {
-                statePoints = STATE_POINTS_MAP.get(resolvedState);
+                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
             }
             else {
-                statePoints = -4;
+                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
             }
 
             Boolean isSouth = false;
             if (resolvedState != 'UNKNOWN (NO PINCODE)') {
-                isSouth = SOUTH_STATES.contains(resolvedState);
+                isSouth = SOUTH_STATES.containsKey(resolvedState);
             } else if (String.isNotBlank(ld.Ad_Name__c)) {
                 isSouth = isSouthFromText(ld.Ad_Name__c);
             } else if (String.isNotBlank(CampName)) {
                 isSouth = isSouthFromText(CampName);
             }
 
-            String callCentre = isSouth ? 'South Call Centre' : 'General Call Centre';
+            ld.Call_Centre_Type__c = isSouth ? 'South Call Centre' : 'General Call Centre';
 
-            Integer leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
-            //ld.Lead_Score=leadScore;
-            Integer routingPriority = leadScore + ticketBonus;
+            Decimal leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
+            ld.Lead_Score__c=leadScore;
+            Decimal routingPriority = leadScore + ticketBonus;
 
-            String leadGrade = (leadScore >= 135) ? 'A' : (leadScore >= 115) ? 'B' : (leadScore >= 100) ? 'C' : 'D';
-            Decimal loginProb = (leadGrade == 'A') ? 5.28 : (leadGrade == 'B') ? 1.36 : (leadGrade == 'C') ? 1.02 : 0.63;
+            String leadGrade;
+            if (leadScore >= LEADS_GRADE_MAP.get('A').Cuttoff__c) {
+                leadGrade = 'A';
+            } else if (leadScore >= LEADS_GRADE_MAP.get('B').Cuttoff__c) {
+                leadGrade = 'B';
+            } else if (leadScore >= LEADS_GRADE_MAP.get('C').Cuttoff__c) {
+                leadGrade = 'C';
+            } else{
+                leadGrade = 'D';
+            }   
+                    
+            ld.Lead_Grade__c=leadGrade;
+            ld.Login_Probability__c = LEADS_GRADE_MAP.get(leadGrade).Login_Probability__c;
 
-            String agentTier = 'Tier 3 (bottom agents)';
+            String agentTier = 'Tier 3';
             if (isSouth) {
-                agentTier = (routingPriority >= SOUTH_TIER1_CUTOFF) ? 'Tier 1 (top agents)'
-                          : (routingPriority >= SOUTH_TIER2_CUTOFF) ? 'Tier 2 (middle agents)'
-                          : 'Tier 3 (bottom agents)';
+                agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                          : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                          : 'Tier 3';
             } else {
-                agentTier = (routingPriority >= GEN_TIER1_CUTOFF) ? 'Tier 1 (top agents)'
-                          : (routingPriority >= GEN_TIER2_CUTOFF) ? 'Tier 2 (middle agents)'
-                          : 'Tier 3 (bottom agents)';
+                agentTier = (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                          : (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                          : 'Tier 3';
             }
+            ld.Agent_Tier__c=agentTier;
         }
 
         update leadsToUpdate;
