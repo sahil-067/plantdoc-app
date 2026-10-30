@@ -20,7 +20,7 @@ public class LeadScoreCalculator {
         if (leadIds == null || leadIds.isEmpty()) return;
 
         List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Name__c, Lead_Score__c,
-                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c,
+                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
                                     Ad_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
 
         if (leadsToUpdate.isEmpty()) return;
@@ -41,12 +41,16 @@ public class LeadScoreCalculator {
 
             if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Name__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Ad_Name__c)) {
                 ld.Lead_Score__c=0;
+                ld.Lead_Grade__c='D';
+                ld.Call_Centre_Type__c='General Call Centre';
+                ld.Agent_Tier__c='Tier 3';
+                ld.Login_Probability__c=0.0;
                 continue;
             }
 
             String CampName = String.isNotBlank(ld.Campaign_Name__c) ? ld.Campaign_Name__c : '';
             String campNameLower = CampName.toLowerCase();
-            String Pin = String.isNotBlank(ld.PostalCode) ? ld.PostalCode : '';
+            String Pin = String.isNotBlank(ld.PostalCode) ? ld.PostalCode.trim() : '';
 
             String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c, campNameLower);
             String sourceKey = Source.toLowerCase();
@@ -77,7 +81,7 @@ public class LeadScoreCalculator {
                 statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
             }
             else {
-                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
+                statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
             }
 
             Boolean isSouth = false;
