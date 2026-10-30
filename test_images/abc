@@ -1,252 +1,226 @@
-@isTest
-public class LeadScoreCalculatorTest {
+/*
+ * 		Developed by: Sahil Hooda
+ * 		Pre-call Lead Scoring & Routing.
+*/
 
-    @testSetup
-    public static void testsetup(){
+public class LeadScoreCalculator {
         
-        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
-        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
-        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
-            
-        Customer__c cus = new Customer__c(Name = 'Rahul');
-        cus.Query_Raised_count__c=17;
-        cus.Hindsight_Approval__c='Pending';
-        cus.Credit_Hindsight_Approval__c='Approved';
-        cus.Property_Paper_Storage_Date__c=System.today();
-        insert cus;
-        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
-        badc.Bank_name__c='HDFC';
-        badc.Disbursement_in_this_Account__c='Yes';
-        badc.Household__c = cus.Id;
-        badc.Bank_Account_Number__c = '12345678';
-        badc.IFSC_Code__c = 'ABC123456';
-        badc.Percentage__c='91';
-        badc.Is_PennyDrop_Done__c=true;
-        badc.Name_of_Account_Holder__c = 'John Doe';
-        badc.PennyDrop_Status_Code__c='NP001';
-        insert badc;
+    private static Map<String, Lead_Score_Tiers__mdt> CUTTOFFS_MAP = new Map<String, Lead_Score_Tiers__mdt>();
+    private static Map<String, Lead_Source_Scores__mdt> SOURCE_POINTS_MAP = new Map<String, Lead_Source_Scores__mdt>();
+    private static Map<String, Lead_Campaign_Scores__mdt> CAMPAIGN_POINTS_MAP = new Map<String, Lead_Campaign_Scores__mdt>();
+    private static Map<String, Lead_State_Scores__mdt> STATE_POINTS_MAP = new Map<String, Lead_State_Scores__mdt>();
+    private static Map<String, Lead_South_Region_States__mdt> SOUTH_STATES = new Map<String, Lead_South_Region_States__mdt>();
+    private static Map<String, Lead_Loan_Bands__mdt> LOAN_POINTS_MAP = new Map<String, Lead_Loan_Bands__mdt>();
+    private static Map<String, Lead_Grade_Tiers__mdt> LEADS_GRADE_MAP = new Map<String, Lead_Grade_Tiers__mdt>();
+    
+    private static Decimal BASE_SCORE;
+
+    static {
+        for (Lead_Score_Tiers__mdt rec : Lead_Score_Tiers__mdt.getAll().values()) {
+            CUTTOFFS_MAP.put(rec.MasterLabel, rec);
+        }
+        BASE_SCORE = CUTTOFFS_MAP.get('BASE_SCORE').Score__c;
+
+        for (Lead_Source_Scores__mdt rec : Lead_Source_Scores__mdt.getAll().values()) {
+            SOURCE_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
+        }
+        for (Lead_Campaign_Scores__mdt rec : Lead_Campaign_Scores__mdt.getAll().values()) {
+            CAMPAIGN_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
+        }
+        for (Lead_State_Scores__mdt rec : Lead_State_Scores__mdt.getAll().values()) {
+            STATE_POINTS_MAP.put(rec.MasterLabel.toUpperCase(), rec);
+        }
+        for (Lead_South_Region_States__mdt rec : Lead_South_Region_States__mdt.getAll().values()) {
+            SOUTH_STATES.put(rec.MasterLabel.toUpperCase(), rec);
+        }
+        for (Lead_Loan_Bands__mdt rec : Lead_Loan_Bands__mdt.getAll().values()) {
+            LOAN_POINTS_MAP.put(rec.MasterLabel, rec);
+        }
+        for (Lead_Grade_Tiers__mdt rec : Lead_Grade_Tiers__mdt.getAll().values()) {
+            LEADS_GRADE_MAP.put(rec.MasterLabel, rec);
+        }
+    }
+
+    
+    public static void generateScore(List<Lead> leadList) {
         
-        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
-                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
-        ac.Is_Screenza_Done__c=true;
-        ac.Pan_Verified__c=true;
-        ac.Sex__pc='Male';
-        ac.Salutation='Mr.';
-        insert ac;
-        
-        Id kycRecId=Schema.SObjectType.KYC_Log__c.getRecordTypeInfosByName().get('Faceliveness').getRecordTypeId();
-        KYC_Log__c kyc=new KYC_Log__c();
-        kyc.Applicant__c=ac.id;
-        kyc.RecordTypeId=kycRecId;
-        kyc.Face_Match__c='yes';
-        kyc.Liveliness__c='yes';
-        insert kyc;
-        
-        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
-        insert cf;
-        
-        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
-        insert nsc;
-        
-        Loan_Product__c lp=new Loan_Product__c();
-        lp.PF_Rate_1__c=5.0;
-        lp.Status__c='Active';
-        insert lp;
-        
-        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
-                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
-                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
-                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
-                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
-                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
-                                  Pin_Code__c=12345);
-        insert con;
-        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
-        User testUser = new User(
-            FirstName = 'Test',
-            LastName = 'User',
-            Email = 'testuser@example.com',
-            Username = 'testuser' + DateTime.now().getTime() + '@testorg.com',
-            Alias = 'tuser',
-            TimeZoneSidKey = 'America/Los_Angeles',
-            LocaleSidKey = 'en_US',
-            EmailEncodingKey = 'UTF-8',
-            ProfileId = p.Id,
-            LanguageLocaleKey = 'en_US'
-        );
-        testUser.EmployeeNumber='ISFC12121';
-        insert testUser;
-        System.runAs(testUser) {
-            String employeeCode = [Select Id, EmployeeNumber from User where Id =: UserInfo.getUserId()].EmployeeNumber;
-            String profileName = [SELECT Id, Name FROM Profile WHERE Id = :UserInfo.getProfileId()].Name;
+        if (leadList == null || leadList.isEmpty()) return;
+
+        Set<Id> leadIds = new Set<Id>();
+        for(Lead l: leadList) {
+            leadIds.add(l.Id);
         }
         
-        Branch__c branch = new Branch__c();
-        branch.Name = 'Jaipur-1';
-        branch.Branch_Category__c = 'B';
-        branch.Critical_Insurance_Company__c='ICICI Lombard CI';
-        branch.Insurance_Company__c='ICICI';
-        branch.Property_Insurance_Company__c='ICICI Lombard';
-        insert branch;
-        
-        Opportunity op = new Opportunity(CloseDate=System.today(), Name='Rahul',
-                                         PennyDrop_Status__c='Success', AccountId=ac.Id,
-                                         HLA_Sign_Date__c=Date.newInstance(2024,11,01),
-                                         Collateral_Pin_Code_New__c=nsc.Id,
-                                         Address_Pin_Code_New__c=nsc.Id,
-                                         Household__c=cus.Id, Sanctioned_Amont__c=300000, 
-                                         Loan_Product__c=lp.Id,
-                                         LM_Loan_Status__c='Sanctioned');
-        op.Loan_Number__c='6983162387';
-        op.Branch__c=branch.Id;
-        op.First_Sanction_Date__c=system.today();
-        op.Loan_Product_Type__c='HL';
-        op.Purpose_of_taking_the_loan__c='HOME EXTENSION';
-        op.Loan_Amount_Required__c=1500001;
-        op.DE_Done_By__c='By-Pass Ten Thousand Validation';
-        op.ACH_Registration_Status__c='Registered';
-        op.FCU_Status__c='Cleared';
-        op.Finnone_Loan_Id__c='FN1234';
+        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Type__c, Lead_Score__c,
+                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
+                                    Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
 
-        insert op;
-        
-        List<Pincode_Master__c> pincodes = new List<Pincode_Master__c>{
-            new Pincode_Master__c(Name = '600001', State_Name__c = 'Tamil Nadu'),
-            new Pincode_Master__c(Name = '500001', State_Name__c = 'Telangana'),
-            new Pincode_Master__c(Name = '110001', State_Name__c = 'Delhi'),
-            new Pincode_Master__c(Name = '999999', State_Name__c = 'Unlisted State')
-        };
-        insert pincodes;
+        if (leadsToUpdate.isEmpty()) return;
 
-        Lead l1 = new Lead(
-                FirstName = 'Test',
-                LastName = 'Blank Lead'
-            );
-        
-		Lead l2 = new Lead(
-                FirstName = 'Test',
-                LastName = 'South Tier 1',
-                How_did_you_come_to_know_about_us__c = 'retention',
-                Campaign_Type__c = 'Google Search-Brand',
-                PostalCode = '600001',
-                Loan_Amount__c = '3500000'
-            );
-                
-		Lead l3 = new Lead(
-                FirstName = 'Test',
-                LastName = 'South Tier 2',
-                How_did_you_come_to_know_about_us__c = 'website',
-                Campaign_Type__c = 'Google Search-Generic',
-                PostalCode = '500001',
-                Loan_Amount__c = '1500000'
-            );
-                
-		Lead l4 = new Lead(
-                FirstName = 'Test',
-                LastName = 'South Tier 3 Ad Fallback',
-                How_did_you_come_to_know_about_us__c = 'whatsapp',
-                Campaign_Type__c = 'N/A (not FB/Google)',
-                Advt_Name__c = 'Tamil_HomeLoan_Ad',
-                Loan_Amount__c = '300000'
-            );
-        
-		Lead l5 = new Lead(
-                FirstName = 'Test',
-                LastName = 'General Tier 1',
-                How_did_you_come_to_know_about_us__c = 'tollfree',
-                Campaign_Type__c = 'N/A (not FB/Google)',
-                PostalCode = '110001',
-                Loan_Amount__c = '4500000'
-            );
+        Set<String> pinCodes = new Set<String>();
+        for (Lead ld : leadsToUpdate) {
+            if (String.isNotBlank(ld.PostalCode)) {
+                pinCodes.add(ld.PostalCode.trim());
+            }
+        }
 
-		Lead l6 = new Lead(
-                FirstName = 'Test',
-                LastName = 'General Tier 2',
-                How_did_you_come_to_know_about_us__c = 'facebook',
-                Campaign_Type__c = 'FB Meta-web (site form)',
-                PostalCode = '999999',
-                Loan_Amount__c = '2500000'
-            );
-        
-		Lead l7 = new Lead(
-                FirstName = 'Test',
-                LastName = 'General Tier 3 Organic',
-                How_did_you_come_to_know_about_us__c = 'website (organic)',
-                Campaign_Type__c = 'Google PMax',
-                Loan_Amount__c = '700000'
-            );
+        Map<String, String> pinToStateMap = new Map<String, String>();
+        for (Pincode_Master__c pm : [SELECT Name, State_Name__c FROM Pincode_Master__c WHERE Name IN :pinCodes]) {
+            pinToStateMap.put(pm.Name, pm.State_Name__c);
+        }
 
-		Lead l8 = new Lead(
-                FirstName = 'Test',
-                LastName = 'Other Source South Ad',
-                How_did_you_come_to_know_about_us__c = 'unlisted_custom_source',
-                Campaign_Type__c = 'FB Missing campaign',
-                Advt_Name__c = 'Karnataka_Kannada_Ad',
-                Loan_Amount__c = '0'
-            );
-        
-            List<Lead> testLeads = new List<Lead>{l1, l2, l3, l4, l5, l6, l7, l8};
-        	insert testLeads;
+        for (Lead ld : leadsToUpdate) {
 
-        
-        Test.stoptest();
+            if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Type__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Advt_Name__c)) {
+                ld.Lead_Score__c=0;
+                ld.Lead_Grade__c='D';
+                ld.Call_Centre_Type__c='General Call Centre';
+                ld.Agent_Tier__c='Tier 3';
+                ld.Login_Probability__c=0.0;
+                continue;
+            }
+
+            String CampName = String.isNotBlank(ld.Campaign_Type__c) ? ld.Campaign_Type__c : '';
+            String campNameLower = CampName.toLowerCase();
+            String Pin = String.isNotBlank(ld.PostalCode) ? ld.PostalCode.trim() : '';
+
+            String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c, campNameLower);
+            String sourceKey = Source.toLowerCase();
+            Decimal sourcePoints = 0;
+            if (SOURCE_POINTS_MAP.containsKey(sourceKey) && SOURCE_POINTS_MAP.get(sourceKey) != null) {
+                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey).Points__c;
+            } else {
+                sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
+            }
+
+            //String CampaignType = resolveCampaignType(Source, CampName);
+            //String campaignKey = CampaignType.toLowerCase();
+            String campaignKey = CampName.toLowerCase();
+            Decimal campaignPoints = 0;
+            if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
+                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
+            }
+            //if (campaignKey=='FB Missing campaign' || campaignKey=='Google Missing campaign' || campaignKey=='N/A (not FB/Google)') {
+            //    ld.Campaign_Type__c=campaignKey;
+            //}
+			
+            String loanBand = 'Not captured';
+            if(String.isNotBlank(ld.Loan_Amount__c)) {
+            	loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c.trim()));
+            } 
+            
+            Decimal loanPoints = LOAN_POINTS_MAP.get(loanBand).Loan_Amount_Points__c;
+            Decimal ticketBonus = LOAN_POINTS_MAP.get(loanBand).Ticket_Bonus_Points__c;
+
+            String resolvedState = 'UNKNOWN (NO PINCODE)';
+            if (String.isNotBlank(Pin) && pinToStateMap.containsKey(Pin) && String.isNotBlank(pinToStateMap.get(Pin))) {
+                resolvedState = pinToStateMap.get(Pin).toUpperCase();
+            }
+            Decimal statePoints = 0;
+            if (resolvedState != 'UNKNOWN (NO PINCODE)' && STATE_POINTS_MAP.containsKey(resolvedState) && STATE_POINTS_MAP.get(resolvedState) != null) {
+                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
+            }
+            else {
+                statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
+            }
+
+            Boolean isSouth = false;
+            if (resolvedState != 'UNKNOWN (NO PINCODE)') {
+                isSouth = SOUTH_STATES.containsKey(resolvedState);
+            } else if (String.isNotBlank(ld.Advt_Name__c)) {
+                isSouth = isSouthFromText(ld.Advt_Name__c);
+            }
+
+            ld.Call_Centre_Type__c = isSouth ? 'South Call Centre' : 'General Call Centre';
+
+            Decimal leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
+            ld.Lead_Score__c=leadScore;
+            Decimal routingPriority = leadScore + ticketBonus;
+
+            String leadGrade;
+            if (leadScore >= LEADS_GRADE_MAP.get('A').Cuttoff__c) {
+                leadGrade = 'A';
+            } else if (leadScore >= LEADS_GRADE_MAP.get('B').Cuttoff__c) {
+                leadGrade = 'B';
+            } else if (leadScore >= LEADS_GRADE_MAP.get('C').Cuttoff__c) {
+                leadGrade = 'C';
+            } else{
+                leadGrade = 'D';
+            }   
+                    
+            ld.Lead_Grade__c=leadGrade;
+            ld.Login_Probability__c = LEADS_GRADE_MAP.get(leadGrade).Login_Probability__c;
+
+            String agentTier = 'Tier 3';
+            if (isSouth) {
+                agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                          : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                          : 'Tier 3';
+            } else {
+                agentTier = (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                          : (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                          : 'Tier 3';
+            }
+            ld.Agent_Tier__c=agentTier;
+        }
+
+        update leadsToUpdate;
+    }
+
+    private static String resolveLeadSource(String Source, String campNameLower) {
+        if (String.isBlank(Source)) return 'unknown';
+
+        if (Source.equalsIgnoreCase('website') || Source.equalsIgnoreCase('website (organic)')) {
+            if (campNameLower.contains('ag_') || campNameLower.contains('gclid')) return 'google (via website)';
+            if (campNameLower.contains('unb_metaweb')) return 'facebook (via website)';
+            return 'website (organic)';
+        }
+        return Source;
+    }
+
+    private static String resolveCampaignType(String Source, String CampName) {
+        String Camp = String.isNotBlank(CampName) ? CampName : '';
+        String campLower = Camp.toLowerCase();
+
+        if (String.isNotBlank(campLower) && CAMPAIGN_POINTS_MAP.containsKey(campLower)) {
+            return Camp;
+        }
+
+        String srcLower = String.isNotBlank(Source) ? Source.toLowerCase() : '';
+        Boolean isFB = (srcLower == 'facebook' || srcLower == 'facebook (via website)');
+        Boolean isGoogle = (srcLower == 'google' || srcLower == 'google (via website)');
+
+        if (isFB) {
+            return 'FB Missing campaign';
+        } else if (isGoogle){
+            return 'Google Missing campaign';
+        } else {
+            return 'N/A (not FB/Google)';
+        }
     }
     
-    @isTest
-    static void testNullCases() {
-        Test.startTest();
-        LeadScoreCalculator.generateScore(null);
-        LeadScoreCalculator.generateScore(new List<Lead>());
-        Test.stopTest();
+    private static String getLoanAmountBand(Decimal Amount) {
+
+            if (amount == null) return 'Not captured';
+            if (amount <= 0) return 'Not captured';
+
+            if (amount < 500000)  return '< 5L';
+            if (amount < 1000000) return '5-10L';
+            if (amount < 2000000) return '10-20L';
+            if (amount < 3000000) return '20-30L';
+            if (amount < 4000000) return '30-40L';
+            return '40L+';
     }
 
-    @isTest
-    static void testScoringAndRoutingScenarios() {
-        List<Lead> setupLeads = [SELECT Id, LastName, How_did_you_come_to_know_about_us__c, Campaign_Type__c,
-                   				 Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead];
-
-        Test.startTest();
-        LeadScoreCalculator.generateScore(setupLeads);
-        Test.stopTest();
-
-        Map<String, Lead> resultByName = new Map<String, Lead>();
-        for (Lead ld : [
-            SELECT LastName, Lead_Score__c, Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c
-            FROM Lead
-            WHERE Id IN :setupLeads
-        ]) {
-            resultByName.put(ld.LastName, ld);
+    private static Boolean isSouthFromText(String text) {
+        if (String.isBlank(text)) return false;
+        String upperText = text.toUpperCase();
+        
+        for (String southState : SOUTH_STATES.keySet()) {
+            if (upperText.contains(southState)) {
+                return true;
+            }
         }
-
-
-        Lead blankLead = resultByName.get('Blank Lead');
-        System.assertEquals(0, blankLead.Lead_Score__c);
-        System.assertEquals('D', blankLead.Lead_Grade__c);
-        System.assertEquals('General Call Centre', blankLead.Call_Centre_Type__c);
-        System.assertEquals('Tier 3', blankLead.Agent_Tier__c);
-        System.assertEquals(0.0, blankLead.Login_Probability__c);
-
-
-        Lead southT1 = resultByName.get('South Tier 1');
-        System.assertNotEquals(null, southT1.Lead_Score__c);
-        System.assertEquals('A', southT1.Lead_Grade__c);
-        System.assertEquals('South Call Centre', southT1.Call_Centre_Type__c);
-        System.assertEquals('Tier 1', southT1.Agent_Tier__c);
-
-
-        Lead southT3 = resultByName.get('South Tier 3 Ad Fallback');
-        System.assertEquals('South Call Centre', southT3.Call_Centre_Type__c);
-        System.assertEquals('Tier 3', southT3.Agent_Tier__c);
-
-
-        Lead genT1 = resultByName.get('General Tier 1');
-        System.assertEquals('General Call Centre', genT1.Call_Centre_Type__c);
-        System.assertEquals('Tier 1', genT1.Agent_Tier__c);
-
-
-        Lead otherSouth = resultByName.get('Other Source South Ad');
-        System.assertEquals('South Call Centre', otherSouth.Call_Centre_Type__c);
-        System.assertNotEquals(null, otherSouth.Lead_Score__c);
+        return false;
     }
-
 }
