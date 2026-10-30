@@ -1,9 +1,115 @@
 @isTest
-private class LeadScoreCalculatorTest {
+public class LeadScoreCalculatorTest {
 
     @testSetup
-    static void setupTestData() {
-        // 1. Insert Pincode_Master__c base records
+    public static void testsetup(){
+        
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
+        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
+        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
+            
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        cus.Query_Raised_count__c=17;
+        cus.Hindsight_Approval__c='Pending';
+        cus.Credit_Hindsight_Approval__c='Approved';
+        cus.Property_Paper_Storage_Date__c=System.today();
+        insert cus;
+        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
+        badc.Bank_name__c='HDFC';
+        badc.Disbursement_in_this_Account__c='Yes';
+        badc.Household__c = cus.Id;
+        badc.Bank_Account_Number__c = '12345678';
+        badc.IFSC_Code__c = 'ABC123456';
+        badc.Percentage__c='91';
+        badc.Is_PennyDrop_Done__c=true;
+        badc.Name_of_Account_Holder__c = 'John Doe';
+        badc.PennyDrop_Status_Code__c='NP001';
+        insert badc;
+        
+        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
+                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
+        ac.Is_Screenza_Done__c=true;
+        ac.Pan_Verified__c=true;
+        ac.Sex__pc='Male';
+        ac.Salutation='Mr.';
+        insert ac;
+        
+        Id kycRecId=Schema.SObjectType.KYC_Log__c.getRecordTypeInfosByName().get('Faceliveness').getRecordTypeId();
+        KYC_Log__c kyc=new KYC_Log__c();
+        kyc.Applicant__c=ac.id;
+        kyc.RecordTypeId=kycRecId;
+        kyc.Face_Match__c='yes';
+        kyc.Liveliness__c='yes';
+        insert kyc;
+        
+        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
+        insert cf;
+        
+        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
+        insert nsc;
+        
+        Loan_Product__c lp=new Loan_Product__c();
+        lp.PF_Rate_1__c=5.0;
+        lp.Status__c='Active';
+        insert lp;
+        
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);
+        insert con;
+        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
+        User testUser = new User(
+            FirstName = 'Test',
+            LastName = 'User',
+            Email = 'testuser@example.com',
+            Username = 'testuser' + DateTime.now().getTime() + '@testorg.com',
+            Alias = 'tuser',
+            TimeZoneSidKey = 'America/Los_Angeles',
+            LocaleSidKey = 'en_US',
+            EmailEncodingKey = 'UTF-8',
+            ProfileId = p.Id,
+            LanguageLocaleKey = 'en_US'
+        );
+        testUser.EmployeeNumber='ISFC12121';
+        insert testUser;
+        System.runAs(testUser) {
+            String employeeCode = [Select Id, EmployeeNumber from User where Id =: UserInfo.getUserId()].EmployeeNumber;
+            String profileName = [SELECT Id, Name FROM Profile WHERE Id = :UserInfo.getProfileId()].Name;
+        }
+        
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Jaipur-1';
+        branch.Branch_Category__c = 'B';
+        branch.Critical_Insurance_Company__c='ICICI Lombard CI';
+        branch.Insurance_Company__c='ICICI';
+        branch.Property_Insurance_Company__c='ICICI Lombard';
+        insert branch;
+        
+        Opportunity op = new Opportunity(CloseDate=System.today(), Name='Rahul',
+                                         PennyDrop_Status__c='Success', AccountId=ac.Id,
+                                         HLA_Sign_Date__c=Date.newInstance(2024,11,01),
+                                         Collateral_Pin_Code_New__c=nsc.Id,
+                                         Address_Pin_Code_New__c=nsc.Id,
+                                         Household__c=cus.Id, Sanctioned_Amont__c=300000, 
+                                         Loan_Product__c=lp.Id,
+                                         LM_Loan_Status__c='Sanctioned');
+        op.Loan_Number__c='6983162387';
+        op.Branch__c=branch.Id;
+        op.First_Sanction_Date__c=system.today();
+        op.Loan_Product_Type__c='HL';
+        op.Purpose_of_taking_the_loan__c='HOME EXTENSION';
+        op.Loan_Amount_Required__c=1500001;
+        op.DE_Done_By__c='By-Pass Ten Thousand Validation';
+        op.ACH_Registration_Status__c='Registered';
+        op.FCU_Status__c='Cleared';
+        op.Finnone_Loan_Id__c='FN1234';
+
+        insert op;
+        
         List<Pincode_Master__c> pincodes = new List<Pincode_Master__c>{
             new Pincode_Master__c(Name = '600001', State_Name__c = 'Tamil Nadu'),
             new Pincode_Master__c(Name = '500001', State_Name__c = 'Telangana'),
@@ -12,121 +118,79 @@ private class LeadScoreCalculatorTest {
         };
         insert pincodes;
 
-        // 2. Insert base Lead records using ONLY valid restricted picklist values for Campaign_Type__c
-        List<Lead> testLeads = new List<Lead>{
-            // 0. All-blank scoring inputs Lead
-            new Lead(
+        Lead l1 = new Lead(
                 FirstName = 'Test',
-                LastName = 'Blank Lead',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543210',
-                Phone = '9876543210',
-                Email = 'blanklead@test.com',
-                Status = 'Open - Not Contacted'
-            ),
-            // 1. South Tier 1, Grade A: Retention + Google Search-Brand + Tamil Nadu + 30-40L (3500000)
-            new Lead(
+                LastName = 'Blank Lead'
+            );
+        
+		Lead l2 = new Lead(
                 FirstName = 'Test',
                 LastName = 'South Tier 1',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543211',
-                Phone = '9876543211',
-                Email = 'southt1@test.com',
-                Status = 'Open - Not Contacted',
                 How_did_you_come_to_know_about_us__c = 'retention',
                 Campaign_Type__c = 'Google Search-Brand',
                 PostalCode = '600001',
                 Loan_Amount__c = '3500000'
-            ),
-            // 2. South Tier 2, Grade B: Website + Google Search-Generic + Telangana + 10-20L (1500000)
-            new Lead(
+            );
+                
+		Lead l3 = new Lead(
                 FirstName = 'Test',
                 LastName = 'South Tier 2',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543212',
-                Phone = '9876543212',
-                Email = 'southt2@test.com',
-                Status = 'Open - Not Contacted',
                 How_did_you_come_to_know_about_us__c = 'website',
-                Campaign_Type__c = 'Google Search-Generic',
+                Campaign_Type__c = 'ag_search_campaign',
                 PostalCode = '500001',
                 Loan_Amount__c = '1500000'
-            ),
-            // 3. South Tier 3, Grade D: Whatsapp + No Pincode + South Ad Name (Tamil) + < 5L (300000)
-            new Lead(
+            );
+                
+		Lead l4 = new Lead(
                 FirstName = 'Test',
                 LastName = 'South Tier 3 Ad Fallback',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543213',
-                Phone = '9876543213',
-                Email = 'southt3@test.com',
-                Status = 'Open - Not Contacted',
                 How_did_you_come_to_know_about_us__c = 'whatsapp',
-                Campaign_Type__c = 'N/A (not FB/Google)',
                 Advt_Name__c = 'Tamil_HomeLoan_Ad',
                 Loan_Amount__c = '300000'
-            ),
-            // 4. General Tier 1, Grade A: Tollfree + Delhi + 40L+ (4500000)
-            new Lead(
+            );
+        
+		Lead l5 = new Lead(
                 FirstName = 'Test',
                 LastName = 'General Tier 1',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543214',
-                Phone = '9876543214',
-                Email = 'gent1@test.com',
-                Status = 'Open - Not Contacted',
                 How_did_you_come_to_know_about_us__c = 'tollfree',
-                Campaign_Type__c = 'N/A (not FB/Google)',
                 PostalCode = '110001',
                 Loan_Amount__c = '4500000'
-            ),
-            // 5. General Tier 2, Grade C: Facebook + FB Meta-web (site form) + Unlisted State Pincode + 20-30L (2500000)
-            new Lead(
+            );
+
+		Lead l6 = new Lead(
                 FirstName = 'Test',
                 LastName = 'General Tier 2',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543215',
-                Phone = '9876543215',
-                Email = 'gent2@test.com',
-                Status = 'Open - Not Contacted',
-                How_did_you_come_to_know_about_us__c = 'facebook',
-                Campaign_Type__c = 'FB Meta-web (site form)',
+                How_did_you_come_to_know_about_us__c = 'website',
+                Campaign_Type__c = 'unb_metaweb_campaign',
                 PostalCode = '999999',
                 Loan_Amount__c = '2500000'
-            ),
-            // 6. General Tier 3: Website (organic) + Google PMax + 5-10L (700000)
-            new Lead(
+            );
+        
+		Lead l7 = new Lead(
                 FirstName = 'Test',
                 LastName = 'General Tier 3 Organic',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543216',
-                Phone = '9876543216',
-                Email = 'gent3@test.com',
-                Status = 'Open - Not Contacted',
                 How_did_you_come_to_know_about_us__c = 'website (organic)',
-                Campaign_Type__c = 'Google PMax',
+                Campaign_Type__c = 'General_Hindi_Campaign',
                 Loan_Amount__c = '700000'
-            ),
-            // 7. Unlisted Lead Source ('other' fallback) + South Ad Fallback (Kannada) + Loan <= 0
-            new Lead(
-                FirstName = 'Test',
-                LastName = 'Other Source South Ad',
-                Company = 'India Shelter Test',
-                MobilePhone = '9876543217',
-                Phone = '9876543217',
-                Email = 'othersouth@test.com',
-                Status = 'Open - Not Contacted',
-                How_did_you_come_to_know_about_us__c = 'unlisted_custom_source',
-                Campaign_Type__c = 'FB Missing campaign',
-                Advt_Name__c = 'Karnataka_Kannada_Ad',
-                Loan_Amount__c = '0'
-            )
-        };
-        insert testLeads;
-    }
+            );
 
+		Lead l8 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Other Source South Camp',
+                How_did_you_come_to_know_about_us__c = 'unlisted_custom_source',
+                Campaign_Type__c = 'Karnataka_Special_Offer',
+                Loan_Amount__c = '0'
+            );
+        
+            List<Lead> testLeads = new List<Lead>{l1, l2, l3, l4, l5, l6, l7, l8};
+        	insert testLeads;
+
+        
+        Test.stoptest();
+    }
+    
     @isTest
-    static void testGuardClauses() {
+    static void testNullCases() {
         Test.startTest();
         LeadScoreCalculator.generateScore(null);
         LeadScoreCalculator.generateScore(new List<Lead>());
@@ -135,11 +199,8 @@ private class LeadScoreCalculatorTest {
 
     @isTest
     static void testScoringAndRoutingScenarios() {
-        List<Lead> setupLeads = [
-            SELECT Id, LastName, How_did_you_come_to_know_about_us__c, Campaign_Type__c,
-                   Advt_Name__c, Loan_Amount__c, PostalCode
-            FROM Lead
-        ];
+        List<Lead> setupLeads = [SELECT Id, LastName, How_did_you_come_to_know_about_us__c, Campaign_Type__c,
+                   				 Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead];
 
         Test.startTest();
         LeadScoreCalculator.generateScore(setupLeads);
@@ -154,7 +215,7 @@ private class LeadScoreCalculatorTest {
             resultByName.put(ld.LastName, ld);
         }
 
-        // Verify All-Blank Lead
+
         Lead blankLead = resultByName.get('Blank Lead');
         System.assertEquals(0, blankLead.Lead_Score__c);
         System.assertEquals('D', blankLead.Lead_Grade__c);
@@ -162,26 +223,27 @@ private class LeadScoreCalculatorTest {
         System.assertEquals('Tier 3', blankLead.Agent_Tier__c);
         System.assertEquals(0.0, blankLead.Login_Probability__c);
 
-        // Verify South Tier 1
+
         Lead southT1 = resultByName.get('South Tier 1');
         System.assertNotEquals(null, southT1.Lead_Score__c);
         System.assertEquals('A', southT1.Lead_Grade__c);
         System.assertEquals('South Call Centre', southT1.Call_Centre_Type__c);
         System.assertEquals('Tier 1', southT1.Agent_Tier__c);
 
-        // Verify South Tier 3 via Advt_Name__c fallback
+
         Lead southT3 = resultByName.get('South Tier 3 Ad Fallback');
         System.assertEquals('South Call Centre', southT3.Call_Centre_Type__c);
         System.assertEquals('Tier 3', southT3.Agent_Tier__c);
 
-        // Verify General Tier 1
+
         Lead genT1 = resultByName.get('General Tier 1');
         System.assertEquals('General Call Centre', genT1.Call_Centre_Type__c);
         System.assertEquals('Tier 1', genT1.Agent_Tier__c);
 
-        // Verify South Ad fallback & 'other' source fallback
+
         Lead otherSouth = resultByName.get('Other Source South Ad');
         System.assertEquals('South Call Centre', otherSouth.Call_Centre_Type__c);
         System.assertNotEquals(null, otherSouth.Lead_Score__c);
     }
+
 }
