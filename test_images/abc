@@ -1,3 +1,10 @@
+/*
+ * 		Developed by: Sahil Hooda
+ * 		Pre-call Lead Scoring & Routing.
+*/
+
+public class LeadScoreCalculator {
+        
     private static Map<String, Lead_Score_Tiers__mdt> CUTTOFFS_MAP = new Map<String, Lead_Score_Tiers__mdt>();
     private static Map<String, Lead_Source_Scores__mdt> SOURCE_POINTS_MAP = new Map<String, Lead_Source_Scores__mdt>();
     private static Map<String, Lead_Campaign_Scores__mdt> CAMPAIGN_POINTS_MAP = new Map<String, Lead_Campaign_Scores__mdt>();
@@ -5,10 +12,9 @@
     private static Map<String, Lead_South_Region_States__mdt> SOUTH_STATES = new Map<String, Lead_South_Region_States__mdt>();
     private static Map<String, Lead_Loan_Bands__mdt> LOAN_POINTS_MAP = new Map<String, Lead_Loan_Bands__mdt>();
     private static Map<String, Lead_Grade_Tiers__mdt> LEADS_GRADE_MAP = new Map<String, Lead_Grade_Tiers__mdt>();
-
+    
     private static Decimal BASE_SCORE;
 
-    // Runs automatically once when the class loads and indexes every map by MasterLabel
     static {
         for (Lead_Score_Tiers__mdt rec : Lead_Score_Tiers__mdt.getAll().values()) {
             CUTTOFFS_MAP.put(rec.MasterLabel, rec);
@@ -34,3 +40,198 @@
             LEADS_GRADE_MAP.put(rec.MasterLabel, rec);
         }
     }
+
+    
+    public static void generateScore(List<Lead> leadList) {
+        
+        Set<Id> leadIds = new Set<Id>();
+        for(Lead l: leadList) {
+            leadIds.add(l.Id);
+        }
+        
+        if (leadIds == null || leadIds.isEmpty()) return;
+
+        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Type__c, Lead_Score__c,
+                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
+                                    Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
+
+        if (leadsToUpdate.isEmpty()) return;
+
+        Set<String> pinCodes = new Set<String>();
+        for (Lead ld : leadsToUpdate) {
+            if (String.isNotBlank(ld.PostalCode)) {
+                pinCodes.add(ld.PostalCode.trim());
+            }
+        }
+
+        Map<String, String> pinToStateMap = new Map<String, String>();
+        for (Pincode_Master__c pm : [SELECT Name, State_Name__c FROM Pincode_Master__c WHERE Name IN :pinCodes]) {
+            pinToStateMap.put(pm.Name, pm.State_Name__c);
+        }
+
+        for (Lead ld : leadsToUpdate) {
+
+            if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Type__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Advt_Name__c)) {
+                ld.Lead_Score__c=0;
+                ld.Lead_Grade__c='D';
+                ld.Call_Centre_Type__c='General Call Centre';
+                ld.Agent_Tier__c='Tier 3';
+                ld.Login_Probability__c=0.0;
+                continue;
+            }
+
+            String CampName = String.isNotBlank(ld.Campaign_Type__c) ? ld.Campaign_Type__c : '';
+            String campNameLower = CampName.toLowerCase();
+            String Pin = String.isNotBlank(ld.PostalCode) ? ld.PostalCode.trim() : '';
+
+            String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c, campNameLower);
+            String sourceKey = Source.toLowerCase();
+            Decimal sourcePoints = 0;
+            if (SOURCE_POINTS_MAP.containsKey(sourceKey) && SOURCE_POINTS_MAP.get(sourceKey) != null) {
+                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey).Points__c;
+            } else {
+                sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
+            }
+
+            String CampaignType = resolveCampaignType(Source, CampName);
+            String campaignKey = CampaignType.toLowerCase();
+            Decimal campaignPoints = 0;
+            if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
+                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
+            }
+			
+            String loanBand = null;
+            if(String.isNotBlank(ld.Loan_Amount__c)) {
+            	loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c.trim()));
+            } 
+            
+            Decimal loanPoints = LOAN_POINTS_MAP.get(loanBand).Loan_Amount_Points__c;
+            Decimal ticketBonus = LOAN_POINTS_MAP.get(loanBand).Ticket_Bonus_Points__c;
+
+            String resolvedState = 'UNKNOWN (NO PINCODE)';
+            if (String.isNotBlank(Pin) && pinToStateMap.containsKey(Pin) && String.isNotBlank(pinToStateMap.get(Pin))) {
+                resolvedState = pinToStateMap.get(Pin).toUpperCase();
+            }
+            Decimal statePoints = 0;
+            if (resolvedState != 'UNKNOWN (NO PINCODE)' && STATE_POINTS_MAP.containsKey(resolvedState) && STATE_POINTS_MAP.get(resolvedState) != null) {
+                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
+            }
+            else {
+                statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
+            }
+
+            Boolean isSouth = false;
+            if (resolvedState != 'UNKNOWN (NO PINCODE)') {
+                isSouth = SOUTH_STATES.containsKey(resolvedState);
+            } else if (String.isNotBlank(ld.Advt_Name__c)) {
+                isSouth = isSouthFromText(ld.Advt_Name__c);
+            } else if (String.isNotBlank(CampName)) {
+                isSouth = isSouthFromText(CampName);
+            }
+
+            ld.Call_Centre_Type__c = isSouth ? 'South Call Centre' : 'General Call Centre';
+
+            Decimal leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
+            ld.Lead_Score__c=leadScore;
+            Decimal routingPriority = leadScore + ticketBonus;
+
+            String leadGrade;
+            if (leadScore >= LEADS_GRADE_MAP.get('A').Cuttoff__c) {
+                leadGrade = 'A';
+            } else if (leadScore >= LEADS_GRADE_MAP.get('B').Cuttoff__c) {
+                leadGrade = 'B';
+            } else if (leadScore >= LEADS_GRADE_MAP.get('C').Cuttoff__c) {
+                leadGrade = 'C';
+            } else{
+                leadGrade = 'D';
+            }   
+                    
+            ld.Lead_Grade__c=leadGrade;
+            ld.Login_Probability__c = LEADS_GRADE_MAP.get(leadGrade).Login_Probability__c;
+
+            String agentTier = 'Tier 3';
+            if (isSouth) {
+                agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                          : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                          : 'Tier 3';
+            } else {
+                agentTier = (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                          : (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                          : 'Tier 3';
+            }
+            ld.Agent_Tier__c=agentTier;
+        }
+
+        update leadsToUpdate;
+    }
+
+    private static String resolveLeadSource(String Source, String campNameLower) {
+        if (String.isBlank(Source)) return 'unknown';
+
+        if (Source.equalsIgnoreCase('website') || Source.equalsIgnoreCase('website (organic)')) {
+            if (campNameLower.contains('ag_') || campNameLower.contains('gclid')) return 'google (via website)';
+            if (campNameLower.contains('unb_metaweb')) return 'facebook (via website)';
+            return 'website (organic)';
+        }
+        return Source;
+    }
+
+    private static String resolveCampaignType(String Source, String CampName) {
+        String Camp = String.isNotBlank(CampName) ? CampName : '';
+        String campLower = Camp.toLowerCase();
+
+        if (String.isNotBlank(campLower) && CAMPAIGN_POINTS_MAP.containsKey(campLower)) {
+            return Camp;
+        }
+
+        String srcLower = String.isNotBlank(Source) ? Source.toLowerCase() : '';
+        Boolean isFB = (srcLower == 'facebook' || srcLower == 'facebook (via website)');
+        Boolean isGoogle = (srcLower == 'google' || srcLower == 'google (via website)');
+
+        if (!isFB && !isGoogle) {
+            return 'N/A (not FB/Google)';
+        }
+
+        if (String.isBlank(campLower)) {
+            return isFB ? 'FB Missing campaign' : 'Google Missing campaign';
+        }
+
+        if (isFB) {
+            if (campLower.contains('unb_metaweb') || campLower.contains('meta-web')) return 'FB Meta-web (site form)';
+            if (campLower.contains('unb_leadgen_cbo') || campLower.contains('lead-form cbo')) return 'FB Lead-form CBO';
+            if (campLower.contains('test')) return 'FB Test';
+            return 'FB Missing campaign';
+        }
+
+        if (isGoogle) {
+            if (campLower.contains('ag_search_brand') || campLower.contains('search-brand')) return 'Google Search-Brand';
+            if (campLower.contains('ag_search') || campLower.contains('search-generic')) return 'Google Search-Generic';
+            if (campLower.contains('demandgen') || campLower.contains('youtube') || campLower.contains('you tube')) return 'Google DemandGen/YouTube';
+            if (campLower.contains('pmax')) return 'Google PMax';
+            return 'Google Missing campaign';
+        }
+
+        return 'N/A (not FB/Google)';
+    }
+
+    private static String getLoanAmountBand(Decimal Amount) {
+
+            if (amount == null) return 'Not captured';
+            if (amount <= 0) return 'Not captured';
+
+            if (amount < 500000)  return '<5L';
+            if (amount < 1000000) return '5-10L';
+            if (amount < 2000000) return '10-20L';
+            if (amount < 3000000) return '20-30L';
+            if (amount < 4000000) return '30-40L';
+            return '40L+';
+    }
+
+    private static Boolean isSouthFromText(String text) {
+        if (String.isBlank(text)) return false;
+        String lower = text.toLowerCase();
+        return lower.contains('tamil') || lower.contains('tamil nadu') || lower.contains('tamilnadu')
+            || lower.contains('telugu') || lower.contains('telangana') || lower.contains('andhra')
+            || lower.contains('kannada') || lower.contains('karnataka');
+    }
+}
