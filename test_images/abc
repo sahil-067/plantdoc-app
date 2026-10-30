@@ -93,16 +93,11 @@ public class LeadScoreCalculator {
                 sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
             }
 
-            //String CampaignType = resolveCampaignType(Source, CampName);
-            //String campaignKey = CampaignType.toLowerCase();
             String campaignKey = CampName.toLowerCase();
             Decimal campaignPoints = 0;
             if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
                 campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
             }
-            //if (campaignKey=='FB Missing campaign' || campaignKey=='Google Missing campaign' || campaignKey=='N/A (not FB/Google)') {
-            //    ld.Campaign_Type__c=campaignKey;
-            //}
 			
             String loanBand = 'Not captured';
             if(String.isNotBlank(ld.Loan_Amount__c)) {
@@ -124,14 +119,28 @@ public class LeadScoreCalculator {
                 statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
             }
 
+            // --- 4-POOL ROUTING LOGIC (SOUTH SPLIT BY LANGUAGE) ---
             Boolean isSouth = false;
+            String southLang = null; // 'TAMIL', 'TELUGU', or 'KANNADA'
+
             if (resolvedState != 'UNKNOWN (NO PINCODE)') {
                 isSouth = SOUTH_STATES.containsKey(resolvedState);
+                if (isSouth) {
+                    southLang = getLanguageFromSouthState(resolvedState);
+                }
             } else if (String.isNotBlank(ld.Advt_Name__c)) {
-                isSouth = isSouthFromText(ld.Advt_Name__c);
+                southLang = getSouthLanguageFromText(ld.Advt_Name__c);
+                isSouth = (southLang != null);
             }
 
-            ld.Call_Centre_Type__c = isSouth ? 'South Call Centre' : 'General Call Centre';
+            String callCentre = 'General Call Centre';
+            if (isSouth) {
+                if (southLang == 'TAMIL') callCentre = 'South - Tamil Call Centre';
+                else if (southLang == 'TELUGU') callCentre = 'South - Telugu Call Centre';
+                else if (southLang == 'KANNADA') callCentre = 'South - Kannada Call Centre';
+                else callCentre = 'South Call Centre';
+            }
+            ld.Call_Centre_Type__c = callCentre;
 
             Decimal leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
             ld.Lead_Score__c=leadScore;
@@ -153,9 +162,21 @@ public class LeadScoreCalculator {
 
             String agentTier = 'Tier 3';
             if (isSouth) {
-                agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                          : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                          : 'Tier 3';
+                if (southLang == 'TAMIL') {
+                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                              : 'Tier 3';
+                } else if (southLang == 'TELUGU') {
+                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                              : 'Tier 3';
+                } else if (southLang == 'KANNADA') {
+                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER1_CUTOFF').Score__c) ? 'Tier 1'
+                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER2_CUTOFF').Score__c) ? 'Tier 2'
+                              : 'Tier 3';
+                } else {
+                    agentTier = 'Tier 3';
+                }
             } else {
                 agentTier = (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) ? 'Tier 1'
                           : (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) ? 'Tier 2'
@@ -212,15 +233,34 @@ public class LeadScoreCalculator {
             return '40L+';
     }
 
-    private static Boolean isSouthFromText(String text) {
-        if (String.isBlank(text)) return false;
+    private static String getLanguageFromSouthState(String stateName) {
+        if (stateName == null) return null;
+        String upper = stateName.toUpperCase();
+        if (upper.contains('TAMIL NADU') || upper.contains('PUDUCHERRY') || upper.contains('PONDI')) {
+            return 'TAMIL';
+        }
+        if (upper.contains('TELANGANA') || upper.contains('ANDHRA PRADESH')) {
+            return 'TELUGU';
+        }
+        if (upper.contains('KARNATAKA')) {
+            return 'KANNADA';
+        }
+        return 'TAMIL'; // Default fallback for generic South states
+    }
+
+    private static String getSouthLanguageFromText(String text) {
+        if (String.isBlank(text)) return null;
         String upperText = text.toUpperCase();
         
+        if (upperText.contains('TAMIL') || upperText.contains('PUDUCHERRY')) return 'TAMIL';
+        if (upperText.contains('TELUGU') || upperText.contains('TELANGANA') || upperText.contains('ANDHRA')) return 'TELUGU';
+        if (upperText.contains('KANNADA') || upperText.contains('KARNATAKA')) return 'KANNADA';
+
         for (String southState : SOUTH_STATES.keySet()) {
             if (upperText.contains(southState)) {
-                return true;
+                return getLanguageFromSouthState(southState);
             }
         }
-        return false;
+        return null;
     }
 }
