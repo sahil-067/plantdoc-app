@@ -44,13 +44,13 @@ public class LeadScoreCalculator {
     
     public static void generateScore(List<Lead> leadList) {
         
+        if (leadList == null || leadList.isEmpty()) return;
+
         Set<Id> leadIds = new Set<Id>();
         for(Lead l: leadList) {
             leadIds.add(l.Id);
         }
         
-        if (leadIds == null || leadIds.isEmpty()) return;
-
         List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Type__c, Lead_Score__c,
                                     Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
                                     Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
@@ -93,14 +93,18 @@ public class LeadScoreCalculator {
                 sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
             }
 
-            String CampaignType = resolveCampaignType(Source, CampName);
-            String campaignKey = CampaignType.toLowerCase();
+            //String CampaignType = resolveCampaignType(Source, CampName);
+            //String campaignKey = CampaignType.toLowerCase();
+            String campaignKey = CampName.toLowerCase();
             Decimal campaignPoints = 0;
             if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
                 campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
             }
+            //if (campaignKey=='FB Missing campaign' || campaignKey=='Google Missing campaign' || campaignKey=='N/A (not FB/Google)') {
+            //    ld.Campaign_Type__c=campaignKey;
+            //}
 			
-            String loanBand = null;
+            String loanBand = 'Not captured';
             if(String.isNotBlank(ld.Loan_Amount__c)) {
             	loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c.trim()));
             } 
@@ -188,38 +192,21 @@ public class LeadScoreCalculator {
         Boolean isFB = (srcLower == 'facebook' || srcLower == 'facebook (via website)');
         Boolean isGoogle = (srcLower == 'google' || srcLower == 'google (via website)');
 
-        if (!isFB && !isGoogle) {
+        if (isFB) {
+            return 'FB Missing campaign';
+        } else if (isGoogle){
+            return 'Google Missing campaign';
+        } else {
             return 'N/A (not FB/Google)';
         }
-
-        if (String.isBlank(campLower)) {
-            return isFB ? 'FB Missing campaign' : 'Google Missing campaign';
-        }
-
-        if (isFB) {
-            if (campLower.contains('unb_metaweb') || campLower.contains('meta-web')) return 'FB Meta-web (site form)';
-            if (campLower.contains('unb_leadgen_cbo') || campLower.contains('lead-form cbo')) return 'FB Lead-form CBO';
-            if (campLower.contains('test')) return 'FB Test';
-            return 'FB Missing campaign';
-        }
-
-        if (isGoogle) {
-            if (campLower.contains('ag_search_brand') || campLower.contains('search-brand')) return 'Google Search-Brand';
-            if (campLower.contains('ag_search') || campLower.contains('search-generic')) return 'Google Search-Generic';
-            if (campLower.contains('demandgen') || campLower.contains('youtube') || campLower.contains('you tube')) return 'Google DemandGen/YouTube';
-            if (campLower.contains('pmax')) return 'Google PMax';
-            return 'Google Missing campaign';
-        }
-
-        return 'N/A (not FB/Google)';
     }
-
+    
     private static String getLoanAmountBand(Decimal Amount) {
 
             if (amount == null) return 'Not captured';
             if (amount <= 0) return 'Not captured';
 
-            if (amount < 500000)  return '<5L';
+            if (amount < 500000)  return '< 5L';
             if (amount < 1000000) return '5-10L';
             if (amount < 2000000) return '10-20L';
             if (amount < 3000000) return '20-30L';
