@@ -1,133 +1,25 @@
-global class ForeclosureSMSBatch implements Database.Batchable<sObject>, Database.AllowsCallouts {
-    
-    global Database.QueryLocator start(Database.BatchableContext BC) {
-        // Query only open leads that hit the exact ageing thresholds
-        String query = 'SELECT Id, MobilePhone, Ageing__c FROM Lead ' +
-                       'WHERE Status != \'Closed\' AND Ageing__c IN (1, 4, 7, 10, 13, 16, 19, 21) AND MobilePhone != null';
-        return Database.getQueryLocator(query);
-    }
-
-    global void execute(Database.BatchableContext BC, List<Lead> scope) {
-        List<SmsRequest> smsPayloads = new List<SmsRequest>();
-
-        for (Lead l : scope) {
-            String templateId = getDltTemplateId(Integer.valueOf(l.Ageing__c));
-            
-            if (templateId != null) {
-                smsPayloads.add(new SmsRequest(l.MobilePhone, templateId));
-            }
-        }
-
-        if (!smsPayloads.isEmpty()) {
-            sendSms(smsPayloads);
-        }
-    }
-
-    global void finish(Database.BatchableContext BC) {
-        // Execute any post-batch logic, like emailing admin on completion
-    }
-
-    // Maps the day threshold to the DLT Template IDs provided in the email thread
-    private String getDltTemplateId(Integer ageingDays) {
-        switch on ageingDays {
-            when 1 { return '1077217930046105549'; } // Template-1
-            when 4 { return '1077471770046203926'; } // Template-2
-            when 7 { return '1077595490046192356'; } // Template-3
-            when 10 { return '1077284850050929992'; } // Template-4
-            when 13 { return '1077441020046153887'; } // Template-5
-            when 16 { return '1077303510036497254'; } // Template-6
-            when 19 { return '1077325840046148293'; } // Template-7
-            when 21 { return '1077511520046174433'; } // Template-8
-            when else { return null; }
-        }
-    }
-
-    // REST Wrapper class for the payload
-    private class SmsRequest {
-        String phone;
-        String templateId;
-        
-        SmsRequest(String phone, String templateId) {
-            this.phone = phone;
-            this.templateId = templateId;
-        }
-    }
-
-    private void sendSms(List<SmsRequest> payloads) {
-        // Implement the specific API callout logic using your standard REST wrapper
-        // String body = JSON.serialize(payloads);
-        // HttpRequest req = new HttpRequest();
-        // req.setEndpoint('callout:SMS_Provider_Named_Credential');
-        // req.setMethod('POST');
-        // req.setBody(body);
-        // Http http = new Http();
-        // HttpResponse res = http.send(req);
-    }
-}
-
-
-
-
-
-
-
-
-global class ForeclosureSMSScheduler implements Schedulable {
-    global void execute(SchedulableContext SC) {
-        ForeclosureSMSBatch batch = new ForeclosureSMSBatch();
-        // Enforcing a batch size of 50 to safely handle API callouts
-        Database.executeBatch(batch, 50); 
-    }
-}
-
-
-
-
-
-
-@isTest
-private class ForeclosureSMSBatchTest {
-    
-    @testSetup
-    static void setupTestData() {
-        List<Lead> testLeads = new List<Lead>();
-        // Insert leads mapping to different thresholds
-        testLeads.add(new Lead(LastName='Test 1', Company='Comp1', Status='Open', MobilePhone='9000000001', Ageing__c=1));
-        testLeads.add(new Lead(LastName='Test 4', Company='Comp4', Status='Open', MobilePhone='9000000004', Ageing__c=4));
-        testLeads.add(new Lead(LastName='Test Closed', Company='CompClosed', Status='Closed', MobilePhone='9000000000', Ageing__c=13));
-        insert testLeads;
-    }
-
-    @isTest
-    static void testBatchExecution() {
-        Test.setMock(HttpCalloutMock.class, new SMSCalloutMock());
-
-        Test.startTest();
-        Database.executeBatch(new ForeclosureSMSBatch(), 200);
-        Test.stopTest();
-
-        // The closed lead should be ignored. Assert against standard limits or updated fields if applicable.
-        System.assertEquals(2, [SELECT count() FROM Lead WHERE Status != 'Closed'], 'Only open leads should be processed');
-    }
-
-    @isTest
-    static void testSchedulerExecution() {
-        Test.startTest();
-        String cronExpression = '0 0 10 * * ?'; 
-        String jobId = System.schedule('Test Foreclosure SMS 10 AM', cronExpression, new ForeclosureSMSScheduler());
-        Test.stopTest();
-
-        System.assertNotEquals(null, jobId, 'The scheduled job ID should not be null');
-    }
-
-    // Mock response for the SMS API
-    private class SMSCalloutMock implements HttpCalloutMock {
-        public HTTPResponse respond(HTTPRequest req) {
-            HttpResponse res = new HttpResponse();
-            res.setHeader('Content-Type', 'application/json');
-            res.setBody('{"status": "success"}');
-            res.setStatusCode(200);
-            return res;
-        }
-    }
-}
+API Name	Type	Line	Column	Error Message
+LeadScoreCalculator	Apex Class	91	65	Variable does not exist: Points__c
+LeadScoreCalculator	Apex Class	93	63	Variable does not exist: Points__c
+LeadScoreCalculator	Apex Class	99	71	Variable does not exist: Points__c
+LeadScoreCalculator	Apex Class	107	64	Variable does not exist: Loan_Amount_Points__c
+LeadScoreCalculator	Apex Class	108	65	Variable does not exist: Ticket_Bonus_Points__c
+LeadScoreCalculator	Apex Class	116	67	Variable does not exist: Points__c
+LeadScoreCalculator	Apex Class	119	76	Variable does not exist: Points__c
+LeadScoreCalculator	Apex Class	148	55	Variable does not exist: Cuttoff__c
+LeadScoreCalculator	Apex Class	150	62	Variable does not exist: Cuttoff__c
+LeadScoreCalculator	Apex Class	152	62	Variable does not exist: Cuttoff__c
+LeadScoreCalculator	Apex Class	159	70	Variable does not exist: Login_Probability__c
+LeadScoreCalculator	Apex Class	164	98	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	165	98	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	168	99	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	169	99	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	172	100	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	173	100	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	179	86	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	180	86	Variable does not exist: Score__c
+LeadScoreCalculator	Apex Class	22	53	Variable does not exist: Score__c
+LeadScoreCalculatorTest	Apex Class	91	65	Dependent class is invalid and needs recompilation: Class LeadScoreCalculator : Variable does not exist: Points__c
+LeadAssignment	Apex Trigger	64	3	Variable does not exist: LeadScoreCalculator
+ 
+ 
