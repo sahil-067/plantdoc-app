@@ -1,266 +1,906 @@
-/*
- * 		Developed by: Sahil Hooda
- * 		Pre-call Lead Scoring & Routing.
-*/
+Approval Required For SMS Templates
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 29/07/2026 5:33 PM
+To: Aakash Jain <Aakash.Jain3@indiashelter.in>
+Cc: rohit singh <Rohit.Singh@indiashelter.in>; Rohit Gaur <rohit.gaur@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>
+Subject: Approval Required For SMS Templates
 
-public class LeadScoreCalculator {
-        
-    private static Map<String, Lead_Score_Tiers__mdt> CUTTOFFS_MAP = new Map<String, Lead_Score_Tiers__mdt>();
-    private static Map<String, Lead_Source_Scores__mdt> SOURCE_POINTS_MAP = new Map<String, Lead_Source_Scores__mdt>();
-    private static Map<String, Lead_Campaign_Scores__mdt> CAMPAIGN_POINTS_MAP = new Map<String, Lead_Campaign_Scores__mdt>();
-    private static Map<String, Lead_State_Scores__mdt> STATE_POINTS_MAP = new Map<String, Lead_State_Scores__mdt>();
-    private static Map<String, Lead_South_Region_States__mdt> SOUTH_STATES = new Map<String, Lead_South_Region_States__mdt>();
-    private static Map<String, Lead_Loan_Bands__mdt> LOAN_POINTS_MAP = new Map<String, Lead_Loan_Bands__mdt>();
-    private static Map<String, Lead_Grade_Tiers__mdt> LEADS_GRADE_MAP = new Map<String, Lead_Grade_Tiers__mdt>();
-    
-    private static Decimal BASE_SCORE;
+ 
 
-    static {
-        for (Lead_Score_Tiers__mdt rec : Lead_Score_Tiers__mdt.getAll().values()) {
-            CUTTOFFS_MAP.put(rec.MasterLabel, rec);
-        }
-        BASE_SCORE = CUTTOFFS_MAP.get('BASE_SCORE').Score__c;
+Hi Sir
 
-        for (Lead_Source_Scores__mdt rec : Lead_Source_Scores__mdt.getAll().values()) {
-            SOURCE_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
-        }
-        for (Lead_Campaign_Scores__mdt rec : Lead_Campaign_Scores__mdt.getAll().values()) {
-            CAMPAIGN_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
-        }
-        for (Lead_State_Scores__mdt rec : Lead_State_Scores__mdt.getAll().values()) {
-            STATE_POINTS_MAP.put(rec.MasterLabel.toUpperCase(), rec);
-        }
-        for (Lead_South_Region_States__mdt rec : Lead_South_Region_States__mdt.getAll().values()) {
-            SOUTH_STATES.put(rec.MasterLabel.toUpperCase(), rec);
-        }
-        for (Lead_Loan_Bands__mdt rec : Lead_Loan_Bands__mdt.getAll().values()) {
-            LOAN_POINTS_MAP.put(rec.MasterLabel, rec);
-        }
-        for (Lead_Grade_Tiers__mdt rec : Lead_Grade_Tiers__mdt.getAll().values()) {
-            LEADS_GRADE_MAP.put(rec.MasterLabel, rec);
-        }
-    }
+ 
 
-    
-    public static void generateScore(List<Lead> leadList) {
-        
-        if (leadList == null || leadList.isEmpty()) return;
+Requesting your approval for the SMS which we are planning to send to the customers who are foreclosing the loan.
 
-        Set<Id> leadIds = new Set<Id>();
-        for(Lead l: leadList) {
-            leadIds.add(l.Id);
-        }
-        
-        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Type__c, Lead_Score__c,
-                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
-                                    Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
+ 
 
-        if (leadsToUpdate.isEmpty()) return;
+Please find the attached SMS templates for your reference.
 
-        Set<String> pinCodes = new Set<String>();
-        for (Lead ld : leadsToUpdate) {
-            if (String.isNotBlank(ld.PostalCode)) {
-                pinCodes.add(ld.PostalCode.trim());
-            }
-        }
+ 
 
-        Map<String, String> pinToStateMap = new Map<String, String>();
-        for (Pincode_Master__c pm : [SELECT Name, State_Name__c FROM Pincode_Master__c WHERE Name IN :pinCodes]) {
-            pinToStateMap.put(pm.Name, pm.State_Name__c);
-        }
+Thanks & Regards
 
-        for (Lead ld : leadsToUpdate) {
+Jitesh Yadav
 
-            if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Type__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Advt_Name__c)) {
-                ld.Lead_Score__c=0;
-                ld.Lead_Grade__c='D';
-                ld.Call_Centre_Type__c='General Call Centre';
-                ld.Agent_Tier__c='Tier 3';
-                ld.Login_Probability__c=0.0;
-                continue;
-            }
+From: Aakash Jain <Aakash.Jain3@indiashelter.in>
+Sent: Thursday, July 30, 2026 10:01 AM
+To: rohit singh <Rohit.Singh@indiashelter.in>
+Subject: RE: Approval Required For SMS Templates
 
-            String CampName = String.isNotBlank(ld.Campaign_Type__c) ? ld.Campaign_Type__c : '';
-            String campNameLower = CampName.toLowerCase();
-            String Pin = String.isNotBlank(ld.PostalCode) ? ld.PostalCode.trim() : '';
+ 
 
-            String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c, campNameLower);
-            String sourceKey = Source.toLowerCase();
-            Decimal sourcePoints = 0;
-            if (SOURCE_POINTS_MAP.containsKey(sourceKey) && SOURCE_POINTS_MAP.get(sourceKey) != null) {
-                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey).Points__c;
-            } else {
-                sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
-            }
+Trying to reach u over call, pls connect
 
-            String campaignKey = CampName.toLowerCase();
-            Decimal campaignPoints = 0;
-            if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
-                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
-            }
-			
-            String loanBand = 'Not captured';
-            if(String.isNotBlank(ld.Loan_Amount__c)) {
-            	loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c.trim()));
-            } 
-            
-            Decimal loanPoints = LOAN_POINTS_MAP.get(loanBand).Loan_Amount_Points__c;
-            Decimal ticketBonus = LOAN_POINTS_MAP.get(loanBand).Ticket_Bonus_Points__c;
+From: rohit singh <Rohit.Singh@indiashelter.in>
+Sent: 03/08/2026 2:58 PM
+To: Aakash Jain <Aakash.Jain3@indiashelter.in>
+Cc: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
 
-            String resolvedState = 'UNKNOWN (NO PINCODE)';
-            if (String.isNotBlank(Pin) && pinToStateMap.containsKey(Pin) && String.isNotBlank(pinToStateMap.get(Pin))) {
-                resolvedState = pinToStateMap.get(Pin).toUpperCase();
-            }
-            Decimal statePoints = 0;
-            if (resolvedState != 'UNKNOWN (NO PINCODE)' && STATE_POINTS_MAP.containsKey(resolvedState) && STATE_POINTS_MAP.get(resolvedState) != null) {
-                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
-            }
-            else {
-                statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
-            }
+ 
 
-            // --- 4-POOL ROUTING LOGIC (SOUTH SPLIT BY LANGUAGE) ---
-            Boolean isSouth = false;
-            String southLang = null; // 'TAMIL', 'TELUGU', or 'KANNADA'
+Hi,
 
-            if (resolvedState != 'UNKNOWN (NO PINCODE)') {
-                isSouth = SOUTH_STATES.containsKey(resolvedState);
-                if (isSouth) {
-                    southLang = getLanguageFromSouthState(resolvedState);
-                }
-            } else if (String.isNotBlank(ld.Advt_Name__c)) {
-                southLang = getSouthLanguageFromText(ld.Advt_Name__c);
-                isSouth = (southLang != null);
-            }
+ 
 
-            String callCentre = 'General Call Centre';
-            if (isSouth) {
-                if (southLang == 'TAMIL') callCentre = 'South - Tamil Call Centre';
-                else if (southLang == 'TELUGU') callCentre = 'South - Telugu Call Centre';
-                else if (southLang == 'KANNADA') callCentre = 'South - Kannada Call Centre';
-                else callCentre = 'South Call Centre';
-            }
-            ld.Call_Centre_Type__c = callCentre;
+Requesting your approval for the SMS templates. The purpose is customer retention.
 
-            Decimal leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
-            ld.Lead_Score__c=leadScore;
-            Decimal routingPriority = leadScore + ticketBonus;
+ 
 
-            String leadGrade;
-            if (leadScore >= LEADS_GRADE_MAP.get('A').Cuttoff__c) {
-                leadGrade = 'A';
-            } else if (leadScore >= LEADS_GRADE_MAP.get('B').Cuttoff__c) {
-                leadGrade = 'B';
-            } else if (leadScore >= LEADS_GRADE_MAP.get('C').Cuttoff__c) {
-                leadGrade = 'C';
-            } else{
-                leadGrade = 'D';
-            }   
-                    
-            ld.Lead_Grade__c=leadGrade;
-            ld.Login_Probability__c = LEADS_GRADE_MAP.get(leadGrade).Login_Probability__c;
+Kindly note that the words used in the SMS are intended to inform customers about applicable charges, GST, reprocessing, re‑documentation/verification, and loss of deposit payment.
 
-            String agentTier = 'Tier 3';
-            if (isSouth) {
-                if (southLang == 'TAMIL') {
-                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                              : 'Tier 3';
-                } else if (southLang == 'TELUGU') {
-                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                              : 'Tier 3';
-                } else if (southLang == 'KANNADA') {
-                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                              : 'Tier 3';
-                } else {
-                    agentTier = 'Tier 3';
-                }
-            } else {
-                agentTier = (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                          : (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                          : 'Tier 3';
-            }
-            ld.Agent_Tier__c=agentTier;
-        }
+ 
 
-        update leadsToUpdate;
-    }
+These SMS notifications will be sent on different days, specifically to customers who are not responding(Not answering the call).
 
-    private static String resolveLeadSource(String Source, String campNameLower) {
-        if (String.isBlank(Source)) return 'unknown';
+ 
 
-        if (Source.equalsIgnoreCase('website') || Source.equalsIgnoreCase('website (organic)')) {
-            if (campNameLower.contains('ag_') || campNameLower.contains('gclid')) return 'google (via website)';
-            if (campNameLower.contains('unb_metaweb')) return 'facebook (via website)';
-            return 'website (organic)';
-        }
-        return Source;
-    }
+Thanks & Regards
 
-    private static String resolveCampaignType(String Source, String CampName) {
-        String Camp = String.isNotBlank(CampName) ? CampName : '';
-        String campLower = Camp.toLowerCase();
+Rohit Singh
 
-        if (String.isNotBlank(campLower) && CAMPAIGN_POINTS_MAP.containsKey(campLower)) {
-            return Camp;
-        }
+India Shelter Finance Corporation Limited
 
-        String srcLower = String.isNotBlank(Source) ? Source.toLowerCase() : '';
-        Boolean isFB = (srcLower == 'facebook' || srcLower == 'facebook (via website)');
-        Boolean isGoogle = (srcLower == 'google' || srcLower == 'google (via website)');
+Registered Office: - Plot no 15, Sector 44, Level 6, Gurgaon, Haryana-122003
 
-        if (isFB) {
-            return 'FB Missing campaign';
-        } else if (isGoogle){
-            return 'Google Missing campaign';
-        } else {
-            return 'N/A (not FB/Google)';
-        }
-    }
-    
-    private static String getLoanAmountBand(Decimal Amount) {
+Phone no: - 9654445986
 
-            if (amount == null) return 'Not captured';
-            if (amount <= 0) return 'Not captured';
+From: Aakash Jain <Aakash.Jain3@indiashelter.in>
+Sent: Monday, August 3, 2026 3:56 PM
+To: rohit singh <Rohit.Singh@indiashelter.in>
+Cc: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>; Rohit Gaur <rohit.gaur@indiashelter.in>
+Subject: RE: Approval Required For SMS Templates
 
-            if (amount < 500000)  return '< 5L';
-            if (amount < 1000000) return '5-10L';
-            if (amount < 2000000) return '10-20L';
-            if (amount < 3000000) return '20-30L';
-            if (amount < 4000000) return '30-40L';
-            return '40L+';
-    }
+ 
 
-    private static String getLanguageFromSouthState(String stateName) {
-        if (stateName == null) return null;
-        String upper = stateName.toUpperCase();
-        if (upper.contains('TAMIL NADU') || upper.contains('PUDUCHERRY') || upper.contains('PONDI')) {
-            return 'TAMIL';
-        }
-        if (upper.contains('TELANGANA') || upper.contains('ANDHRA PRADESH')) {
-            return 'TELUGU';
-        }
-        if (upper.contains('KARNATAKA')) {
-            return 'KANNADA';
-        }
-        return 'TAMIL'; // Default fallback for generic South states
-    }
+Hi Rohit,
 
-    private static String getSouthLanguageFromText(String text) {
-        if (String.isBlank(text)) return null;
-        String upperText = text.toUpperCase();
-        
-        if (upperText.contains('TAMIL') || upperText.contains('PUDUCHERRY')) return 'TAMIL';
-        if (upperText.contains('TELUGU') || upperText.contains('TELANGANA') || upperText.contains('ANDHRA')) return 'TELUGU';
-        if (upperText.contains('KANNADA') || upperText.contains('KARNATAKA')) return 'KANNADA';
+ 
 
-        for (String southState : SOUTH_STATES.keySet()) {
-            if (upperText.contains(southState)) {
-                return getLanguageFromSouthState(southState);
-            }
-        }
-        return null;
-    }
-}
+Please find below the redrafted SMS. Each message is under 160 characters, ensuring it will be delivered and charged as a single SMS only :
+
+ 
+
+Day 1 Do you know closing your loan early attracts prepayments charges & GST. Don’t lose money unnecessarily. Call India Shelter at 1800‑572‑8888.
+
+Day 4 Switching lenders means fresh paperwork, income proofs & re‑verification. Save time and effort. Stay secure with India Shelter. Call 1800‑572‑8888.
+
+Day 7 A lower rate may hide setup fees, legal costs & GST. Check the real savings before deciding. Call India Shelter at 1800‑572‑8888.
+
+Day 10 Your loan progress is valuable. Switching resets cleared steps with new documentation & verification. Keep benefits with India Shelter. Call 1800‑572‑8888
+
+Day 13 Hidden costs add up: property checks, credit reports, re‑documentation fees & GST. Avoid surprises. Talk to India Shelter at 1800‑572‑8888.
+
+Day 16 Your loan file is scheduled for closure. Many regret switching due to unexpected charges & GST. Review options with India Shelter first. Call 1800‑572‑8888.
+
+Day 19 Simple math: heavy fees today take years to recover. Don’t delay savings. Call India Shelter right now at 1800‑572‑8888.
+
+Day 21 Final reminder: once closed, your India Shelter loan history & deposit benefits are lost. Stop closure today. Call immediately at 1800‑572‑8888.
+
+ 
+
+ 
+
+Let me know in case of anything,
+
+ 
+
+Regards
+
+Aakash Jain
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Monday, August 3, 2026 4:38 PM
+To: Raj <raj.19302@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Raj
+
+ 
+
+Request you to please help with getting the attached templates approved so that we can use the same.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 04 August 2026 10:15
+To: Raj <raj.19302@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Raj
+
+ 
+
+Any update on the same
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: Tuesday, August 4, 2026 10:26 AM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi @Jitesh Kumar Yadav,
+
+ 
+
+As discussed, please check and update the template.
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 04 August 2026 10:40
+To: Raj <raj.19302@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Raj
+
+ 
+
+As requested please find the attached for your reference.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: 04 August 2026 10:55
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi @Jitesh Kumar Yadav,
+
+ 
+
+Ok Noted. Kindly allow me sometime will check and register the same.
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: 04 August 2026 21:12
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi @Jitesh Kumar Yadav,
+
+ 
+
+We have registered all 16 templates with DLT.
+
+ 
+
+Kindly note TAT for approval or rejection of template is 2 days.
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: Thursday, August 6, 2026 9:38 AM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Jitesh,
+
+ 
+
+Out of 16 templates only below mentioned template are approved.
+
+ 
+
+I am checking the issue while initiate your work with below mention template. Will update you on remaining one ASAP.
+
+ 
+
+Template - 6 - 1077303510036497254.
+
+ 
+
+T-12 - 1077209020037044578.
+
+ 
+
+T-14 - 1077112590036478666.
+
+ 
+
+T-16 - 1077026810036457273.
+
+ 
+
+Do confirm if there any issue with while sending communication using these templates.
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 20 August 2026 11:42
+To: Raj <raj.19302@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Raj
+
+ 
+
+Request you to please help with an update on the remaining SMS whitelisting.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: Thursday, August 20, 2026 6:44 PM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Aakash Jain <Aakash.Jain3@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi @Jitesh Kumar Yadav,
+
+ 
+
+Please find template id as requested.
+
+ 
+
+Template Name
+
+Template DLT Id
+
+T-16
+
+1077026810036457273
+
+T-14
+
+1077112590036478666
+
+T-12
+
+1077209020037044578
+
+T-15
+
+1077296890046134014
+
+T-11
+
+1077372860046163246
+
+T-13
+
+1077405700046186546
+
+Template - 6
+
+1077303510036497254
+
+Template-1
+
+1077217930046105549
+
+Template - 10
+
+1077262980046127994
+
+Template - 7
+
+1077325840046148293
+
+Template -5
+
+1077441020046153887
+
+Template-2
+
+1077471770046203926
+
+Template - 8
+
+1077511520046174433
+
+Template - 9
+
+1077558120046223192
+
+Template - 3
+
+1077595490046192356
+
+Template - 4
+
+1077284850050929992
+
+ 
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Friday, August 21, 2026 2:42 PM
+To: Raj <raj.19302@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Raj
+
+ 
+
+Request you to please help us with the template content as well because we are getting the below error message while sending the SMS-
+
+ 
+
+Template not matched for given template id Or failed due to content violation in static part
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 24 August 2026 09:35
+To: Raj <raj.19302@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Raj
+
+ 
+
+Any update on this?
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: Monday, August 24, 2026 11:05 AM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi,
+
+ 
+
+
+
+No
+
+Name
+
+id
+
+Template Content
+
+603
+
+Template - 6
+
+1077303510036497254
+
+Your loan file is scheduled for closure. Many regret switching due to unexpected charges & GST. Review options with India Shelter first. Call 1800-572-8888. Thanks India Shelter Finance Corporation Ltd
+
+604
+
+Template-1
+
+1077217930046105549
+
+Do you know closing your loan early attracts prepayments charges & GST. Don’t lose money unnecessarily. Call India Shelter at 1800-572-8888. Thanks  India Shelter Finance Corporation Ltd
+
+605
+
+Template - 10
+
+1077262980046127994
+
+दूसरे ऋणदाता के पास जाने का मतलब है नया कागजी काम, आय प्रमाण पत्र और दोबारा सत्यापन। अपना समय और मेहनत बचाएँ। इंडिया शेल्टर के साथ सुरक्षित रहें। 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+607
+
+Template - 7
+
+1077325840046148293
+
+Heavy fees today take years to recover. Don’t delay savings. Call India Shelter right now at 1800-572-8888. Thanks India Shelter Finance Corporation Ltd
+
+610
+
+Template -5
+
+1077441020046153887
+
+Hidden costs add up: property checks, credit reports, re-documentation fees & GST. Avoid surprises. Talk to India Shelter at 1800-572-8888. Thanks India Shelter Finance Corporation Ltd
+
+611
+
+Template-2
+
+1077471770046203926
+
+Switching lenders means fresh paperwork, income proofs & re-verification. Save time and effort. Stay secure with India Shelter. Call 1800-572-8888. Thanks India Shelter Finance Corporation Ltd
+
+612
+
+Template - 8
+
+1077511520046174433
+
+Once closed, your India Shelter loan history & deposit benefits are lost. Stop closure today. Call immediately at 1800-572-8888. Thanks India Shelter Finance Corporation Ltd
+
+613
+
+Template - 9
+
+1077558120046223192
+
+क्या आप जानते हैं कि अपना ऋण (लोन) समय से पहले बंद करने पर प्रीपेमेंट शुल्क और GST देना पड़ सकता है? बेवजह पैसे न गंवाएँ। इंडिया शेल्टर को 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+614
+
+Template - 3
+
+1077595490046192356
+
+A lower rate may hide setup fees, legal costs & GST. Check the real savings before deciding. Call India Shelter at 1800-572-8888. Thanks India Shelter Finance Corporation Ltd
+
+615
+
+Template - 4
+
+1077284850050929992
+
+Your loan progress is valuable. Switching resets cleared steps with new documentation & verification. Keep benefits with India Shelter. Call 1800‑572‑8888. Thanks India Shelter Finance Corporation Ltd
+
+616
+
+T-16
+
+1077026810036457273
+
+अंतिम अनुस्मारक: एक बार ऋण बंद हो जाने पर, आपका इंडिया शेल्टर ऋण इतिहास और जमा लाभ समाप्त हो जाएंगे। आज ही ऋण बंद होने की प्रक्रिया रोकें। तुरंत 1800‑572‑8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+कम ब्याज दर के साथ प्रोसेसिंग शुल्क, कानूनी खर्च और GST जैसे अतिरिक्त शुल्क छिपे हो सकते हैं। निर्णय लेने से पहले वास्तविक बचत की जाँच करें। इंडिया शेल्टर को 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+617
+
+T-14
+
+1077112590036478666
+
+आपकी ऋण फाइल बंद होने के लिए निर्धारित है। कई लोग अप्रत्याशित शुल्क और GST के कारण ऋणदाता बदलने के फैसले पर पछताते हैं। पहले इंडिया शेल्टर के साथ अपने विकल्पों की समीक्षा करें। 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+618
+
+T-12
+
+1077209020037044578
+
+आपकी ऋण प्रगति महत्वपूर्ण है। ऋणदाता बदलने पर पहले से पूरी की गई प्रक्रियाएँ फिर से नए दस्तावेज़ों और सत्यापन के साथ शुरू करनी पड़ सकती हैं। इंडिया शेल्टर के साथ अपने लाभ बनाए रखें। 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+619
+
+T-15
+
+1077296890046134014
+
+सरल गणित: आज दिए गए भारी शुल्क की भरपाई करने में वर्षों लग सकते हैं। अपनी बचत में देरी न करें। अभी इंडिया शेल्टर को 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+620
+
+T-11
+
+1077372860046163246
+
+कम ब्याज दर के साथ प्रोसेसिंग शुल्क, कानूनी खर्च और GST जैसे अतिरिक्त शुल्क छिपे हो सकते हैं। निर्णय लेने से पहले वास्तविक बचत की जाँच करें। इंडिया शेल्टर को 1800-572-8888 पर कॉल करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+621
+
+T-13
+
+1077405700046186546
+
+छिपे हुए खर्च तेजी से बढ़ सकते हैं: संपत्ति जाँच, क्रेडिट रिपोर्ट, पुनः दस्तावेज़ीकरण शुल्क और GST। अनचाहे आश्चर्यों से बचें। इंडिया शेल्टर से 1800-572-8888 पर बात करें। इंडियाशेल्टर फाइनेंस का धन्यवाद।
+
+ 
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Thursday, September 10, 2026 12:00 PM
+To: Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Deepak Sir
+
+ 
+
+As we discussed request you to please help in implementing automated SMS sender to the cases which are being created at branch level for foreclosure letter according to the ageing mentioned in the attached sheet.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Sent: 10 September 2026 12:03
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>; Raj <raj.19302@indiashelter.in>; Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: RE: Approval Required For SMS Templates
+
+ 
+
+@Raj – check the template approvals.
+
+ 
+
+@Naman – Pick this for development.
+
+ 
+
+Regards,
+
+Deepak
+
+From: Raj <raj.19302@indiashelter.in>
+Sent: Thursday, September 10, 2026 12:33 PM
+To: Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>; Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>; Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi @Deepak Wadhwa Sir,
+
+ 
+
+All the mentioned template are registered by me recently and all are active at DLT portal.
+
+ 
+
+Thanks & Regards,
+
+Raj
+
+
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Friday, September 18, 2026 8:42 AM
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+Please help in getting this implemented.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Monday, September 21, 2026 10:04 AM
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+Any update on this?
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Monday, September 21, 2026 10:42 AM
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+As discussed please find the attached file for your reference.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 06 October 2026 10:12
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+Please help with the ETA for this?
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Naman <naman.1047@indiashelter.in>
+Sent: Tuesday, October 6, 2026 10:18 AM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Jitesh
+
+ 
+
+It will be live by EOD.
+
+ 
+
+Regards,
+
+Naman
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: 08 October 2026 11:37
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+Could you please help with the confirmation if this is live?
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Naman <naman.1047@indiashelter.in>
+Sent: Friday, October 9, 2026 10:52 AM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Jitesh
+
+ 
+
+Due to a slight delay in Salesforce server-side processing, the functionality is currently experiencing some delays. It will be live and fully operational once the issue is resolved on Salesforce’s end.
+
+ 
+
+Regards,
+
+Naman
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Thursday, October 22, 2026 10:35 AM
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+Any progress on this?
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Tuesday, October 27, 2026 11:43 AM
+To: Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>; Abhinav Arya <abhinav.arya@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+Hi Naman
+
+ 
+
+Any update on this?
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>
+Sent: Wednesday, October 28, 2026 10:16 AM
+To: Naman <naman.1047@indiashelter.in>; Deepak Wadhwa <Deepak.Wadhwa@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <Rohit.Singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>
+Subject: Re: Approval Required For SMS Templates
+
+ 
+
+@Deepak Wadhwa Sir request your intervention in getting this task done.
+
+ 
+
+Thanks & Regards
+
+Jitesh Yadav
+
+From: Deepak Wadhwa
+Sent: Wednesday, October 28, 2026 10:43 AM
+To: Jitesh Kumar Yadav <jitesh.yadav@indiashelter.in>; Naman <naman.1047@indiashelter.in>
+Cc: Rohit Gaur <rohit.gaur@indiashelter.in>; Raj <raj.19302@indiashelter.in>; rohit singh <rohit.singh@indiashelter.in>; Siddharth Bhargava <siddharth.bhargava@indiashelter.in>
+Subject: RE: Approval Required For SMS Templates
+
+ 
+
+Hi Jitesh,
+
+ 
+
+We are working on other priority items; we will pick this in 5-7 days.
+
+Let me confirm you the timelines shortly.
+
+ 
+
+Regards,
+
+Deepak
+
+Deepak Wadhwa
+
+Sahil;
+Ankit Tiwari;
+Naman
+Raghav;
+Abhinav Arya
+@Naman – Share the project details with Sahil he will pick this.
+
+ 
+
+@Ankit Tiwari – Please utilize sahil for the same.
+
+ 
+
+Regards,
+
+Deepak
