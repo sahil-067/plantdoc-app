@@ -1,281 +1,3 @@
-now this is my main class:
-
-
-
-/*
- * 		Developed by: Sahil Hooda
- * 		Pre-call Lead Scoring & Routing.
-*/
-
-public class LeadScoreCalculator {
-        
-    private static Map<String, Lead_Score_Tiers__mdt> CUTTOFFS_MAP = new Map<String, Lead_Score_Tiers__mdt>();
-    private static Map<String, Lead_Source_Scores__mdt> SOURCE_POINTS_MAP = new Map<String, Lead_Source_Scores__mdt>();
-    private static Map<String, Lead_Campaign_Scores__mdt> CAMPAIGN_POINTS_MAP = new Map<String, Lead_Campaign_Scores__mdt>();
-    private static Map<String, Lead_State_Scores__mdt> STATE_POINTS_MAP = new Map<String, Lead_State_Scores__mdt>();
-    private static Map<String, Lead_South_Region_States__mdt> SOUTH_STATES = new Map<String, Lead_South_Region_States__mdt>();
-    private static Map<String, Lead_Loan_Bands__mdt> LOAN_POINTS_MAP = new Map<String, Lead_Loan_Bands__mdt>();
-    private static Map<String, Lead_Grade_Tiers__mdt> LEADS_GRADE_MAP = new Map<String, Lead_Grade_Tiers__mdt>();
-    
-    private static Decimal BASE_SCORE;
-
-    static {
-        for (Lead_Score_Tiers__mdt rec : Lead_Score_Tiers__mdt.getAll().values()) {
-            CUTTOFFS_MAP.put(rec.MasterLabel, rec);
-        }
-        BASE_SCORE = CUTTOFFS_MAP.get('BASE_SCORE').Score__c;
-
-        for (Lead_Source_Scores__mdt rec : Lead_Source_Scores__mdt.getAll().values()) {
-            SOURCE_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
-        }
-        for (Lead_Campaign_Scores__mdt rec : Lead_Campaign_Scores__mdt.getAll().values()) {
-            CAMPAIGN_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
-        }
-        for (Lead_State_Scores__mdt rec : Lead_State_Scores__mdt.getAll().values()) {
-            STATE_POINTS_MAP.put(rec.MasterLabel.toUpperCase(), rec);
-        }
-        for (Lead_South_Region_States__mdt rec : Lead_South_Region_States__mdt.getAll().values()) {
-            SOUTH_STATES.put(rec.MasterLabel.toUpperCase(), rec);
-        }
-        for (Lead_Loan_Bands__mdt rec : Lead_Loan_Bands__mdt.getAll().values()) {
-            LOAN_POINTS_MAP.put(rec.MasterLabel, rec);
-        }
-        for (Lead_Grade_Tiers__mdt rec : Lead_Grade_Tiers__mdt.getAll().values()) {
-            LEADS_GRADE_MAP.put(rec.MasterLabel, rec);
-        }
-    }
-
-    
-    public static void generateScore(List<Lead> leadList) {
-        
-        if (leadList == null || leadList.isEmpty()) return;
-
-        Set<Id> leadIds = new Set<Id>();
-        for(Lead l: leadList) {
-            leadIds.add(l.Id);
-        }
-        
-        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Type__c, Lead_Score__c,
-                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
-                                    Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
-
-        if (leadsToUpdate.isEmpty()) return;
-
-        Set<String> pinCodes = new Set<String>();
-        for (Lead ld : leadsToUpdate) {
-            if (String.isNotBlank(ld.PostalCode)) {
-                pinCodes.add(ld.PostalCode.trim());
-            }
-        }
-
-        Map<String, String> pinToStateMap = new Map<String, String>();
-        for (Pincode_Master__c pm : [SELECT Name, State_Name__c FROM Pincode_Master__c WHERE Name IN :pinCodes]) {
-            pinToStateMap.put(pm.Name, pm.State_Name__c);
-        }
-
-        for (Lead ld : leadsToUpdate) {
-
-            if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Type__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Advt_Name__c)) {
-                ld.Lead_Score__c=0;
-                ld.Lead_Grade__c='D';
-                ld.Call_Centre_Type__c='General Call Centre';
-                ld.Agent_Tier__c='Tier 3';
-                ld.Login_Probability__c=0.0;
-                continue;
-            }
-
-            String CampName = String.isNotBlank(ld.Campaign_Type__c) ? ld.Campaign_Type__c : '';
-            String campNameLower = CampName.toLowerCase();
-            String Pin = String.isNotBlank(ld.PostalCode) ? ld.PostalCode.trim() : '';
-
-            String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c, campNameLower);
-            String sourceKey = Source.toLowerCase();
-            Decimal sourcePoints = 0;
-            if (SOURCE_POINTS_MAP.containsKey(sourceKey) && SOURCE_POINTS_MAP.get(sourceKey) != null) {
-                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey).Points__c;
-            } else {
-                sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
-            }
-
-            String campaignKey = CampName.toLowerCase();
-            Decimal campaignPoints = 0;
-            if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
-                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
-            }
-			
-            String loanBand = 'Not captured';
-            if(String.isNotBlank(ld.Loan_Amount__c)) {
-            	loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c.trim()));
-            } 
-            
-            Decimal loanPoints = LOAN_POINTS_MAP.get(loanBand).Loan_Amount_Points__c;
-            Decimal ticketBonus = LOAN_POINTS_MAP.get(loanBand).Ticket_Bonus_Points__c;
-
-            String resolvedState = 'UNKNOWN (NO PINCODE)';
-            if (String.isNotBlank(Pin) && pinToStateMap.containsKey(Pin) && String.isNotBlank(pinToStateMap.get(Pin))) {
-                resolvedState = pinToStateMap.get(Pin).toUpperCase();
-            }
-            Decimal statePoints = 0;
-            if (resolvedState != 'UNKNOWN (NO PINCODE)' && STATE_POINTS_MAP.containsKey(resolvedState) && STATE_POINTS_MAP.get(resolvedState) != null) {
-                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
-            }
-            else {
-                statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
-            }
-
-            Boolean isSouth = false;
-            String southLang = null; // 'TAMIL', 'TELUGU', or 'KANNADA'
-
-            if (resolvedState != 'UNKNOWN (NO PINCODE)') {
-                isSouth = SOUTH_STATES.containsKey(resolvedState);
-                if (isSouth) {
-                    southLang = getLanguageFromSouthState(resolvedState);
-                }
-            } else if (String.isNotBlank(ld.Advt_Name__c)) {
-                southLang = getSouthLanguageFromText(ld.Advt_Name__c);
-                isSouth = (southLang != null);
-            }
-
-            String callCentre = 'General Call Centre';
-            if (isSouth) {
-                if (southLang == 'TAMIL') callCentre = 'South - Tamil Call Centre';
-                else if (southLang == 'TELUGU') callCentre = 'South - Telugu Call Centre';
-                else if (southLang == 'KANNADA') callCentre = 'South - Kannada Call Centre';
-            }
-            ld.Call_Centre_Type__c = callCentre;
-
-            Decimal leadScore = BASE_SCORE + sourcePoints + campaignPoints + loanPoints + statePoints;
-            ld.Lead_Score__c=leadScore;
-            Decimal routingPriority = leadScore + ticketBonus;
-
-            String leadGrade;
-            if (leadScore >= LEADS_GRADE_MAP.get('A').Cuttoff__c) {
-                leadGrade = 'A';
-            } else if (leadScore >= LEADS_GRADE_MAP.get('B').Cuttoff__c) {
-                leadGrade = 'B';
-            } else if (leadScore >= LEADS_GRADE_MAP.get('C').Cuttoff__c) {
-                leadGrade = 'C';
-            } else{
-                leadGrade = 'D';
-            }   
-                    
-            ld.Lead_Grade__c=leadGrade;
-            ld.Login_Probability__c = LEADS_GRADE_MAP.get(leadGrade).Login_Probability__c;
-
-            String agentTier = 'Tier 3';
-            if (isSouth) {
-                if (southLang == 'TAMIL') {
-                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                              : 'Tier 3';
-                } else if (southLang == 'TELUGU') {
-                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                              : 'Tier 3';
-                } else if (southLang == 'KANNADA') {
-                    agentTier = (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                              : (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                              : 'Tier 3';
-                } else {
-                    agentTier = 'Tier 3';
-                }
-            } else {
-                agentTier = (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) ? 'Tier 1'
-                          : (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) ? 'Tier 2'
-                          : 'Tier 3';
-            }
-            ld.Agent_Tier__c=agentTier;
-        }
-
-        update leadsToUpdate;
-    }
-
-    private static String resolveLeadSource(String Source, String campNameLower) {
-        if (String.isBlank(Source)) return 'unknown';
-
-        if (Source.equalsIgnoreCase('website') || Source.equalsIgnoreCase('website (organic)')) {
-            if (campNameLower.contains('ag_') || campNameLower.contains('gclid')) return 'google (via website)';
-            if (campNameLower.contains('unb_metaweb')) return 'facebook (via website)';
-            return 'website (organic)';
-        }
-        return Source;
-    }
-/*
-    private static String resolveCampaignType(String Source, String CampName) {
-        String Camp = String.isNotBlank(CampName) ? CampName : '';
-        String campLower = Camp.toLowerCase();
-
-        if (String.isNotBlank(campLower) && CAMPAIGN_POINTS_MAP.containsKey(campLower)) {
-            return Camp;
-        }
-
-        String srcLower = String.isNotBlank(Source) ? Source.toLowerCase() : '';
-        Boolean isFB = (srcLower == 'facebook' || srcLower == 'facebook (via website)');
-        Boolean isGoogle = (srcLower == 'google' || srcLower == 'google (via website)');
-
-        if (isFB) {
-            return 'FB Missing campaign';
-        } else if (isGoogle){
-            return 'Google Missing campaign';
-        } else {
-            return 'N/A (not FB/Google)';
-        }
-    }
-    */
-    private static String getLoanAmountBand(Decimal Amount) {
-
-            if (amount == null) return 'Not captured';
-            if (amount <= 0) return 'Not captured';
-
-            if (amount < 500000)  return '< 5L';
-            if (amount < 1000000) return '5-10L';
-            if (amount < 2000000) return '10-20L';
-            if (amount < 3000000) return '20-30L';
-            if (amount < 4000000) return '30-40L';
-            return '40L+';
-    }
-
-    private static String getLanguageFromSouthState(String stateName) {
-        if (stateName == null) return null;
-        String upper = stateName.toUpperCase();
-        if (upper.contains('TAMIL NADU') || upper.contains('PUDUCHERRY') || upper.contains('PONDI')) {
-            return 'TAMIL';
-        }
-        if (upper.contains('TELANGANA') || upper.contains('ANDHRA PRADESH')) {
-            return 'TELUGU';
-        }
-        if (upper.contains('KARNATAKA')) {
-            return 'KANNADA';
-        }
-        return 'TAMIL'; // Default for Other South states
-    }
-
-    private static String getSouthLanguageFromText(String text) {
-        if (String.isBlank(text)) return null;
-        String upperText = text.toUpperCase();
-        
-        //If lang name in campaign field
-        if (upperText.contains('TAMIL') || upperText.contains('PUDUCHERRY')) return 'TAMIL';
-        if (upperText.contains('TELUGU') || upperText.contains('TELANGANA') || upperText.contains('ANDHRA')) return 'TELUGU';
-        if (upperText.contains('KANNADA') || upperText.contains('KARNATAKA')) return 'KANNADA';
-
-        //If south state name in campaign field
-        for (String southState : SOUTH_STATES.keySet()) {
-            if (upperText.contains(southState)) {
-                return getLanguageFromSouthState(southState);
-            }
-        }
-        return null;
-    }
-}
-
-
-
-
-and this is the test class::
-
-
-
 @isTest
 public class LeadScoreCalculatorTest {
 
@@ -471,9 +193,144 @@ public class LeadScoreCalculatorTest {
                 Advt_Name__c = '_Ad',
                 Loan_Amount__c = '0'
             );
+
+        // --- ADDITIONAL LEADS TO COVER EVERY BRANCH, GRADE (A/B/C/D), POOL & TIER (1/2/3) ---
+
+        // l10: Covers blank Source inside resolveLeadSource() -> returns 'unknown' + Grade C + General Tier 2 (Score 100)
+        Lead l10 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Blank Source Non Blank Lead',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'General_Ad'
+            );
+
+        // l11: Covers Grade B (Score 108) + South Telugu via Advt_Name__c + Telugu Tier 2 (Score 108)
+        Lead l11 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Telugu Ad Tier 2 Grade B',
+                How_did_you_come_to_know_about_us__c = 'facebook',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'Telugu_Telangana_Andhra_Ad'
+            );
+
+        // l12: Covers South Telugu via Advt_Name__c + Telugu Tier 1 (Score 232)
+        Lead l12 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Telugu Ad Tier 1',
+                How_did_you_come_to_know_about_us__c = 'retention',
+                Campaign_Type__c = 'Google Search-Brand',
+                Advt_Name__c = 'Telugu_Ad'
+            );
+
+        // l13: Covers South Telugu via Advt_Name__c + Telugu Tier 3 (Score 85) + Grade D
+        Lead l13 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Telugu Ad Tier 3',
+                How_did_you_come_to_know_about_us__c = 'whatsapp',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'Andhra_Telugu_Ad'
+            );
+
+        // l14: Covers South Telugu Tier 2 (Score 121 for higher cutoff range)
+        Lead l14 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Telugu Ad Tier 2 High',
+                How_did_you_come_to_know_about_us__c = 'cibil trigger',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'Telangana_Ad'
+            );
+
+        // l15: Covers South Tamil Tier 2 (Score 121 -> hits 114-122 and 120-139) + Grade B
+        Lead l15 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Tamil Tier 2 High',
+                How_did_you_come_to_know_about_us__c = 'cibil trigger',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'Puducherry_Tamil_Ad'
+            );
+
+        // l16: Covers South Tamil Tier 2 via Pincode (Score 115 -> 100 + 3 google + 12 Tamil Nadu)
+        Lead l16 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Tamil Pincode Tier 2',
+                How_did_you_come_to_know_about_us__c = 'google',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                PostalCode = '600001'
+            );
+
+        // l17: Covers South Kannada Tier 2 (Score 102 -> 100 + 8 facebook - 6 FB Lead-form CBO)
+        Lead l17 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Kannada Ad Tier 2',
+                How_did_you_come_to_know_about_us__c = 'facebook',
+                Campaign_Type__c = 'FB Lead-form CBO',
+                Advt_Name__c = 'Kannada_Ad'
+            );
+
+        // l18: Covers South Kannada Tier 2 (Score 101 -> 100 - 15 whatsapp + 16 FB Meta-web)
+        Lead l18 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Kannada Ad Tier 2 Low',
+                How_did_you_come_to_know_about_us__c = 'whatsapp',
+                Campaign_Type__c = 'FB Meta-web (site form)',
+                Advt_Name__c = 'Karnataka_Ad'
+            );
+
+        // l19: Covers South Kannada Tier 2 (Score 121 for higher cutoff range)
+        Lead l19 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Kannada Ad Tier 2 High',
+                How_did_you_come_to_know_about_us__c = 'cibil trigger',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'Kannada_Karnataka_Ad'
+            );
+
+        // l20: Covers South Kannada Tier 3 (Score 85 -> 100 - 15 whatsapp)
+        Lead l20 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Kannada Ad Tier 3',
+                How_did_you_come_to_know_about_us__c = 'whatsapp',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'Kannada_HomeLoan_Ad'
+            );
+
+        // l21: Covers General Call Centre Tier 2 (Score 98 -> 100 - 2 basichomeloan) + Grade C
+        Lead l21 = new Lead(
+                FirstName = 'Test',
+                LastName = 'General Tier 2 Grade C',
+                How_did_you_come_to_know_about_us__c = 'basichomeloan',
+                Campaign_Type__c = 'N/A (not FB/Google)'
+            );
+
+        // l22: Covers General Call Centre Tier 2 (Score 121 for higher cutoff range) + Grade B
+        Lead l22 = new Lead(
+                FirstName = 'Test',
+                LastName = 'General Tier 2 High Grade B',
+                How_did_you_come_to_know_about_us__c = 'cibil trigger',
+                Campaign_Type__c = 'N/A (not FB/Google)'
+            );
+
+        // l23: Covers General Call Centre Tier 3 (Score 85 -> 100 - 15 whatsapp) + Grade D
+        Lead l23 = new Lead(
+                FirstName = 'Test',
+                LastName = 'General Tier 3 Grade D',
+                How_did_you_come_to_know_about_us__c = 'whatsapp',
+                Campaign_Type__c = 'N/A (not FB/Google)'
+            );
+
+        // l24: Covers SOUTH_STATES loop inside getSouthLanguageFromText() & default return in getLanguageFromSouthState()
+        Lead l24 = new Lead(
+                FirstName = 'Test',
+                LastName = 'Other South States Loop',
+                How_did_you_come_to_know_about_us__c = 'moneyview',
+                Campaign_Type__c = 'N/A (not FB/Google)',
+                Advt_Name__c = 'OTHER - SOUTH OTHER – SOUTH KERALA PONDI'
+            );
         
-        
-            List<Lead> testLeads = new List<Lead>{l1, l2, l3, l4, l5, l6, l7, l8, l9};
+            List<Lead> testLeads = new List<Lead>{
+                l1, l2, l3, l4, l5, l6, l7, l8, l9,
+                l10, l11, l12, l13, l14, l15, l16, l17, l18, l19, l20, l21, l22, l23, l24
+            };
 insert testLeads;
 
     }
@@ -498,12 +355,3 @@ insert testLeads;
     }
 
 }
-
-
-now its giving 91% coverage in uat but when validating on production its 70% only so it needs 75% to deploy
-
-i have tried things so do this
-
-create more leads to cover every single case and condition so to push max coverage 
-
-change only the test class and in that only add new leads and then insert them no other change
