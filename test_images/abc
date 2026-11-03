@@ -130,10 +130,8 @@ public class LeadScoreCalculator {
             String southLang = null; // 'TAMIL', 'TELUGU', or 'KANNADA'
 
             if (resolvedState != 'UNKNOWN (NO PINCODE)') {
-                isSouth = SOUTH_STATES.containsKey(resolvedState);
-                if (isSouth) {
-                    southLang = getLanguageFromSouthState(resolvedState);
-                }
+                southLang = getLanguageFromSouthState(resolvedState);
+                isSouth = (southLang != null);
             } else if (String.isNotBlank(ld.Advt_Name__c)) {
                 southLang = getSouthLanguageFromText(ld.Advt_Name__c);
                 isSouth = (southLang != null);
@@ -274,7 +272,7 @@ public class LeadScoreCalculator {
     private static String getLanguageFromSouthState(String stateName) {
         if (stateName == null) return null;
         String upper = stateName.toUpperCase();
-        if (upper.contains('TAMIL NADU') || upper.contains('PUDUCHERRY') || upper.contains('PONDI')) {
+        if (upper.contains('TAMIL NADU') || upper.contains('PUDUCHERRY') || upper.contains('PONDI') || upper.contains('KERALA') || upper.contains('SOUTH')) {
             return 'TAMIL';
         }
         if (upper.contains('TELANGANA') || upper.contains('ANDHRA PRADESH')) {
@@ -283,7 +281,7 @@ public class LeadScoreCalculator {
         if (upper.contains('KARNATAKA')) {
             return 'KANNADA';
         }
-        return 'TAMIL'; // Default for Other South states
+        return null;
     }
 
     private static String getSouthLanguageFromText(String text) {
@@ -310,10 +308,3 @@ public class LeadScoreCalculator {
         return null;
     }
 }
-
-
-
-
-this is my updated code and it still gives the 71% coverage so my guess is the isSouth flag is always getting a false in it
-
-it could be the reason so review my code and check if changes are needded do not change anything else just check this case
