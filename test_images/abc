@@ -1,310 +1,195 @@
-/*
- * 		Developed by: Sahil Hooda
- * 		Pre-call Lead Scoring & Routing.
+i got another task on salesforce apex, whenever a new lead is created with source==csc and status=open, a whatsapp sms should be send to the usser
+
+
+now i was asked to see another existing class which is earlier used for sending bills on whatsapp i am giving that here:
+
+
+/* @File Name         : SetuSendBillAPI 
+* @Description        : This Api is used to Send Bill on whatsapp for payment.
+* @Author             : Siddharth Gupta
+* @Group              : Techmatrix
+* @Last Modified By   : Rahul kumar
+* @Last Modified On   : 02-03-2026
+* @Modification Log   :
+*==============================================================================
+* Ver        Date                     Author                 Modification
+*==============================================================================
+* 1.0      03-02-2025              Siddharth Gupta          Initial Version                         
 */
-
-public class LeadScoreCalculator {
+public class SetuSendBillAPI {
+    @AuraEnabled
+    public static Boolean sendBill(String token, String recordId, Integer payAmount, String campaignName, String mobile,Integer typeOfTemplate){ /// new parameter typeOfTemplate added by Rahul kumar 26-12-25
         
-    private static Map<String, Lead_Score_Tiers__mdt> CUTTOFFS_MAP = new Map<String, Lead_Score_Tiers__mdt>();
-    private static Map<String, Lead_Source_Scores__mdt> SOURCE_POINTS_MAP = new Map<String, Lead_Source_Scores__mdt>();
-    private static Map<String, Lead_Campaign_Scores__mdt> CAMPAIGN_POINTS_MAP = new Map<String, Lead_Campaign_Scores__mdt>();
-    private static Map<String, Lead_State_Scores__mdt> STATE_POINTS_MAP = new Map<String, Lead_State_Scores__mdt>();
-    private static Map<String, Lead_South_Region_States__mdt> SOUTH_STATES = new Map<String, Lead_South_Region_States__mdt>();
-    private static Map<String, Lead_Loan_Bands__mdt> LOAN_POINTS_MAP = new Map<String, Lead_Loan_Bands__mdt>();
-    private static Map<String, Lead_Grade_Tiers__mdt> LEADS_GRADE_MAP = new Map<String, Lead_Grade_Tiers__mdt>();
-    
-    private static Decimal BASE_SCORE;
-
-    static {
-        for (Lead_Score_Tiers__mdt rec : Lead_Score_Tiers__mdt.getAll().values()) {
-            CUTTOFFS_MAP.put(rec.MasterLabel, rec);
-        }
-        BASE_SCORE = CUTTOFFS_MAP.get('BASE_SCORE').Score__c;
-
-        for (Lead_Source_Scores__mdt rec : Lead_Source_Scores__mdt.getAll().values()) {
-            SOURCE_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
-        }
-        for (Lead_Campaign_Scores__mdt rec : Lead_Campaign_Scores__mdt.getAll().values()) {
-            CAMPAIGN_POINTS_MAP.put(rec.MasterLabel.toLowerCase(), rec);
-        }
-        for (Lead_State_Scores__mdt rec : Lead_State_Scores__mdt.getAll().values()) {
-            STATE_POINTS_MAP.put(rec.MasterLabel.toUpperCase(), rec);
-        }
-        for (Lead_South_Region_States__mdt rec : Lead_South_Region_States__mdt.getAll().values()) {
-            SOUTH_STATES.put(rec.MasterLabel.toUpperCase(), rec);
-        }
-        for (Lead_Loan_Bands__mdt rec : Lead_Loan_Bands__mdt.getAll().values()) {
-            LOAN_POINTS_MAP.put(rec.MasterLabel, rec);
-        }
-        for (Lead_Grade_Tiers__mdt rec : Lead_Grade_Tiers__mdt.getAll().values()) {
-            LEADS_GRADE_MAP.put(rec.MasterLabel, rec);
-        }
-    }
-
-    
-    public static void generateScore(List<Lead> leadList) {
-        
-        if (leadList == null || leadList.isEmpty()) return;
-
-        Set<Id> leadIds = new Set<Id>();
-        for(Lead l: leadList) {
-            leadIds.add(l.Id);
+        System.debug('recordId: '+recordId+' amount: '+' campaignName: '+ campaignName+ ' token: '+token);
+        System.debug('amt: '+ payAmount);
+        system.debug('typeOfTemplate::'+typeOfTemplate);
+        HTTPRequest request = new HTTPRequest();
+        HttpResponse response = new HttpResponse();
+        List<Customer_Collection_Campaign__c> ccc = new List<Customer_Collection_Campaign__c>();
+        if(String.isNotBlank(token) && String.isNotBlank(recordId)){
+            ccc = [SELECT id, Application__c, Application__r.Loan_Number__c, Application__r.Household__r.Mobile__c 
+                   FROM  Customer_Collection_Campaign__c
+                   WHERE Id =: recordId];
         }
         
-        List<Lead> leadsToUpdate = [SELECT Id, How_did_you_come_to_know_about_us__c, Campaign_Type__c, Lead_Score__c,
-                                    Lead_Grade__c, Call_Centre_Type__c, Agent_Tier__c, Login_Probability__c,
-                                    Advt_Name__c, Loan_Amount__c, PostalCode FROM Lead WHERE Id IN :leadIds];
-
-        if (leadsToUpdate.isEmpty()) return;
-
-        Set<String> pinCodes = new Set<String>();
-        for (Lead ld : leadsToUpdate) {
-            if (String.isNotBlank(ld.PostalCode)) {
-                pinCodes.add(ld.PostalCode.trim());
-            }
-        }
-
-        Map<String, String> pinToStateMap = new Map<String, String>();
-        List<Pincode_Master__c> pmlist = [SELECT Name, State_Name__c FROM Pincode_Master__c WHERE Name IN :pinCodes];
-        for (Pincode_Master__c pm : pmlist) {
-            pinToStateMap.put(pm.Name, pm.State_Name__c);
-        }
-
-        for (Lead ld : leadsToUpdate) {
-
-            if (String.isBlank(ld.How_did_you_come_to_know_about_us__c) && String.isBlank(ld.Campaign_Type__c) && ld.Loan_Amount__c == null && String.isBlank(ld.PostalCode) && String.isBlank(ld.Advt_Name__c)) {
-                ld.Lead_Score__c=0;
-                ld.Lead_Grade__c='D';
-                ld.Call_Centre_Type__c='General Call Centre';
-                ld.Agent_Tier__c='Tier 3';
-                ld.Login_Probability__c=0.0;
-                continue;
-            }
-			
-            String CampName = '';
-            if (String.isNotBlank(ld.Campaign_Type__c)){
-                CampName = ld.Campaign_Type__c;
-            }
-            String campNameLower = CampName.toLowerCase();
-            String Pin = '';
-            if (String.isNotBlank(ld.PostalCode)){
-                Pin = ld.PostalCode.trim();
-            }
-
-            String Source = resolveLeadSource(ld.How_did_you_come_to_know_about_us__c);
-            String sourceKey = Source.toLowerCase();
-            Decimal sourcePoints = 0;
-            if (SOURCE_POINTS_MAP.containsKey(sourceKey) && SOURCE_POINTS_MAP.get(sourceKey) != null) {
-                sourcePoints = SOURCE_POINTS_MAP.get(sourceKey).Points__c;
-            } else {
-                sourcePoints = SOURCE_POINTS_MAP.get('other').Points__c;
-            }
-
-            String campaignKey = CampName.toLowerCase();
-            Decimal campaignPoints = 0;
-            if (CAMPAIGN_POINTS_MAP.containsKey(campaignKey) && CAMPAIGN_POINTS_MAP.get(campaignKey) != null) {
-                campaignPoints = CAMPAIGN_POINTS_MAP.get(campaignKey).Points__c;
-            }
-			
-            String loanBand = 'Not captured';
-            if(String.isNotBlank(ld.Loan_Amount__c)) {
-            	loanBand = getLoanAmountBand(Decimal.valueOf(ld.Loan_Amount__c.trim()));
-            } 
-            
-            Decimal loanPoints = LOAN_POINTS_MAP.get(loanBand).Loan_Amount_Points__c;
-            Decimal ticketBonus = LOAN_POINTS_MAP.get(loanBand).Ticket_Bonus_Points__c;
-
-            String resolvedState = 'UNKNOWN (NO PINCODE)';
-            if (String.isNotBlank(Pin) && pinToStateMap.containsKey(Pin) && String.isNotBlank(pinToStateMap.get(Pin))) {
-                resolvedState = pinToStateMap.get(Pin).toUpperCase();
-            }
-            Decimal statePoints = 0;
-            if (resolvedState != 'UNKNOWN (NO PINCODE)' && STATE_POINTS_MAP.containsKey(resolvedState) && STATE_POINTS_MAP.get(resolvedState) != null) {
-                statePoints = STATE_POINTS_MAP.get(resolvedState).Points__c;
-            }
-            else {
-                statePoints = STATE_POINTS_MAP.get('UNKNOWN (NO PINCODE)').Points__c;
-            }
-
-            Boolean isSouth = false;
-            String southLang = null; // 'TAMIL', 'TELUGU', or 'KANNADA'
-
-            if (resolvedState != 'UNKNOWN (NO PINCODE)') {
-                southLang = getLanguageFromSouthState(resolvedState);
-                isSouth = (southLang != null);
-            } else if (String.isNotBlank(ld.Advt_Name__c)) {
-                southLang = getSouthLanguageFromText(ld.Advt_Name__c);
-                isSouth = (southLang != null);
-            }
-
-            String callCentre = 'General Call Centre';
-            if (isSouth) {
-                if (southLang == 'TAMIL') {
-                    callCentre = 'South - Tamil Call Centre';
-                } else if (southLang == 'TELUGU') {
-                    callCentre = 'South - Telugu Call Centre';
-                } else if (southLang == 'KANNADA') {
-                    callCentre = 'South - Kannada Call Centre';
-                }
-            }
-            ld.Call_Centre_Type__c = callCentre;
-
-            Decimal leadScore = BASE_SCORE + sourcePoints;
-            leadScore += campaignPoints;
-            leadScore += loanPoints;
-            leadScore += statePoints;
-            ld.Lead_Score__c=leadScore;
-            Decimal routingPriority = leadScore + ticketBonus;
-
-            String leadGrade;
-            if (leadScore >= LEADS_GRADE_MAP.get('A').Cuttoff__c) {
-                leadGrade = 'A';
-            } else if (leadScore >= LEADS_GRADE_MAP.get('B').Cuttoff__c) {
-                leadGrade = 'B';
-            } else if (leadScore >= LEADS_GRADE_MAP.get('C').Cuttoff__c) {
-                leadGrade = 'C';
-            } else{
-                leadGrade = 'D';
-            }   
+        try{
+            if(String.isNotBlank(mobile)){
+                Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
+                if(tokenMdt != null){
                     
-            ld.Lead_Grade__c=leadGrade;
-            ld.Login_Probability__c = LEADS_GRADE_MAP.get(leadGrade).Login_Probability__c;
-
-            String agentTier = 'Tier 3';
-            if (isSouth) {
-                if (southLang == 'TAMIL') {
-                    if (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER1_CUTOFF').Score__c) {
-                        agentTier = 'Tier 1';
-                    } else if (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TAMIL_TIER2_CUTOFF').Score__c) {
-                        agentTier = 'Tier 2';
-                    } else{
-                        agentTier = 'Tier 3';
+                    // Calculate the due date as the 7th of the current                     
+                    Date dueDate = Date.today().toStartOfMonth().addDays(6);
+                    
+                    // Convert Date → DateTime so that custom format works
+                    DateTime dt = DateTime.newInstance(dueDate, Time.newInstance(0, 0, 0, 0));
+                    String formattedDate = dt.format('dd.MM.yyyy');
+                    
+                    // Calculate the expiry date as the last day of the current month
+                    Datetime expiryDT = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
+                    String expiryDate = expiryDT.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'').split('T')[0]+'T20:55:22Z';
+                    System.debug('Due Date: ' + formattedDate+' Expiry Date: ' + expiryDate);
+                    
+                    request.setEndpoint(tokenMdt.Endpoint_URl__c);
+                    request.setMethod(tokenMdt.Method__C);
+                    request.setHeader('Content-Type', tokenMdt.Content_Type__c);
+                    request.setHeader('X-Setu-Product-Instance-ID', tokenMdt.X_Setu_Product_Instance_ID__c);
+                    request.setHeader('x-setu-client-id', tokenMdt.x_setu_client_id__c);
+                    request.setHeader('Authorization','Bearer '+token); 
+                    
+                    // String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"billerBillID":"DEMO TEST","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"'+campaignName+'","channel":"whatsapp","template":{"loan_number":"'+ccc[0].Application__r.Loan_Number__c+'"}}]}';
+                    String loanNumber = ccc[0].Application__r.Loan_Number__c;
+                    String billerBillID = '91'+mobile+'_'+loanNumber;
+                   // String templateId=typeOfTemplate==0?'setu_eng_reminder_1':'newsetucharges';//// Added By Rahul kumar 26-12-25
+                    String templateId=typeOfTemplate==0?'setu_eng_reminder_1':'loan_overdue_charge_alert1'; /// Added by Rahul 02-03-2026
+                    system.debug('templateId::'+templateId);
+                    /// Added by Rahul Kumar 02-03-2026
+                    String templateParams;
+                    if(typeOfTemplate == 0){
+                        // setu_eng_reminder_1 uses loan_number and due_date
+                        templateParams = '"loan_number":"' + loanNumber + '","due_date":"' + formattedDate + '"';
+                    } else {
+                        Integer payamountInRupees=payAmount/100;
+                        // loan_overdue_charge_alert1 uses loan_number and amount
+                        templateParams = '"loan_number":"' + loanNumber + '","amount":"' + payamountInRupees + '"';
                     }
-                } else if (southLang == 'TELUGU') {
-                    if (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER1_CUTOFF').Score__c) {
-                        agentTier = 'Tier 1';
-                    } else if (routingPriority >= CUTTOFFS_MAP.get('SOUTH_TELUGU_TIER2_CUTOFF').Score__c) {
-                        agentTier = 'Tier 2';
-                    } else{
-                        agentTier = 'Tier 3';
+                    //END HERE
+                    /// templateId in the body, modified by Rahul kumar 26-12-25
+                   // String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"91'+mobile+'","loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'","referenceID":"'+loanNumber+'"},"billerBillID":"'+billerBillID+'","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"'+templateId+'","channel":"whatsapp","template":{"loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'"}}]}';
+                    String body = '{"bill":{"amount":{"value":' + payAmount + ',"currencyCode":"INR"},"additionalInfo":{"destination":"91' + mobile + '","loan_number":"' + loanNumber + '","due_date":"' + formattedDate + '","referenceID":"' + loanNumber + '"},"billerBillID":"' + billerBillID + '","amountExactness":"EXACT","expiryDate":"' + expiryDate + '"},"channels":[{"destination":"91' + mobile + '","campaignID":"' + templateId + '","channel":"whatsapp","template":{' + templateParams + '}}]}';
+                    system.debug('body::'+body);
+                    request.setBody(body);
+                    Http http = new Http();
+                    if(!Test.isRunningTest()){
+                        System.debug('requestBody: '+request.getBody());
+                        response = http.send(request);
+                        System.debug('response: '+response);
+                        System.debug('responseBody: '+response.getBody());
                     }
-                } else if (southLang == 'KANNADA') {
-                    if (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER1_CUTOFF').Score__c) {
-                        agentTier = 'Tier 1';
-                    } else if (routingPriority >= CUTTOFFS_MAP.get('SOUTH_KANNADA_TIER2_CUTOFF').Score__c) {
-                        agentTier = 'Tier 2';
-                    } else{
-                        agentTier = 'Tier 3';
+                    else{
+                        response.setBody('{"bill":{"amount":{"value":100,"currencyCode":"INR"},"additionalInfo":{"destination":"919599066550","loan_number":"AP-10019086","due_date":"2022-12-02","referenceID":"123412"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"2022-11-29T20:55:22Z"},"channels":[{"destination":"919599066550","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"AP-10019086","due_date":"30.11.2022"}}]}');
+                        response.setStatusCode(200);
                     }
-                } else {
-                    agentTier = 'Tier 3';
+                    Api_Logs__c log = new Api_Logs__c();
+                    log.Name = 'Setu_Send_Bill_Generate_Token_API';
+                    log.Customer_Collection_Campaign__c =  recordId;
+                    log.API_Request__c =  request.getBody();
+                    log.API_Response__c =  response.getBody();
+                    insert log;
+                    
+                    Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+                    Boolean success = Boolean.valueOf(result.get('success'));
+                    if(response.getStatusCode() == 200 && success == true){
+                        return true;
+                    }
+                    else{
+                        return false;
+                    }
                 }
-            } else {
-                    if (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER1_CUTOFF').Score__c) {
-                        agentTier = 'Tier 1';
-                    } else if (routingPriority >= CUTTOFFS_MAP.get('GEN_TIER2_CUTOFF').Score__c) {
-                        agentTier = 'Tier 2';
-                    } else{
-                        agentTier = 'Tier 3';
-                    }
             }
-            ld.Agent_Tier__c=agentTier;
         }
-
-        update leadsToUpdate;
-    }
-
-    private static String resolveLeadSource(String Source) {
-        if (String.isBlank(Source)) {
-            return 'unknown';
-        }
-        return Source;
-    }
-/*
-    private static String resolveCampaignType(String Source, String CampName) {
-        String Camp = String.isNotBlank(CampName) ? CampName : '';
-        String campLower = Camp.toLowerCase();
-
-        if (String.isNotBlank(campLower) && CAMPAIGN_POINTS_MAP.containsKey(campLower)) {
-            return Camp;
-        }
-
-        String srcLower = String.isNotBlank(Source) ? Source.toLowerCase() : '';
-        Boolean isFB = (srcLower == 'facebook' || srcLower == 'facebook (via website)');
-        Boolean isGoogle = (srcLower == 'google' || srcLower == 'google (via website)');
-
-        if (isFB) {
-            return 'FB Missing campaign';
-        } else if (isGoogle){
-            return 'Google Missing campaign';
-        } else {
-            return 'N/A (not FB/Google)';
-        }
-    }
-    */
-    private static String getLoanAmountBand(Decimal Amount) {
-
-        if (amount == null) {
-            return 'Not captured';
-        }
-        if (amount <= 0) {
-            return 'Not captured';
-        }
-
-        if (amount < 500000)  {
-            return '< 5L';
-        }
-        if (amount < 1000000) {
-            return '5-10L';
-        }
-        if (amount < 2000000) {
-            return '10-20L';
-        }
-        if (amount < 3000000) {
-            return '20-30L';
-        }
-        if (amount < 4000000) {
-            return '30-40L';
-        }
-        return '40L+';
-    }
-
-    private static String getLanguageFromSouthState(String stateName) {
-        if (stateName == null) return null;
-        String upper = stateName.toUpperCase();
-        if (upper.contains('TAMIL NADU') || upper.contains('PUDUCHERRY') || upper.contains('PONDI') || upper.contains('KERALA') || upper.contains('SOUTH')) {
-            return 'TAMIL';
-        }
-        if (upper.contains('TELANGANA') || upper.contains('ANDHRA PRADESH')) {
-            return 'TELUGU';
-        }
-        if (upper.contains('KARNATAKA')) {
-            return 'KANNADA';
+        catch(Exception e){
+            System.debug('Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber());
+            Api_Logs__c log = new Api_Logs__c();
+            log.Name = 'Send_Bill_API';
+            log.Customer_Collection_Campaign__c =  recordId;
+            log.API_Request__c =  request.getBody();
+            log.API_Response__c =  response.getBody();
+            insert log;
+            
+            return null;
         }
         return null;
     }
-
-    private static String getSouthLanguageFromText(String text) {
-        if (String.isBlank(text)) return null;
-        String upperText = text.toUpperCase();
+    
+    
+    @AuraEnabled
+    public static ResponseWrapper sendBillForBOT(String token, String body){
         
-        //If lang name in campaign field
-        if (upperText.contains('TAMIL') || upperText.contains('PUDUCHERRY')) {
-            return 'TAMIL';
-        }
-        if (upperText.contains('TELUGU') || upperText.contains('TELANGANA') || upperText.contains('ANDHRA')) {
-            return 'TELUGU';
-        }
-        if (upperText.contains('KANNADA') || upperText.contains('KARNATAKA')) {
-            return 'KANNADA';
-        }
-
-        //If south state name in campaign field
-        for (String southState : SOUTH_STATES.keySet()) {
-            if (upperText.contains(southState)) {
-                return getLanguageFromSouthState(southState);
+        System.debug('body: '+ body);
+        ResponseWrapper rw = new ResponseWrapper();
+        HTTPRequest request = new HTTPRequest();
+        HttpResponse response = new HttpResponse();        
+        try{
+            if(String.isNotBlank(body) && String.isNotBlank(token)){
+                Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
+                if(tokenMdt != null){
+                    
+                    request.setEndpoint(tokenMdt.Endpoint_URl__c);
+                    request.setMethod(tokenMdt.Method__C);
+                    request.setHeader('Content-Type', tokenMdt.Content_Type__c);
+                    request.setHeader('X-Setu-Product-Instance-ID', tokenMdt.X_Setu_Product_Instance_ID__c);
+                    request.setHeader('x-setu-client-id', tokenMdt.x_setu_client_id__c);
+                    request.setHeader('Authorization','Bearer '+token); 
+                    
+                    //String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"91'+mobile+'","loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'","referenceID":"123412"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'"}}]}';
+                    
+                    request.setBody(body);
+                    Http http = new Http();
+                    if(!Test.isRunningTest()){
+                        System.debug('requestBody: '+request.getBody());
+                        response = http.send(request);
+                        System.debug('response: '+response);
+                        System.debug('responseBody: '+response.getBody());
+                    }
+                    else{
+                        response.setBody('{"result":"BILL_SENT_SUCCESSFULLY","success":true,"status":"SUCCESS"}');
+                        response.setStatusCode(200);
+                    }
+                    
+                    Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+                    Boolean success = Boolean.valueOf(result.get('success'));
+                    rw.result = response.getBody();
+                    if(response.getStatusCode() == 200 && success == true){
+                        rw.success = true;
+                        return rw;
+                    }
+                    else{
+                        rw.success = false;
+                        return rw;
+                    }
+                }
             }
         }
+        catch(Exception e){
+            System.debug('Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber());
+            rw.success = false;
+            rw.result ='Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber();
+            return rw;
+        }
         return null;
+    }
+    
+    Public class ResponseWrapper{
+        public String result;
+        public Boolean success;
+        public String status;
     }
 }
+
+
+the metadata is also there with two entriees one for generate token and one for send bill
+
+
+now i was asked how many values we can keep as variable in the body while sending it after that we will register the template and implement it
+
+tteach me, answer this query and guide for code
