@@ -1,35 +1,64 @@
-public class SetuLeadWhatsAppService {
+public class SetuLeadWhatsAppQueueable implements Queueable, Database.AllowsCallouts {
+    
+    private Set<Id> leadIds;
+    // Max 100 callouts allowed per transaction (1 for token + up to 90 for leads)
+    private static final Integer MAX_LEADS_PER_JOB = 90;
 
-    @future(callout=true)
-    public static void sendWelcomeWhatsAppAsync(Set<Id> leadIds) {
-        List<Lead> leads = [
-            SELECT Id, Name, FirstName, MobilePhone, LeadSource, Status 
-            FROM Lead 
-            WHERE Id IN :leadIds
-        ];
-        
-        if (leads.isEmpty()) return;
+    // Constructor to receive Lead IDs from the Trigger
+    public SetuLeadWhatsAppQueueable(Set<Id> leadIds) {
+        this.leadIds = leadIds;
+    }
 
-        // 1. Get Token first using your Generate_Token metadata record
-        String token = generateSetuToken();
-        if (String.isBlank(token)) {
-            System.debug('Failed to generate Setu Token.');
+    public void execute(QueueableContext context) {
+        if (leadIds == null || leadIds.isEmpty()) {
             return;
         }
 
-        // 2. Load the Send_Bill metadata
+        // Split into current batch (up to 90) and remaining IDs (for chaining if bulk inserted)
+        Set<Id> currentBatchIds = new Set<Id>();
+        Set<Id> remainingIds = new Set<Id>();
+        
+        for (Id lId : leadIds) {
+            if (currentBatchIds.size() < MAX_LEADS_PER_JOB) {
+                currentBatchIds.add(lId);
+            } else {
+                remainingIds.add(lId);
+            }
+        }
+
+        List<Lead> leads = [
+            SELECT Id, Name, FirstName, MobilePhone, LeadSource, Status 
+            FROM Lead 
+            WHERE Id IN :currentBatchIds
+        ];
+
+        if (leads.isEmpty()) {
+            return;
+        }
+
+        // 1. Fetch Bearer Token using the first metadata entry
+        String token = generateSetuToken();
+        if (String.isBlank(token)) {
+            System.debug('Setu Token generation failed.');
+            return;
+        }
+
+        // 2. Fetch Send_Bill metadata record
         Setu_Send_Bill__mdt sendMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
-        if (sendMdt == null) return;
+        if (sendMdt == null) {
+            return;
+        }
 
         List<Api_Logs__c> logsToInsert = new List<Api_Logs__c>();
         Http http = new Http();
 
+        // 3. Loop through leads and make HTTP Callouts (NO DML inside this loop!)
         for (Lead ld : leads) {
             HttpRequest request = new HttpRequest();
             HttpResponse response = new HttpResponse();
             
             try {
-                // Clean mobile number (ensure 10 digits before adding '91')
+                // Sanitize mobile number to last 10 digits
                 String cleanMobile = ld.MobilePhone.replaceAll('[^0-9]', '');
                 if (cleanMobile.length() > 10) {
                     cleanMobile = cleanMobile.right(10);
@@ -42,13 +71,13 @@ public class SetuLeadWhatsAppService {
                 request.setHeader('x-setu-client-id', sendMdt.x_setu_client_id__c);
                 request.setHeader('Authorization', 'Bearer ' + token);
 
-                // Replace 'csc_lead_welcome_template' with the actual campaignID once registered
-                String templateId = 'csc_lead_welcome_template'; 
-                
-                // Add as many template variables here as registered in your template
+                // Replace with your newly registered template campaignID
+                String templateId = 'csc_lead_welcome_template';
+
+                // Add your dynamic template variables here
                 String templateParams = '"customer_name":"' + ld.Name + '","lead_id":"' + ld.Id + '"';
 
-                // Construct body (adjust 'bill' section based on your team's confirmation)
+                // Expiry date calculation (same as SetuSendBillAPI)
                 Datetime expiryDT = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
                 String expiryDate = expiryDT.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'').split('T')[0] + 'T20:55:22Z';
                 String billerBillID = '91' + cleanMobile + '_' + ld.Id;
@@ -83,16 +112,53 @@ public class SetuLeadWhatsAppService {
             }
         }
 
-        // Insert all logs at the very end (After all callouts are complete!)
+        // 4. Perform all DML AFTER all callouts are finished
         if (!logsToInsert.isEmpty()) {
             insert logsToInsert;
         }
+
+        // 5. Chain remaining leads into a next Queueable job if more than 90 were inserted
+        if (!remainingIds.isEmpty() && !Test.isRunningTest()) {
+            System.enqueueJob(new SetuLeadWhatsAppQueueable(remainingIds));
+        }
     }
 
-    // Helper method to get Token from your 1st metadata entry
-    private static String generateSetuToken() {
-        // Check your existing Token Generation class to see how they fetch the token!
-        // Usually, there is already a method like SetuGenerateTokenAPI.getToken() in your org.
-        return 'YOUR_EXISTING_TOKEN_METHOD_CALL';
+    // Helper method to generate token using your 1st metadata entry
+    private String generateSetuToken() {
+        try {
+            // Replace 'Generate_Token' with the exact DeveloperName of your 1st metadata entry
+            Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Generate_Token');
+            if (tokenMdt == null) return null;
+
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(tokenMdt.Endpoint_URl__c);
+            req.setMethod(tokenMdt.Method__c);
+            req.setHeader('Content-Type', tokenMdt.Content_Type__c);
+            
+            // Check your existing token class to see how clientID & secret are passed (Headers or Body)
+            String reqBody = '{"clientID":"' + tokenMdt.x_setu_client_id__c + '","secret":"' + tokenMdt.Client_Secret__c + '"}';
+            req.setBody(reqBody);
+
+            Http http = new Http();
+            HttpResponse res = new HttpResponse();
+            
+            if (!Test.isRunningTest()) {
+                res = http.send(req);
+            } else {
+                res.setBody('{"token":"dummy_test_token","success":true}');
+                res.setStatusCode(200);
+            }
+
+            if (res.getStatusCode() == 200) {
+                Map<String, Object> resultMap = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+                // Check if your token response returns 'token' or 'access_token' inside a data node
+                if (resultMap.containsKey('token')) {
+                    return String.valueOf(resultMap.get('token'));
+                }
+            }
+        } catch (Exception e) {
+            System.debug('Token Error: ' + e.getMessage());
+        }
+        return null;
     }
 }
