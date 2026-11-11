@@ -1,191 +1,185 @@
-i got another task on salesforce apex, whenever a new lead is created with source==csc and status=open, a whatsapp sms should be send to the usser
+public class SetuLeadWhatsAppQueueable implements Queueable, Database.AllowsCallouts {
 
-now i found an existing class which is earlier used for sending bills on whatsapp i am giving that here:
+    private Set<Id> leadIds;
+    
+    // Set to FALSE to send a plain no-template text payload (tests Apex & logs, but Setu may reject delivery).
+    // Set to TRUE to piggyback on the existing 'setu_eng_reminder_1' payload so your phone actually receives a WhatsApp message.
+    private static final Boolean USE_EXISTING_LIVE_TEMPLATE_FOR_TEST = false;
 
-/* @File Name         : SetuSendBillAPI 
-* @Description        : This Api is used to Send Bill on whatsapp for payment.
-* @Author             : Siddharth Gupta
-* @Group              : Techmatrix
-* @Last Modified By   : Rahul kumar
-* @Last Modified On   : 02-03-2026
-* @Modification Log   :
-*==============================================================================
-* Ver        Date                     Author                 Modification
-*==============================================================================
-* 1.0      03-02-2025              Siddharth Gupta          Initial Version                         
-*/
-public class SetuSendBillAPI {
-    @AuraEnabled
-    public static Boolean sendBill(String token, String recordId, Integer payAmount, String campaignName, String mobile,Integer typeOfTemplate){ /// new parameter typeOfTemplate added by Rahul kumar 26-12-25
-        
-        System.debug('recordId: '+recordId+' amount: '+' campaignName: '+ campaignName+ ' token: '+token);
-        System.debug('amt: '+ payAmount);
-        system.debug('typeOfTemplate::'+typeOfTemplate);
-        HTTPRequest request = new HTTPRequest();
-        HttpResponse response = new HttpResponse();
-        List<Customer_Collection_Campaign__c> ccc = new List<Customer_Collection_Campaign__c>();
-        if(String.isNotBlank(token) && String.isNotBlank(recordId)){
-            ccc = [SELECT id, Application__c, Application__r.Loan_Number__c, Application__r.Household__r.Mobile__c 
-                   FROM  Customer_Collection_Campaign__c
-                   WHERE Id =: recordId];
+    public SetuLeadWhatsAppQueueable(Set<Id> leadIds) {
+        this.leadIds = leadIds;
+    }
+
+    public void execute(QueueableContext context) {
+        if (leadIds == null || leadIds.isEmpty()) {
+            return;
         }
-        
-        try{
-            if(String.isNotBlank(mobile)){
-                Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
-                if(tokenMdt != null){
-                    
-                    // Calculate the due date as the 7th of the current                     
-                    Date dueDate = Date.today().toStartOfMonth().addDays(6);
-                    
-                    // Convert Date → DateTime so that custom format works
-                    DateTime dt = DateTime.newInstance(dueDate, Time.newInstance(0, 0, 0, 0));
-                    String formattedDate = dt.format('dd.MM.yyyy');
-                    
-                    // Calculate the expiry date as the last day of the current month
-                    Datetime expiryDT = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
-                    String expiryDate = expiryDT.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'').split('T')[0]+'T20:55:22Z';
-                    System.debug('Due Date: ' + formattedDate+' Expiry Date: ' + expiryDate);
-                    
-                    request.setEndpoint(tokenMdt.Endpoint_URl__c);
-                    request.setMethod(tokenMdt.Method__C);
-                    request.setHeader('Content-Type', tokenMdt.Content_Type__c);
-                    request.setHeader('X-Setu-Product-Instance-ID', tokenMdt.X_Setu_Product_Instance_ID__c);
-                    request.setHeader('x-setu-client-id', tokenMdt.x_setu_client_id__c);
-                    request.setHeader('Authorization','Bearer '+token); 
-                    
-                    // String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"billerBillID":"DEMO TEST","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"'+campaignName+'","channel":"whatsapp","template":{"loan_number":"'+ccc[0].Application__r.Loan_Number__c+'"}}]}';
-                    String loanNumber = ccc[0].Application__r.Loan_Number__c;
-                    String billerBillID = '91'+mobile+'_'+loanNumber;
-                   // String templateId=typeOfTemplate==0?'setu_eng_reminder_1':'newsetucharges';//// Added By Rahul kumar 26-12-25
-                    String templateId=typeOfTemplate==0?'setu_eng_reminder_1':'loan_overdue_charge_alert1'; /// Added by Rahul 02-03-2026
-                    system.debug('templateId::'+templateId);
-                    /// Added by Rahul Kumar 02-03-2026
-                    String templateParams;
-                    if(typeOfTemplate == 0){
-                        // setu_eng_reminder_1 uses loan_number and due_date
-                        templateParams = '"loan_number":"' + loanNumber + '","due_date":"' + formattedDate + '"';
-                    } else {
-                        Integer payamountInRupees=payAmount/100;
-                        // loan_overdue_charge_alert1 uses loan_number and amount
-                        templateParams = '"loan_number":"' + loanNumber + '","amount":"' + payamountInRupees + '"';
-                    }
-                    //END HERE
-                    /// templateId in the body, modified by Rahul kumar 26-12-25
-                   // String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"91'+mobile+'","loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'","referenceID":"'+loanNumber+'"},"billerBillID":"'+billerBillID+'","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"'+templateId+'","channel":"whatsapp","template":{"loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'"}}]}';
-                    String body = '{"bill":{"amount":{"value":' + payAmount + ',"currencyCode":"INR"},"additionalInfo":{"destination":"91' + mobile + '","loan_number":"' + loanNumber + '","due_date":"' + formattedDate + '","referenceID":"' + loanNumber + '"},"billerBillID":"' + billerBillID + '","amountExactness":"EXACT","expiryDate":"' + expiryDate + '"},"channels":[{"destination":"91' + mobile + '","campaignID":"' + templateId + '","channel":"whatsapp","template":{' + templateParams + '}}]}';
-                    system.debug('body::'+body);
-                    request.setBody(body);
-                    Http http = new Http();
-                    if(!Test.isRunningTest()){
-                        System.debug('requestBody: '+request.getBody());
-                        response = http.send(request);
-                        System.debug('response: '+response);
-                        System.debug('responseBody: '+response.getBody());
-                    }
-                    else{
-                        response.setBody('{"bill":{"amount":{"value":100,"currencyCode":"INR"},"additionalInfo":{"destination":"919599066550","loan_number":"AP-10019086","due_date":"2022-12-02","referenceID":"123412"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"2022-11-29T20:55:22Z"},"channels":[{"destination":"919599066550","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"AP-10019086","due_date":"30.11.2022"}}]}');
-                        response.setStatusCode(200);
-                    }
-                    Api_Logs__c log = new Api_Logs__c();
-                    log.Name = 'Setu_Send_Bill_Generate_Token_API';
-                    log.Customer_Collection_Campaign__c =  recordId;
-                    log.API_Request__c =  request.getBody();
-                    log.API_Response__c =  response.getBody();
-                    insert log;
-                    
-                    Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-                    Boolean success = Boolean.valueOf(result.get('success'));
-                    if(response.getStatusCode() == 200 && success == true){
-                        return true;
-                    }
-                    else{
-                        return false;
-                    }
+
+        List<Lead> leads = [
+            SELECT Id, Name, MobilePhone, Phone
+            FROM Lead
+            WHERE Id IN :leadIds
+            LIMIT 90
+        ];
+
+        List<Api_Logs__c> logsToInsert = new List<Api_Logs__c>();
+
+        // 1. Generate Bearer Token using 'Generate_Token' metadata
+        String token = generateSetuToken(logsToInsert);
+        System.debug('Generated Setu Token: ' + token);
+
+        if (String.isBlank(token)) {
+            if (!logsToInsert.isEmpty()) {
+                insert logsToInsert;
+            }
+            return;
+        }
+
+        // 2. Fetch 'Send_Bill' metadata
+        Setu_Send_Bill__mdt sendMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
+        if (sendMdt == null) {
+            System.debug('Error: Send_Bill metadata not found.');
+            return;
+        }
+
+        Http http = new Http();
+        // Send_Bill has a blank Content-Type in metadata, so default to application/json
+        String contentType = String.isNotBlank(sendMdt.Content_Type__c) ? sendMdt.Content_Type__c : 'application/json';
+
+        // 3. Send WhatsApp request for each Lead
+        for (Lead ld : leads) {
+            String rawPhone = String.isNotBlank(ld.MobilePhone) ? ld.MobilePhone : ld.Phone;
+            if (String.isBlank(rawPhone)) {
+                continue;
+            }
+
+            // Keep last 10 digits of phone number
+            String mobile = rawPhone.replaceAll('[^0-9]', '');
+            if (mobile.length() > 10) {
+                mobile = mobile.substring(mobile.length() - 10);
+            }
+
+            HttpRequest request = new HttpRequest();
+            HttpResponse response = new HttpResponse();
+
+            try {
+                request.setEndpoint(sendMdt.Endpoint_URl__c);
+                request.setMethod(sendMdt.Method__c);
+                request.setHeader('Content-Type', contentType);
+                request.setHeader('X-Setu-Product-Instance-ID', sendMdt.X_Setu_Product_Instance_ID__c);
+                request.setHeader('x-setu-client-id', sendMdt.x_setu_client_id__c);
+                request.setHeader('Authorization', 'Bearer ' + token);
+
+                String body;
+                if (!USE_EXISTING_LIVE_TEMPLATE_FOR_TEST) {
+                    // Option A: Generic no-template welcome message payload
+                    body = '{' +
+                        '"channels":[' +
+                            '{' +
+                                '"destination":"91' + mobile + '",' +
+                                '"channel":"whatsapp",' +
+                                '"message":"Welcome ' + ld.Name + '! Thank you for connecting with us."' +
+                            '}' +
+                        ']' +
+                    '}';
+                } else {
+                    // Option B: Uses existing live schema from SetuSendBillAPI so a real WhatsApp message delivers during testing
+                    String dummyRef = 'WELCOME-CSC';
+                    String todayFormatted = DateTime.now().format('dd.MM.yyyy');
+                    String expiryDate = DateTime.now().addDays(5).formatGmt('yyyy-MM-dd') + 'T20:55:22Z';
+                    String billerBillID = '91' + mobile + '_' + dummyRef;
+
+                    body = '{"bill":{"amount":{"value":100,"currencyCode":"INR"},' +
+                           '"additionalInfo":{"destination":"91' + mobile + '","loan_number":"' + dummyRef + '","due_date":"' + todayFormatted + '","referenceID":"' + dummyRef + '"},' +
+                           '"billerBillID":"' + billerBillID + '","amountExactness":"EXACT","expiryDate":"' + expiryDate + '"},' +
+                           '"channels":[{"destination":"91' + mobile + '","campaignID":"setu_eng_reminder_1","channel":"whatsapp",' +
+                           '"template":{"loan_number":"' + dummyRef + '","due_date":"' + todayFormatted + '"}}]}';
                 }
+
+                request.setBody(body);
+                System.debug('WhatsApp Request Body: ' + body);
+
+                if (!Test.isRunningTest()) {
+                    response = http.send(request);
+                    System.debug('WhatsApp Response Status: ' + response.getStatusCode());
+                    System.debug('WhatsApp Response Body: ' + response.getBody());
+                } else {
+                    response.setBody('{"success":true,"status":"SUCCESS"}');
+                    response.setStatusCode(200);
+                }
+
+                Api_Logs__c log = new Api_Logs__c();
+                log.Name = 'Setu_Lead_Welcome_WhatsApp_API';
+                log.API_Request__c = request.getBody();
+                log.API_Response__c = response.getBody();
+                logsToInsert.add(log);
+
+            } catch (Exception e) {
+                System.debug('Exception:: ' + e.getMessage() + ' Line: ' + e.getLineNumber());
+                Api_Logs__c errLog = new Api_Logs__c();
+                errLog.Name = 'Setu_Lead_Welcome_Error';
+                errLog.API_Request__c = request.getBody();
+                errLog.API_Response__c = 'Exception: ' + e.getMessage() + ' Line: ' + e.getLineNumber();
+                logsToInsert.add(errLog);
             }
         }
-        catch(Exception e){
-            System.debug('Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber());
+
+        // 4. Insert logs after all callouts finish
+        if (!logsToInsert.isEmpty()) {
+            insert logsToInsert;
+        }
+    }
+
+    private static String generateSetuToken(List<Api_Logs__c> logsToInsert) {
+        HttpRequest req = new HttpRequest();
+        HttpResponse res = new HttpResponse();
+
+        try {
+            Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Generate_Token');
+            if (tokenMdt == null) {
+                return null;
+            }
+
+            req.setEndpoint(tokenMdt.Endpoint_URl__c);
+            req.setMethod(tokenMdt.Method__c);
+            req.setHeader('Content-Type', tokenMdt.Content_Type__c);
+
+            Map<String, String> authPayload = new Map<String, String>{
+                'clientID' => tokenMdt.clientID__c,
+                'secret'   => tokenMdt.secret__c
+            };
+            req.setBody(JSON.serialize(authPayload));
+
+            Http http = new Http();
+            if (!Test.isRunningTest()) {
+                res = http.send(req);
+                System.debug('Token Response: ' + res.getBody());
+            } else {
+                res.setBody('{"data":{"token":"mock_token"}}');
+                res.setStatusCode(200);
+            }
+
             Api_Logs__c log = new Api_Logs__c();
-            log.Name = 'Send_Bill_API';
-            log.Customer_Collection_Campaign__c =  recordId;
-            log.API_Request__c =  request.getBody();
-            log.API_Response__c =  response.getBody();
-            insert log;
-            
-            return null;
-        }
-        return null;
-    }
-    
-    
-    @AuraEnabled
-    public static ResponseWrapper sendBillForBOT(String token, String body){
-        
-        System.debug('body: '+ body);
-        ResponseWrapper rw = new ResponseWrapper();
-        HTTPRequest request = new HTTPRequest();
-        HttpResponse response = new HttpResponse();        
-        try{
-            if(String.isNotBlank(body) && String.isNotBlank(token)){
-                Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
-                if(tokenMdt != null){
-                    
-                    request.setEndpoint(tokenMdt.Endpoint_URl__c);
-                    request.setMethod(tokenMdt.Method__C);
-                    request.setHeader('Content-Type', tokenMdt.Content_Type__c);
-                    request.setHeader('X-Setu-Product-Instance-ID', tokenMdt.X_Setu_Product_Instance_ID__c);
-                    request.setHeader('x-setu-client-id', tokenMdt.x_setu_client_id__c);
-                    request.setHeader('Authorization','Bearer '+token); 
-                    
-                    //String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"91'+mobile+'","loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'","referenceID":"123412"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'"}}]}';
-                    
-                    request.setBody(body);
-                    Http http = new Http();
-                    if(!Test.isRunningTest()){
-                        System.debug('requestBody: '+request.getBody());
-                        response = http.send(request);
-                        System.debug('response: '+response);
-                        System.debug('responseBody: '+response.getBody());
-                    }
-                    else{
-                        response.setBody('{"result":"BILL_SENT_SUCCESSFULLY","success":true,"status":"SUCCESS"}');
-                        response.setStatusCode(200);
-                    }
-                    
-                    Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-                    Boolean success = Boolean.valueOf(result.get('success'));
-                    rw.result = response.getBody();
-                    if(response.getStatusCode() == 200 && success == true){
-                        rw.success = true;
-                        return rw;
-                    }
-                    else{
-                        rw.success = false;
-                        return rw;
+            log.Name = 'Setu_Generate_Token_API';
+            log.API_Request__c = req.getBody();
+            log.API_Response__c = res.getBody();
+            logsToInsert.add(log);
+
+            if (res.getStatusCode() == 200 || res.getStatusCode() == 201) {
+                Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+                if (result.containsKey('data') && result.get('data') instanceof Map<String, Object>) {
+                    Map<String, Object> dataMap = (Map<String, Object>) result.get('data');
+                    if (dataMap.containsKey('token')) {
+                        return String.valueOf(dataMap.get('token'));
                     }
                 }
+                if (result.containsKey('token')) {
+                    return String.valueOf(result.get('token'));
+                }
             }
-        }
-        catch(Exception e){
-            System.debug('Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber());
-            rw.success = false;
-            rw.result ='Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber();
-            return rw;
+        } catch (Exception e) {
+            System.debug('Token Exception:: ' + e.getMessage());
         }
         return null;
     }
-    
-    Public class ResponseWrapper{
-        public String result;
-        public Boolean success;
-        public String status;
-    }
-} 
-
-note that this class is completely difeerent to my task only useful thing i have to use this setu api (setu360 platform) to send whatsapp message
-
-there is a custom metadata made there with two entriees one for generate token and one for send bill but after inspecting i donot find where the generate token is used
-
-write code to use this setu api and use already existing credentials to send a simple welcome message on the lead contact no
+}
