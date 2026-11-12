@@ -1,164 +1,30 @@
-public class SetuLeadWhatsAppQueueable implements Queueable, Database.AllowsCallouts {
-    
-    private Set<Id> leadIds;
-    // Max 100 callouts allowed per transaction (1 for token + up to 90 for leads)
-    private static final Integer MAX_LEADS_PER_JOB = 90;
-
-    // Constructor to receive Lead IDs from the Trigger
-    public SetuLeadWhatsAppQueueable(Set<Id> leadIds) {
-        this.leadIds = leadIds;
-    }
-
-    public void execute(QueueableContext context) {
-        if (leadIds == null || leadIds.isEmpty()) {
-            return;
-        }
-
-        // Split into current batch (up to 90) and remaining IDs (for chaining if bulk inserted)
-        Set<Id> currentBatchIds = new Set<Id>();
-        Set<Id> remainingIds = new Set<Id>();
-        
-        for (Id lId : leadIds) {
-            if (currentBatchIds.size() < MAX_LEADS_PER_JOB) {
-                currentBatchIds.add(lId);
-            } else {
-                remainingIds.add(lId);
-            }
-        }
-
-        List<Lead> leads = [
-            SELECT Id, Name, FirstName, MobilePhone, LeadSource, Status 
-            FROM Lead 
-            WHERE Id IN :currentBatchIds
-        ];
-
-        if (leads.isEmpty()) {
-            return;
-        }
-
-        // 1. Fetch Bearer Token using the first metadata entry
-        String token = generateSetuToken();
-        if (String.isBlank(token)) {
-            System.debug('Setu Token generation failed.');
-            return;
-        }
-
-        // 2. Fetch Send_Bill metadata record
-        Setu_Send_Bill__mdt sendMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
-        if (sendMdt == null) {
-            return;
-        }
-
-        List<Api_Logs__c> logsToInsert = new List<Api_Logs__c>();
-        Http http = new Http();
-
-        // 3. Loop through leads and make HTTP Callouts (NO DML inside this loop!)
-        for (Lead ld : leads) {
-            HttpRequest request = new HttpRequest();
-            HttpResponse response = new HttpResponse();
-            
-            try {
-                // Sanitize mobile number to last 10 digits
-                String cleanMobile = ld.MobilePhone.replaceAll('[^0-9]', '');
-                if (cleanMobile.length() > 10) {
-                    cleanMobile = cleanMobile.right(10);
-                }
-
-                request.setEndpoint(sendMdt.Endpoint_URl__c);
-                request.setMethod(sendMdt.Method__c);
-                request.setHeader('Content-Type', sendMdt.Content_Type__c);
-                request.setHeader('X-Setu-Product-Instance-ID', sendMdt.X_Setu_Product_Instance_ID__c);
-                request.setHeader('x-setu-client-id', sendMdt.x_setu_client_id__c);
-                request.setHeader('Authorization', 'Bearer ' + token);
-
-                // Replace with your newly registered template campaignID
-                String templateId = 'csc_lead_welcome_template';
-
-                // Add your dynamic template variables here
-                String templateParams = '"customer_name":"' + ld.Name + '","lead_id":"' + ld.Id + '"';
-
-                // Expiry date calculation (same as SetuSendBillAPI)
-                Datetime expiryDT = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
-                String expiryDate = expiryDT.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'').split('T')[0] + 'T20:55:22Z';
-                String billerBillID = '91' + cleanMobile + '_' + ld.Id;
-
-                String body = '{"bill":{"amount":{"value":0,"currencyCode":"INR"},' +
-                              '"additionalInfo":{"destination":"91' + cleanMobile + '","referenceID":"' + ld.Id + '"},' +
-                              '"billerBillID":"' + billerBillID + '","amountExactness":"EXACT","expiryDate":"' + expiryDate + '"},' +
-                              '"channels":[{"destination":"91' + cleanMobile + '","campaignID":"' + templateId + '","channel":"whatsapp",' +
-                              '"template":{' + templateParams + '}}]}';
-
-                request.setBody(body);
-
-                if (!Test.isRunningTest()) {
-                    response = http.send(request);
-                } else {
-                    response.setBody('{"success":true,"status":"SUCCESS"}');
-                    response.setStatusCode(200);
-                }
-
-                Api_Logs__c log = new Api_Logs__c();
-                log.Name = 'Setu_Lead_WhatsApp_API';
-                log.API_Request__c = request.getBody();
-                log.API_Response__c = response.getBody();
-                logsToInsert.add(log);
-
-            } catch (Exception e) {
-                Api_Logs__c errorLog = new Api_Logs__c();
-                errorLog.Name = 'Setu_Lead_WhatsApp_API_Error';
-                errorLog.API_Request__c = request.getBody();
-                errorLog.API_Response__c = 'Exception: ' + e.getMessage() + ' Line: ' + e.getLineNumber();
-                logsToInsert.add(errorLog);
-            }
-        }
-
-        // 4. Perform all DML AFTER all callouts are finished
-        if (!logsToInsert.isEmpty()) {
-            insert logsToInsert;
-        }
-
-        // 5. Chain remaining leads into a next Queueable job if more than 90 were inserted
-        if (!remainingIds.isEmpty() && !Test.isRunningTest()) {
-            System.enqueueJob(new SetuLeadWhatsAppQueueable(remainingIds));
-        }
-    }
-
-    // Helper method to generate token using your 1st metadata entry
-    private String generateSetuToken() {
-        try {
-            // Replace 'Generate_Token' with the exact DeveloperName of your 1st metadata entry
-            Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Generate_Token');
-            if (tokenMdt == null) return null;
-
-            HttpRequest req = new HttpRequest();
-            req.setEndpoint(tokenMdt.Endpoint_URl__c);
-            req.setMethod(tokenMdt.Method__c);
-            req.setHeader('Content-Type', tokenMdt.Content_Type__c);
-            
-            // Check your existing token class to see how clientID & secret are passed (Headers or Body)
-            String reqBody = '{"clientID":"' + tokenMdt.x_setu_client_id__c + '","secret":"' + tokenMdt.Client_Secret__c + '"}';
-            req.setBody(reqBody);
-
-            Http http = new Http();
-            HttpResponse res = new HttpResponse();
-            
-            if (!Test.isRunningTest()) {
-                res = http.send(req);
-            } else {
-                res.setBody('{"token":"dummy_test_token","success":true}');
-                res.setStatusCode(200);
-            }
-
-            if (res.getStatusCode() == 200) {
-                Map<String, Object> resultMap = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-                // Check if your token response returns 'token' or 'access_token' inside a data node
-                if (resultMap.containsKey('token')) {
-                    return String.valueOf(resultMap.get('token'));
-                }
-            }
-        } catch (Exception e) {
-            System.debug('Token Error: ' + e.getMessage());
-        }
-        return null;
-    }
-}
+                	body = 	'{' +
+                                '"bill":' +
+                                    '{' +
+                                        '"amount":' +
+                                            '{' +
+                                                '"value":100,"currencyCode":"INR"' +
+                                            '},' +
+                                        '"additionalInfo":' +
+                                            '{' +
+                                                '"destination":"91' + mobile + '",' +
+                                                '"loan_number":"' + loanNo + '",' +
+                                                '"due_date":"' + todayFormatted + '",' +
+                                                '"referenceID":"' + loanNo + 
+                                            '"},' +
+                                        '"billerBillID":"' + billerBillID + '",' +
+                                        '"amountExactness":"EXACT",' +
+                                        '"expiryDate":"' + expiryDate + 
+                                    '"},' +
+                                '"channels":[' +
+                                    '{' +
+                                        '"destination":"91' + mobile + '",' +
+                                        '"campaignID":"csc_lead",' +
+                                        '"channel":"whatsapp",' +
+                                        '"template":' +
+                                            '{' +
+                                                '"state":"' + state + '",' +
+                                                '"alpha":"' + lname + 
+                                            '"}' +
+                                '}]' +
+                        	'}';
