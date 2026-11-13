@@ -1,90 +1,26 @@
-public class InfobipLeadMessageQueueable implements Queueable, Database.AllowsCallouts {
+trigger LeadTrigger on Lead (after insert) {
+    if (Trigger.isAfter && Trigger.isInsert) {
+        Set<Id> cscLeadIds = new Set<Id>();
 
-    private List<Id> leadIds;
-    private static Integer batch_size = 50;
+        for (Lead ld : Trigger.new) {
+            Boolean isCscSource = (ld.LeadSource != null && ld.LeadSource.equalsIgnoreCase('CSC')) ||
+                                  (ld.How_did_you_come_to_know_about_us__c != null && ld.How_did_you_come_to_know_about_us__c.equalsIgnoreCase('CSC'));
+            
+            Boolean isOpenStatus = ld.Status != null && ld.Status.containsIgnoreCase('Open');
+            
+            Boolean hasPhone = String.isNotBlank(ld.Lead_Phone_Number_1__c) || 
+                               String.isNotBlank(ld.MobilePhone) || 
+                               String.isNotBlank(ld.Phone);
 
-    public InfobipLeadMessageQueueable(List<Id> leadIds) {
-        this.leadIds = leadIds;
-    }
+            System.debug('CSC Trigger Check -> isCscSource: ' + isCscSource + ', isOpenStatus: ' + isOpenStatus + ', hasPhone: ' + hasPhone);
 
-    public void execute(QueueableContext context) {
-        if (leadIds == null || leadIds.isEmpty()) {
-            return;
-        }
-        
-        List<Id> currentIds = new List<Id>();
-        List<Id> remainingIds = new List<Id>();
-        
-        for (Id lId : leadIds) {
-            if (currentIds.size() < batch_size) {
-                currentIds.add(lId);
-            } else {
-                remainingIds.add(lId);
-            }
-        }       
-
-        List<Lead> leads = [SELECT Id, Name, MobilePhone, Lead_Code__c, State FROM Lead WHERE Id IN :currentIds];
-        List<Api_Logs__c> logsToInsert = new List<Api_Logs__c>();
-
-        String templateName = 'csc_lead';
-        Infobip_WhatsApp_API__mdt cred = Infobip_WhatsApp_API__mdt.getInstance('Send_Reminder');
-
-        for (Lead ld : leads) {
-            String toMobile = ld.MobilePhone;
-            String recordId = ld.Id;
-            System.debug('toMobile: ' + toMobile);
-
-            try {
-                if (cred != null && String.isNotBlank(recordId) && String.isNotBlank(toMobile)) {
-                    toMobile = toMobile.replaceAll('[^0-9]', '');
-                    if (toMobile.length() == 10) {
-                        toMobile = '91' + toMobile;
-                    }
-                    System.debug('Formatted toMobile: ' + toMobile);
-
-                    String stateVal  = String.isNotBlank(ld.State) ? ld.State : 'CSC';
-                    String nameVal   = String.isNotBlank(ld.Name) ? ld.Name : 'Customer';
-                    String senderVal = cred.Sender__c.replace('"', '');
-
-                    HttpRequest request = new HttpRequest();
-                    request.setEndpoint(cred.Endpoint_URL__c);
-                    request.setMethod(cred.Method__c);
-                    request.setHeader('Authorization', cred.Authorization__c);
-                    request.setHeader('Content-Type', cred.Content_Type__c);
-
-                    String body = '{"messages":[{"from":"' + senderVal + '","to":"' + toMobile + '","content":{"templateName":"' + templateName + '","templateData":{"body":{"placeholders":["' + stateVal + '","' + nameVal + '"]}},"language":"en"}}]}';
-                    System.debug('Request Body: ' + body);
-                    request.setBody(body);
-                    
-                    HttpResponse response = new HttpResponse();
-                    if (!Test.isRunningTest()) {
-                        Http http = new Http();
-                        response = http.send(request);
-                    } else {
-                        response.setStatusCode(200);
-                        response.setBody('{"messages":[{"from":"917065624774","to":"919125488005","content":{"templateName":"csc_lead","templateData":{"body":{"placeholders":[]}},"language":"en"}}]}');
-                    }
-                    
-                    System.debug('Response: ' + response);
-                    System.debug('Response Body: ' + response.getBody()); 
-                    
-                    Api_Logs__c log = new Api_Logs__c();
-                    log.Name = 'Infobip_Lead_Message_API';
-                    log.API_Request__c = request.getBody();
-                    log.API_Response__c = response.getBody();
-                    logsToInsert.add(log);
-                }
-            } catch (Exception e) {
-                System.debug('Line Number: ' + e.getLineNumber() + ' Message: ' + e.getMessage());
+            if (isCscSource && isOpenStatus && hasPhone) {
+                cscLeadIds.add(ld.Id);
             }
         }
 
-        if (!logsToInsert.isEmpty()) {
-            insert logsToInsert;
-        }
-        
-        if (!remainingIds.isEmpty() && !Test.isRunningTest()) {
-            System.enqueueJob(new InfobipLeadMessageQueueable(remainingIds));
+        if (!cscLeadIds.isEmpty()) {
+            System.enqueueJob(new SetuLeadWhatsAppQueueable(cscLeadIds));
         }
     }
 }
