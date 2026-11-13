@@ -1,3 +1,83 @@
+public class SetuLeadMessageQueueable implements Queueable, Database.AllowsCallouts {
+
+    private List<Id> leadIds;
+    private static Integer batch_size = 50;
+
+    public SetuLeadMessageQueueable(List<Id> leadIds) {
+        this.leadIds = leadIds;
+    }
+
+    public void execute(QueueableContext context) {
+        if (leadIds == null || leadIds.isEmpty()) {
+            return;
+        }
+        
+        List<Id> currentIds = new List<Id>();
+        List<Id> remainingIds = new List<Id>();
+        
+        for (Id lId : leadIds) {
+            if (currentIds.size() < batch_size) {
+                currentIds.add(lId);
+            } else {
+                remainingIds.add(lId);
+            }
+        }       
+
+        List<Lead> leads = [SELECT Id, Name, MobilePhone, Lead_Code__c, State FROM Lead WHERE Id IN :currentIds];
+
+        List<Api_Logs__c> logsToInsert = new List<Api_Logs__c>();
+		/*
+        String token = generateSetuToken(logsToInsert);
+        System.debug('Generated Setu Token: ' + token);
+
+        if (String.isBlank(token)) {
+            if (!logsToInsert.isEmpty()) {
+                insert logsToInsert;
+            }
+            return;
+        }
+
+        Setu_Send_Bill__mdt sendMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
+        if (sendMdt == null) {
+            System.debug('Error: Send_Bill metadata not found.');
+            return;
+        }
+
+        Http http = new Http();
+        String contentType = 'application/json';
+        if(String.isNotBlank(sendMdt.Content_Type__c)) {
+            contentType = sendMdt.Content_Type__c;
+        }
+
+        for (Lead ld : leads) {
+            String Phone = ld.MobilePhone;
+            if (String.isBlank(Phone)) {
+                continue;
+            }
+
+            String mobile = Phone.replaceAll('[^0-9]', '');
+            if (mobile.length() > 10) {
+                mobile = mobile.substring(mobile.length() - 10);
+            }
+
+            HttpRequest request = new HttpRequest();
+            HttpResponse response = new HttpResponse();
+
+            try {
+                request.setEndpoint('https://prod.setu.co/api/v1/message/lead/create');
+                request.setMethod(sendMdt.Method__c);
+                request.setHeader('Content-Type', contentType);
+                request.setHeader('X-Setu-Product-Instance-ID', sendMdt.X_Setu_Product_Instance_ID__c);
+                request.setHeader('x-setu-client-id', sendMdt.x_setu_client_id__c);
+                request.setHeader('Authorization', 'Bearer ' + token);
+
+                String loanNo = ld.Lead_Code__c;
+                String todayFormatted = DateTime.now().format('dd.MM.yyyy');
+                String expiryDate = DateTime.now().addDays(5).formatGmt('yyyy-MM-dd') + 'T20:55:22Z';
+                String billerBillID = '91' + mobile + '_' + loanNo;
+				String state = ld.State;
+                String lname = ld.Name;
+                String body;
                 	body = 	'{' +
                                 '"bill":' +
                                     '{' +
@@ -19,7 +99,7 @@
                                 '"channels":[' +
                                     '{' +
                                         '"destination":"91' + mobile + '",' +
-                                        '"campaignID":"csc_lead",' +
+                                        '"campaignID":"1018562144623740",' +
                                         '"channel":"whatsapp",' +
                                         '"template":' +
                                             '{' +
@@ -28,3 +108,143 @@
                                             '"}' +
                                 '}]' +
                         	'}';
+                
+
+                request.setBody(body);
+                System.debug('WhatsApp Request Body: ' + body);
+
+                if (!Test.isRunningTest()) {
+                    response = http.send(request);
+                } else {
+                    response.setBody('{"success":true,"status":"SUCCESS"}');
+                    response.setStatusCode(200);
+                }
+                System.debug('WhatsApp Response Status: ' + response.getStatusCode());
+                System.debug('WhatsApp Response Body: ' + response.getBody());
+                
+                Api_Logs__c log = new Api_Logs__c();
+                log.Name = 'Setu_Lead_Message_API';
+                log.API_Request__c = request.getBody();
+                log.API_Response__c = response.getBody();
+                logsToInsert.add(log);
+
+            } catch (Exception e) {
+                System.debug('Exception:: ' + e.getMessage() + ' Line: ' + e.getLineNumber());
+                Api_Logs__c errLog = new Api_Logs__c();
+                errLog.Name = 'Setu_Lead_Message_Error';
+                errLog.API_Request__c = request.getBody();
+                errLog.API_Response__c = 'Exception: ' + e.getMessage() + ' Line: ' + e.getLineNumber();
+                logsToInsert.add(errLog);
+            }
+        }*/
+        String toMobile;
+        String recordId;
+        String templateName='csc_lead';
+        for(lead ld: leads) {
+            toMobile = ld.MobilePhone;
+            recordId=ld.Id;
+            System.debug('toMobile: '+toMobile);
+            try{
+                
+                Infobip_WhatsApp_API__mdt cred = Infobip_WhatsApp_API__mdt.getInstance('Send_Reminder');
+                if(cred != null && String.isNotBlank(recordId)) {
+                    if(toMobile.length() == 10){
+                        toMobile = '91'+toMobile;
+                    }
+                    System.debug('toMobile: '+toMobile);
+                    //toMobile = '919125488005';
+                    HttpRequest request = new HttpRequest();
+                    request.setEndpoint(cred.Endpoint_URL__c);
+                    request.setMethod(cred.Method__c);
+                    request.setHeader('Authorization',cred.Authorization__c);
+                    request.setHeader('Content-Type',cred.Content_Type__c);
+                    String body = '{"messages":[{"from":'+cred.Sender__c+',"to":'+toMobile+',"content":{"templateName":'+templateName+',"templateData":{"body":{"placeholders":[]}},"language":"en"}}]}';
+                    //String body = '{"messages":[{"from":'+cred.Sender__c+',"to":'+toMobile+',"content":{"templateName":"emi_bouncing","templateData":{"body":{"placeholders":[]},"header":{"type":"IMAGE","mediaUrl":"https://www.indiashelter.in/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FfooterLogo.eba99f45.png&w=3840&q=75"}},"language":"en"}}]}';
+                    request.setBody(body);
+                    
+                    HttpResponse response = new HttpResponse();
+                    if(!Test.isRunningTest()){
+                        Http http = new Http();
+                        response = http.send(request);
+                    }
+                    else{
+                        response.setStatusCode(200);
+                        response.setBody('{"messages":[{"from":"917065624774","to":"919125488005","content":{"templateName":"due_reminder_collection_1","templateData":{"body":{"placeholders":[]}},"language":"en"}}]}');
+                    }
+                    
+                    System.debug('Response: '+response);
+                    System.debug('Response: '+response.getBody()); 
+                    
+                }
+            }
+            catch(Exception e){
+                System.debug('Line Number: '+ e.getLineNumber());
+                System.debug('Line Number: '+ e.getMessage());
+            }
+        }
+        
+
+        if (!logsToInsert.isEmpty()) {
+            insert logsToInsert;
+        }
+        
+        if (!remainingIds.isEmpty() && !Test.isRunningTest()) {
+            System.enqueueJob(new SetuLeadMessageQueueable(remainingIds));
+        }
+    }
+/*
+    private static String generateSetuToken(List<Api_Logs__c> logsToInsert) {
+        HttpRequest req = new HttpRequest();
+        HttpResponse res = new HttpResponse();
+
+        try {
+            
+            Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Generate_Token');
+            
+            if (tokenMdt == null) {
+                return null;
+            }
+
+            req.setEndpoint(tokenMdt.Endpoint_URl__c);
+            req.setMethod(tokenMdt.Method__c);
+            req.setHeader('Content-Type', tokenMdt.Content_Type__c);
+
+            Map<String, String> authPayload = new Map<String, String>{
+                'clientID' => tokenMdt.clientID__c,
+                'secret'   => tokenMdt.secret__c
+            };
+            req.setBody(JSON.serialize(authPayload));
+
+            Http http = new Http();
+            if (!Test.isRunningTest()) {
+	            res = http.send(req);
+            } else {
+                res.setBody('{"success":true,"token":"abcd123"}');
+                res.setStatusCode(200);
+            }
+            System.debug('Token Response: ' + res.getBody());
+            
+            Api_Logs__c log = new Api_Logs__c();
+            log.Name = 'Setu_Generate_Token_API';
+            log.API_Request__c = req.getBody();
+            log.API_Response__c = res.getBody();
+            logsToInsert.add(log);
+
+            if (res.getStatusCode() == 200 || res.getStatusCode() == 201) {
+                Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+                if (result.containsKey('data') && result.get('data') instanceof Map<String, Object>) {
+                    Map<String, Object> dataMap = (Map<String, Object>) result.get('data');
+                    if (dataMap.containsKey('token')) {
+                        return String.valueOf(dataMap.get('token'));
+                    }
+                }
+                if (result.containsKey('token')) {
+                    return String.valueOf(result.get('token'));
+                }
+            }
+        } catch (Exception e) {
+            System.debug('Token Exception:: ' + e.getMessage());
+        }
+        return null;
+    }*/
+}
