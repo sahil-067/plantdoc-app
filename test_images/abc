@@ -24,67 +24,67 @@ public class InfobipLeadMessageQueueable implements Queueable, Database.AllowsCa
         }       
 
         List<Lead> leads = [SELECT Id, Name, MobilePhone, Lead_Code__c, State FROM Lead WHERE Id IN :currentIds];
-
         List<Api_Logs__c> logsToInsert = new List<Api_Logs__c>();
 
-        String toMobile;
-        String recordId;
-        String templateName='csc_lead';
-        for(lead ld: leads) {
-            toMobile = ld.MobilePhone;
-            recordId=ld.Id;
-            System.debug('toMobile: '+toMobile);
-            try{
-                
-                Infobip_WhatsApp_API__mdt cred = Infobip_WhatsApp_API__mdt.getInstance('Send_Reminder');
-                if(cred != null && String.isNotBlank(recordId)) {
-                    if(toMobile.length() == 10){
-                        toMobile = '91'+toMobile;
+        String templateName = 'csc_lead';
+        Infobip_WhatsApp_API__mdt cred = Infobip_WhatsApp_API__mdt.getInstance('Send_Reminder');
+
+        for (Lead ld : leads) {
+            String toMobile = ld.MobilePhone;
+            String recordId = ld.Id;
+            System.debug('toMobile: ' + toMobile);
+
+            try {
+                if (cred != null && String.isNotBlank(recordId) && String.isNotBlank(toMobile)) {
+                    toMobile = toMobile.replaceAll('[^0-9]', '');
+                    if (toMobile.length() == 10) {
+                        toMobile = '91' + toMobile;
                     }
-                    System.debug('toMobile: '+toMobile);
-                    //toMobile = '919125488005';
+                    System.debug('Formatted toMobile: ' + toMobile);
+
+                    String stateVal  = String.isNotBlank(ld.State) ? ld.State : 'CSC';
+                    String nameVal   = String.isNotBlank(ld.Name) ? ld.Name : 'Customer';
+                    String senderVal = cred.Sender__c.replace('"', '');
+
                     HttpRequest request = new HttpRequest();
                     request.setEndpoint(cred.Endpoint_URL__c);
                     request.setMethod(cred.Method__c);
-                    request.setHeader('Authorization',cred.Authorization__c);
-                    request.setHeader('Content-Type',cred.Content_Type__c);
-                    String body = '{"messages":[{"from":'+cred.Sender__c+',"to":'+toMobile+',"content":{"templateName":'+templateName+',"templateData":{"body":{"placeholders":["'+ld.State+'", "'+ld.Name+'"]}},"language":"en"}}]}';
+                    request.setHeader('Authorization', cred.Authorization__c);
+                    request.setHeader('Content-Type', cred.Content_Type__c);
+
+                    String body = '{"messages":[{"from":"' + senderVal + '","to":"' + toMobile + '","content":{"templateName":"' + templateName + '","templateData":{"body":{"placeholders":["' + stateVal + '","' + nameVal + '"]}},"language":"en"}}]}';
+                    System.debug('Request Body: ' + body);
                     request.setBody(body);
                     
                     HttpResponse response = new HttpResponse();
-                    if(!Test.isRunningTest()){
+                    if (!Test.isRunningTest()) {
                         Http http = new Http();
                         response = http.send(request);
-                    }
-                    else{
+                    } else {
                         response.setStatusCode(200);
-                        response.setBody('{"messages":[{"from":"917065624774","to":"919125488005","content":{"templateName":"due_reminder_collection_1","templateData":{"body":{"placeholders":[]}},"language":"en"}}]}');
+                        response.setBody('{"messages":[{"from":"917065624774","to":"919125488005","content":{"templateName":"csc_lead","templateData":{"body":{"placeholders":[]}},"language":"en"}}]}');
                     }
                     
-                    System.debug('Response: '+response);
-                    System.debug('Response: '+response.getBody()); 
+                    System.debug('Response: ' + response);
+                    System.debug('Response Body: ' + response.getBody()); 
                     
                     Api_Logs__c log = new Api_Logs__c();
-                    log.Name = 'Setu_Lead_Message_API';
+                    log.Name = 'Infobip_Lead_Message_API';
                     log.API_Request__c = request.getBody();
                     log.API_Response__c = response.getBody();
                     logsToInsert.add(log);
                 }
-            }
-            catch(Exception e){
-                System.debug('Line Number: '+ e.getLineNumber());
-                System.debug('Line Number: '+ e.getMessage());
-                
+            } catch (Exception e) {
+                System.debug('Line Number: ' + e.getLineNumber() + ' Message: ' + e.getMessage());
             }
         }
-        
 
         if (!logsToInsert.isEmpty()) {
             insert logsToInsert;
         }
         
         if (!remainingIds.isEmpty() && !Test.isRunningTest()) {
-            System.enqueueJob(new SetuLeadMessageQueueable(remainingIds));
+            System.enqueueJob(new InfobipLeadMessageQueueable(remainingIds));
         }
     }
 }
