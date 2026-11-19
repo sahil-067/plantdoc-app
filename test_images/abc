@@ -1,140 +1,86 @@
 public class InfobipLeadMessageQueueable implements Queueable, Database.AllowsCallouts {
 
-    // Leads processed per job (one callout per job). Remaining Ids are chained to a new job.
-    private static final Integer BATCH_SIZE = 50;
-
     private List<Id> leadIds;
+    private static Integer batch_size = 50;
 
-    // Called from the trigger
-    public InfobipLeadMessageQueueable(List<Lead> leads) {
-        this.leadIds = new List<Id>();
-        if (leads != null) {
-            for (Lead l : leads) {
-                if (l != null && l.Id != null) {
-                    this.leadIds.add(l.Id);
-                }
-            }
-        }
-    }
-
-    // Used internally for chaining the remaining Ids
     public InfobipLeadMessageQueueable(List<Id> leadIds) {
-        this.leadIds = leadIds == null ? new List<Id>() : leadIds;
+        this.leadIds = leadIds;
     }
 
     public void execute(QueueableContext context) {
-        if (leadIds.isEmpty()) {
+        if (leadIds == null || leadIds.isEmpty()) {
             return;
         }
-
-        // Split: current chunk + remaining
-        List<Id> currentIds   = new List<Id>();
+        
+        List<Id> currentIds = new List<Id>();
         List<Id> remainingIds = new List<Id>();
-        for (Integer i = 0; i < leadIds.size(); i++) {
-            if (i < BATCH_SIZE) {
-                currentIds.add(leadIds[i]);
+        for (Id lId : leadIds) {
+            if (currentIds.size() < batch_size) {
+                currentIds.add(lId);
             } else {
-                remainingIds.add(leadIds[i]);
+                remainingIds.add(lId);
             }
-        }
+        }     
+        
+        List<Lead> leads = [SELECT Id, Name, Lead_Code__c, Lead_State__c FROM Lead WHERE Id IN :currentIds];
+        Infobip_WhatsApp_API__mdt cred = Infobip_WhatsApp_API__mdt.getInstance('csc_welcome');
+      List<InfobipLeadMessageNumbers__mdt> numbers = InfobipLeadMessageNumbers__mdt.getAll().values();
+        String templateName = cred.template_name__c;
 
-        HttpRequest  request  = new HttpRequest();
-        HttpResponse response = new HttpResponse();
-
-        try {
-            Infobip_WhatsApp_API__mdt cred = Infobip_WhatsApp_API__mdt.getInstance('csc_welcome');
-            if (cred == null) {
-                System.debug('Infobip: metadata record csc_welcome not found');
-                return;
+        for (Lead ld : leads) {
+            HttpRequest request = new HttpRequest();
+            HttpResponse response = new HttpResponse();
+            String nameVal   = ld.Name;
+      String stateVal;
+            if(String.isNotBlank(ld.Lead_State__c)) {
+              stateVal = ld.Lead_State__c;
+            } else {
+                stateVal = 'CSC';
             }
-
-            List<InfobipLeadMessageNumbers__mdt> numbers = InfobipLeadMessageNumbers__mdt.getAll().values();
-            if (numbers.isEmpty()) {
-                System.debug('Infobip: no recipient numbers configured');
-                return;
-            }
-
-            // Format recipient numbers once
-            List<String> toMobiles = new List<String>();
-            for (InfobipLeadMessageNumbers__mdt num : numbers) {
-                if (String.isBlank(num.Mobile__c)) {
-                    continue;
-                }
-                String toMobile = num.Mobile__c.replaceAll('[^0-9]', '');
-                if (toMobile.length() == 10) {
-                    toMobile = '91' + toMobile;
-                }
-                toMobiles.add(toMobile);
-            }
-            System.debug('Formatted toMobiles: ' + toMobiles);
-            if (toMobiles.isEmpty()) {
-                System.debug('Infobip: no valid recipient numbers');
-                return;
-            }
-
-            String senderVal    = cred.Sender__c == null ? '' : cred.Sender__c.replace('"', '');
-            String templateName = cred.template_name__c;
-
-            // Build one message per lead per recipient number
-            List<Object> messages = new List<Object>();
-            for (Lead leaddet : [SELECT Id, Name, Lead_Code__c, Lead_State__c
-                                 FROM Lead
-                                 WHERE Id IN :currentIds]) {
-
-                String nameVal  = String.isNotBlank(leaddet.Name) ? leaddet.Name : 'Customer';
-                String stateVal = String.isNotBlank(leaddet.Lead_State__c) ? leaddet.Lead_State__c : 'CSC';
-
-                for (String toMobile : toMobiles) {
-                    messages.add(new Map<String, Object>{
-                        'from'    => senderVal,
-                        'to'      => toMobile,
-                        'content' => new Map<String, Object>{
-                            'templateName' => templateName,
-                            'templateData' => new Map<String, Object>{
-                                'body' => new Map<String, Object>{
-                                    'placeholders' => new List<String>{ stateVal, nameVal }
-                                }
-                            },
-                            'language' => 'en'
+            try {
+                if (cred != null) {
+                    String senderVal = cred.Sender__c.replace('"', '');
+                    request.setEndpoint(cred.Endpoint_URL__c);
+                    request.setMethod(cred.Method__c);
+                    request.setHeader('Authorization', cred.Authorization__c);
+                    request.setHeader('Content-Type', cred.Content_Type__c);
+            
+                    String body = '{"messages":[';
+                    for (InfobipLeadMessageNumbers__mdt num: numbers) {
+    
+                        String toMobile = num.Mobile__c.replaceAll('[^0-9]', '');
+                        if (toMobile.length() == 10) {
+                            toMobile = '91' + toMobile;
                         }
-                    });
+                        System.debug('Formatted toMobiles: ' + toMobile);
+                        body += '{"from":"' + senderVal + '","to":"' + toMobile + '","content":{"templateName":"' + templateName + '","templateData":{"body":{"placeholders":["' + stateVal + '","' + nameVal + '"]}},"language":"en"}},';
+                    }
+                    if (body.endsWith(',')) {
+                        body = body.removeEnd(',') + ']}';
+                    }
+                    System.debug('Request Body: ' + body);
+                    request.setBody(body);
+                        
+                    if (!Test.isRunningTest()) {
+                        Http http = new Http();
+                        response = http.send(request);
+                    } else {
+                        response.setStatusCode(200);
+                        response.setBody('{"messages":[{"from":"917065624774","to":"919125488005","content":{"templateName":"csc_lead","templateData":{"body":{"placeholders":[]}},"language":"en"}}]}');
+                    }
+                      
+                    System.debug('Response: ' + response);
+                    System.debug('API_Request: ' + request.getBody());
+                    System.debug('API_Response: ' + response.getBody());
+                        
                 }
-            }
-
-            if (!messages.isEmpty()) {
-                // JSON.serialize escapes quotes/special characters in names safely
-                String body = JSON.serialize(new Map<String, Object>{ 'messages' => messages });
-
-                request.setEndpoint(cred.Endpoint_URL__c);
-                request.setMethod(cred.Method__c);
-                request.setHeader('Authorization', cred.Authorization__c);
-                request.setHeader('Content-Type', cred.Content_Type__c);
-                request.setTimeout(120000);
-                request.setBody(body);
-                System.debug('API_Request: ' + body);
-
-                if (!Test.isRunningTest()) {
-                    response = new Http().send(request);
-                } else {
-                    response.setStatusCode(200);
-                    response.setBody('{"messages":[{"to":"919125488005","status":{"groupName":"PENDING"}}]}');
-                }
-
-                System.debug('API_Status: ' + response.getStatusCode());
+            } catch (Exception e) {
+                System.debug('Line Number: ' + e.getLineNumber() + ' Message: ' + e.getMessage());
+                System.debug('API_Request: ' + request.getBody());
                 System.debug('API_Response: ' + response.getBody());
-
-                if (response.getStatusCode() < 200 || response.getStatusCode() > 299) {
-                    System.debug('Infobip: callout failed for leads ' + currentIds);
-                }
             }
-
-        } catch (Exception e) {
-            System.debug('Line Number: ' + e.getLineNumber() + ' Message: ' + e.getMessage());
-            System.debug('API_Request: ' + request.getBody());
-            System.debug('API_Response: ' + response.getBody());
         }
-
-        // Chain the remaining leads (chaining is not allowed in test context)
+        
         if (!remainingIds.isEmpty() && !Test.isRunningTest()) {
             System.enqueueJob(new InfobipLeadMessageQueueable(remainingIds));
         }
@@ -142,5 +88,4 @@ public class InfobipLeadMessageQueueable implements Queueable, Database.AllowsCa
 }
 
 
-
-this is my updated code when i sked approval for deploy i was asked to explain changes on the mail so add
+you are not on same page this was the last version and before it i gave you the updated code for deplkoyment
