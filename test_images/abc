@@ -1,46 +1,413 @@
-@IsTest
-public class MicroSoftCreateAccountAPITest {
+@isTest
+private class CallBotCollectionWebhookServiceTest {
 
-    @IsTest
-    static void testMaxPossibleCoverage() {
-        String fullWrapperJson = '{' +
-            '"id": "12345",' +
-            '"inviteRedeemUrl": "https://myapp.com/redeem",' +
-            '"invitedUserDisplayName": {},' +
-            '"invitedUserType": "Guest",' +
-            '"invitedUserEmailAddress": "test@example.com",' +
-            '"sendInvitationMessage": true,' +
-            '"inviteRedirectUrl": "https://myapp.com",' +
-            '"status": "PendingAcceptance",' +
-            '"invitedUserMessageInfo": {' +
-                '"messageLanguage": "en-US",' +
-                '"customizedMessageBody": "Welcome",' +
-                '"ccRecipients": [{' +
-                    '"emailAddress": {' +
-                        '"name": "Admin",' +
-                        '"address": "admin@example.com"' +
-                    '}' +
-                '}]' +
-            '},' +
-            '"invitedUser": {' +
-                '"id": "fe3184c1-4154-4833-ab07-3694ba57e0b1"' +
-            '}' +
-        '}';
+    // =========================================================================
+    // Mock HTTP Callout Handler for Token & SendBill APIs
+    // =========================================================================
+    private class CallBotCalloutMock implements HttpCalloutMock {
+        private String mode;
+        private Integer callCount = 0;
 
+        public CallBotCalloutMock(String mode) {
+            this.mode = mode;
+        }
+
+        public HTTPResponse respond(HTTPRequest req) {
+            callCount++;
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+
+            if (mode == 'THROW_EXCEPTION') {
+                throw new CalloutException('Simulated callout failure');
+            }
+
+            // 1st callout: SetuSendBill_GenerateTokenAPI.getToken(null)
+            if (callCount == 1) {
+                if (mode == 'TOKEN_FAIL') {
+                    res.setStatusCode(401);
+                    res.setBody('');
+                    return res;
+                }
+                res.setStatusCode(200);
+                // Covers common token response shapes
+                res.setBody('{"token":"mock_jwt_token_123","access_token":"mock_jwt_token_123","data":{"token":"mock_jwt_token_123"}}');
+                return res;
+            }
+
+            // 2nd callout: SetuSendBillAPI.sendBillForBOT(token, paymentAPIBody)
+            if (mode == 'BILL_FAIL') {
+                res.setStatusCode(400);
+                res.setBody('{"success":false,"status":"FAILED","message":"Bill generation failed"}');
+                return res;
+            }
+
+            res.setStatusCode(200);
+            res.setBody('{"success":true,"status":"SUCCESS","data":{"paymentLink":"https://setu.co/pay/mock123"}}');
+            return res;
+        }
+    }
+
+    // =========================================================================
+    // Test Setup with Standard Objects (Account, Contact, Opportunity)
+    // =========================================================================
+    @TestSetup
+    static void setupTestData() {
+        Account acc = new Account(
+            Name = 'Test Borrower Account',
+            Phone = '9876543210'
+        );
+        insert acc;
+
+        Contact con = new Contact(
+            FirstName = 'Test',
+            LastName = 'Borrower',
+            AccountId = acc.Id,
+            MobilePhone = '9876543210',
+            Email = 'test.borrower@example.com'
+        );
+        insert con;
+
+        List<Opportunity> opps = new List<Opportunity>{
+            // 1. Active loan with balance, due amount, PEMI, and bouncing count
+            new Opportunity(
+                Name = 'Loan Active With Bounce',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = 'LN-ACTIVE-001',
+                Balance_Collectable__c = 5000,
+                Due_For_the_Month__c = 2000,
+                Due_for_the_Month_PEMI__c = 500,
+                BouncingcountFTM__c = 2
+            ),
+            // 2. Loan with Due_For_the_Month__c = 0 (for OnlyDueFortheMonth = Yes validation)
+            new Opportunity(
+                Name = 'Loan Zero Due',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = 'LN-ZERODUE-002',
+                Balance_Collectable__c = 3000,
+                Due_For_the_Month__c = 0,
+                Due_for_the_Month_PEMI__c = 0,
+                BouncingcountFTM__c = 0
+            ),
+            // 3. Loan with Balance_Collectable__c = 0 and BouncingcountFTM__c = 0
+            new Opportunity(
+                Name = 'Loan Zero Balance No Bounce',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = 'LN-ZEROBAL-003',
+                Balance_Collectable__c = 0,
+                Due_For_the_Month__c = 0,
+                Due_for_the_Month_PEMI__c = 0,
+                BouncingcountFTM__c = 0
+            ),
+            // 4. Loan with Balance_Collectable__c = 0 but BouncingcountFTM__c > 0
+            new Opportunity(
+                Name = 'Loan Zero Balance With Bounce',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = 'LN-ZEROBAL-BOUNCE-004',
+                Balance_Collectable__c = 0,
+                Due_For_the_Month__c = 0,
+                Due_for_the_Month_PEMI__c = 0,
+                BouncingcountFTM__c = 1
+            )
+        };
+        insert opps;
+    }
+
+    // =========================================================================
+    // Helper to invoke the REST endpoint
+    // =========================================================================
+    private static RestResponse invokeDoPost(String jsonBody) {
+        RestRequest req = new RestRequest();
+        req.requestURI = '/services/apexrest/CallBotCollection/';
+        req.httpMethod = 'POST';
+        req.requestBody = Blob.valueOf(jsonBody != null ? jsonBody : '');
+
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
+
+        CallBotCollectionWebhookService.doPost();
+        return RestContext.response;
+    }
+
+    // =========================================================================
+    // Test Scenarios
+    // =========================================================================
+
+    @isTest
+    static void testEmptyRequestBody() {
         Test.startTest();
-        // Covers all setters and getters on Wrapper + all private inner classes
-        MicroSoftCreateAccountAPI.Wrapper parsedWrapper =
-            (MicroSoftCreateAccountAPI.Wrapper) JSON.deserialize(
-                fullWrapperJson,
-                MicroSoftCreateAccountAPI.Wrapper.class
-            );
-        String serializedBack = JSON.serialize(parsedWrapper);
-
-        // Covers all reachable lines in both API methods
-        MicroSoftCreateAccountAPI.doPostForGetAccessToken('test@example.com', 'sId');
-        MicroSoftCreateAccountAPI.doPostInvitationsAPI('mockToken', 'test@example.com', 'sId');
+        RestResponse res = invokeDoPost('');
         Test.stopTest();
 
-        System.assertNotEquals(null, serializedBack, 'Wrapper serialization should succeed.');
+        System.assertEquals(400, res.statusCode, 'Empty body should return 400');
+        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Response__c FROM Whatsapp_collect_send_request__c];
+        System.assertEquals(1, logs.size(), 'Audit log should be inserted');
+    }
+
+    @isTest
+    static void testMissingRequiredParameters() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = '';
+        wrapper.phone_Number = '';
+        wrapper.customer_number = '';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Missing required params should return 400');
+    }
+
+    @isTest
+    static void testOnlyDueForMonthIsZero() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ZERODUE-002';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Zero due for month with OnlyDueFortheMonth=Yes should return 403');
+    }
+
+    @isTest
+    static void testZeroBalanceCollectableAndNoBouncing() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ZEROBAL-003';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Zero balance with no bouncing should return 403');
+    }
+
+    @isTest
+    static void testSuccess_GreyLabs_CC003_FullBalanceWithBounce() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('SUCCESS'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ACTIVE-001';
+        wrapper.customer_number = '9876543210';
+        wrapper.source = 'CC-003'; // GreyLabs
+        wrapper.collector_name = 'GreyLabs Bot';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertNotEquals(null, res.responseBody, 'Response body should be populated');
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c, RecordType.Name
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-003'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log GreyLabs request');
+    }
+
+    @isTest
+    static void testSuccess_Gnani_CC002_OnlyDueForMonth() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('SUCCESS'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ACTIVE-001';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002'; // Gnani
+        wrapper.collector_name = 'Gnani Bot';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertNotEquals(null, res.responseBody, 'Response body should be populated');
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-002'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Gnani request');
+    }
+
+    @isTest
+    static void testSuccess_InternalBot_CC004_ZeroBalanceWithBounce() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('SUCCESS'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ZEROBAL-BOUNCE-004';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-004'; // Internal bot
+        wrapper.collector_name = 'Internal Bot';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertNotEquals(null, res.responseBody, 'Response body should be populated');
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-004'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Internal bot request');
+    }
+
+    @isTest
+    static void testTokenAuthenticationFailure() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('TOKEN_FAIL'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ACTIVE-001';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Blank token should return 403');
+    }
+
+    @isTest
+    static void testSendBillFailure() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('BILL_FAIL'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ACTIVE-001';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Failed bill generation should return 400');
+    }
+
+    @isTest
+    static void testException_OpportunityNotFound() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-NON-EXISTENT-999';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(500, res.statusCode, 'QueryException when Opp is missing should return 500');
+    }
+
+    @isTest
+    static void testException_AfterOpportunityLoaded() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('THROW_EXCEPTION'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = 'LN-ACTIVE-001';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(JSON.serialize(wrapper));
+        Test.stopTest();
+
+        System.assertEquals(500, res.statusCode, 'Unhandled exception during callout should return 500');
+        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Application__c FROM Whatsapp_collect_send_request__c];
+        System.assertEquals(1, logs.size(), 'Catch block should insert error log when opp != null');
+    }
+
+    @isTest
+    static void testWrappersCoverage() {
+        CallBotCollectionWebhookService.CallWebhookWrapper w = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        w.loan_id = 'LN-ACTIVE-001';
+        w.phone_Number = '9876543210';
+        w.name = 'Test';
+        w.due_amount = 1000;
+        w.due_month = 'Nov';
+        w.language = 'EN';
+        w.disposition = 'PTP';
+        w.callstatus = 'Completed';
+        w.source_phone = '0123456789';
+        w.call_duration = 60;
+        w.calling_date = '2026-11-22';
+        w.campaign_name = 'Collection';
+        w.call_id = 'C1';
+        w.recording_id = 'R1';
+        w.call_date = '2026-11-22';
+        w.call_start_time = '10:00';
+        w.call_answer_time = '10:01';
+        w.call_end_time = '10:02';
+        w.total_call_duration_sec = 60;
+        w.call_direction = 'Outbound';
+        w.call_status = 'Answered';
+        w.hangup_source = 'Customer';
+        w.hangup_cause = 'Normal';
+        w.hangup_cause_code = 16;
+        w.hangup_cause_name = 'NORMAL_CLEARING';
+        w.agent_id = 'A1';
+        w.agent_number = '1111111111';
+        w.agent_sentiment = 'Positive';
+        w.customer_id = 'CU1';
+        w.customer_number = '9876543210';
+        w.customer_name = 'Test';
+        w.customer_sentiment = 'Neutral';
+        w.detected_language = 'EN';
+        w.final_disposition = 'PTP';
+        w.compliance_score = 95.5;
+        w.call_summary = 'Summary';
+        w.call_transcript = 'Transcript';
+        w.template_name = 'T1';
+        w.template_id = 'TID1';
+        w.recording_url = 'https://example.com/rec';
+        w.telephony_call_uuid = 'UUID-1';
+        w.product_type = 'HL';
+        w.product = 'Home Loan';
+        w.emi_amount = 2000;
+        w.emi_pending = 1;
+        w.days_overdue = 5;
+        w.balance_collectable = 5000;
+        w.loan_last_4 = '0001';
+        w.no_of_months_defaulted = 1;
+        w.monthly_bouncing_charges = 700;
+        w.monthly_penal_interest_rate = 2.0;
+        w.initiation_time = '10:00';
+        w.answer_time = '10:01';
+        w.end_time = '10:02';
+        w.current_datetime = '2026-11-22T10:00:00Z';
+        w.current_day = 'Sunday';
+        w.current_month = 'November';
+        w.from_number = '1111111111';
+        w.to_number = '9876543210';
+        w.source = 'CC-003';
+        w.collector_name = 'Bot';
+        w.OnlyDueFortheMonth = 'No';
+
+        CallBotCollectionWebhookService.CallResponse resp = new CallBotCollectionWebhookService.CallResponse();
+        resp.success = true;
+        resp.message = 'OK';
+        resp.referenceId = 'REF-1';
+        resp.errors.add('None');
+
+        System.assertEquals(true, resp.success);
+        System.assertEquals('LN-ACTIVE-001', w.loan_id);
     }
 }
