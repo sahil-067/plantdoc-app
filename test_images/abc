@@ -1,44 +1,33 @@
-        List<Opportunity> insertedOpps = [SELECT Id, Name, Loan_Number__c FROM Opportunity];
-        List<Opportunity> toUpdate = new List<Opportunity>();
-        Integer counter = 100001;
-        for (Opportunity o : insertedOpps) {
-            if (String.isBlank(o.Loan_Number__c)) {
-                o.Loan_Number__c = String.valueOf(counter++);
-                toUpdate.add(o);
-            }
-        }
-        if (!toUpdate.isEmpty()) {
-            update toUpdate;
-        }
+@IsTest
+public class MicroSoftCreateAccountAPITest {
 
+    @IsTest
+    static void testApiMethodsAndWrapper() {
+        Test.startTest();
 
+        // Cover all 7 public Wrapper properties (both setters and getters)
+        MicroSoftCreateAccountAPI.Wrapper reqObj = new MicroSoftCreateAccountAPI.Wrapper();
+        reqObj.id = '12345';
+        reqObj.inviteRedeemUrl = 'https://myapp.com/redeem';
+        reqObj.invitedUserType = 'Guest';
+        reqObj.invitedUserEmailAddress = 'test@example.com';
+        reqObj.sendInvitationMessage = true;
+        reqObj.inviteRedirectUrl = 'https://myapp.com';
+        reqObj.status = 'Success';
 
-    private static String getLoanNumberByName(String oppName) {
-        return [SELECT Loan_Number__c FROM Opportunity WHERE Name = :oppName LIMIT 1].Loan_Number__c;
+        // Read getters explicitly
+        System.assertEquals('12345', reqObj.id);
+        System.assertEquals('https://myapp.com/redeem', reqObj.inviteRedeemUrl);
+        System.assertEquals('Guest', reqObj.invitedUserType);
+        System.assertEquals('test@example.com', reqObj.invitedUserEmailAddress);
+        System.assertEquals(true, reqObj.sendInvitationMessage);
+        System.assertEquals('https://myapp.com', reqObj.inviteRedirectUrl);
+        System.assertEquals('Success', reqObj.status);
+
+        // Cover all reachable lines in both API methods
+        MicroSoftCreateAccountAPI.doPostForGetAccessToken('test@example.com', 'sId');
+        MicroSoftCreateAccountAPI.doPostInvitationsAPI('mockToken', 'test@example.com', 'sId');
+
+        Test.stopTest();
     }
-
-
-
-    // testOnlyDueForMonthIsZero
-    wrapper.loan_id = getLoanNumberByName('Loan Zero Due');
-
-    // testZeroBalanceCollectableAndNoBouncing
-    wrapper.loan_id = getLoanNumberByName('Loan Zero Balance No Bounce');
-
-    // testSuccess_GreyLabs_CC003_FullBalanceWithBounce
-    wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-
-    // testSuccess_Gnani_CC002_OnlyDueForMonth
-    wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-
-    // testSuccess_InternalBot_CC004_ZeroBalanceWithBounce
-    wrapper.loan_id = getLoanNumberByName('Loan Zero Balance With Bounce');
-
-    // testTokenAuthenticationFailure
-    wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-
-    // testSendBillFailure
-    wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-
-    // testException_AfterOpportunityLoaded
-    wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+}
