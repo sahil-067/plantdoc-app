@@ -1,497 +1,239 @@
-public with sharing class showValuationsController {
-    public boolean frstyear{get;set;}
-    public boolean scondyear{get;set;}
-    public boolean tirdyear{get;set;}
-    public string CAMID{get;set;}
-    public list<Opportunity> OppListRadialLow{get;set;}
-    public list<Opportunity> OppListRadialHigh{get;set;}
-    public list<CAM__c> CAMListRadialLow{get;set;}
-    public list<CAM__c> CAMListRadialHigh{get;set;}
-    public string Querystr1;
-    public string Querystr2;
-    public integer lowRadial_Count{get;set;}
-    public integer HighRadial_Count{get;set;}
-    public decimal lat{get;set;}
-    public decimal lon{get;set;}
-    public list<wrapperClass1> lstWrapperClass{get;set;}
-    public list<wrapperClass1> lstWrapperClass1{get;set;}
+@isTest
+public class showValuationsControllerTest {
 
-    public decimal RadialLowAVG{get;set;}
-    public decimal RadialHighAVG{get;set;}
-    public AggregateResult[] AggregateLow;
-    public AggregateResult[] AggregateHigh;
-    public CAM__c CAM{get;set;}
-    public boolean displayTable{get;set;}
-    public boolean displayRadialLow{get;set;}
-    public boolean displayRadialHigh{get;set;}
-    public boolean DisplayDone{get;set;}
-    public boolean displayError{get;set;}   
-    Public string Propetytype{get;set;}
-    public list<string>listofitem{get;set;}
-    public decimal avg{get;set;}
-    public decimal yearone{get;set;}
-    public decimal yeartwo{get;set;}
-    public decimal yearthree{get;set;}
-    public decimal finalavg{get;set;}
-    Public date camcreateddate{get;set;}
-    public decimal yearonedataavg{get;set;}
-    public  decimal yeartwodataavg{get;set;}
-    public  decimal tearthreedataavg{get;set;}
-    public list<cam__c> camlistFirstYear{get;set;}
-    public list<cam__c> camlistsecondYear{get;set;}
-    public list<cam__c> camlistthirdYear{get;set;}
-    Public set<id> opplist{get;set;}
+    @testSetup
+    static void setupTestData() {
+        // Standard org configuration and master records
+        insert new Config__c(Name__c = 'Test Config', Value__c = '009870');
 
-    public showValuationsController(apexpages.StandardController sc){
-        
-        
-        displayError = true;
-        displayTable = false;
-        DisplayDone = false;
-        displayRadialLow = false;
-        displayRadialLow = false;
-        //Propetytype='Flat';
-        CAMID = apexpages.currentPage().getParameters().get('CAMID');
-        CAMListRadialLow = new list<CAM__c>();
-        CAMListRadialHigh = new list<CAM__c>();
-       
-        frstyear=false;
-        scondyear=false;
-        tirdyear=false;
-         opplist=new set<id>();
-      
-        CAM = new CAM__c();
-        
-        CAM = [Select Id,createddate,Name,Approval_Date__c ,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Customer_Location__latitude__s, Loan_Application__r.Name,
-                Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, Radial_Low_Count__c 
-                from CAM__c Where Id=: CAMID];
-        lstWrapperClass=new list<wrapperClass1>();
-        lstWrapperClass1=new list<wrapperClass1>();
-        
-     //   system.debug('==CAM=='+CAM);
+        Branch__c branch = new Branch__c(Name = 'Jaipur-1');
+        insert branch;
+
+        insert new Pincode_Master__c(Name = '600001', State_Name__c = 'Tamil Nadu');
+
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        insert cus;
+
+        // Primary Opportunity + 3 Opportunities for Year 1, Year 2, and Year 3 CAM buckets
+        List<Opportunity> oppList = new List<Opportunity>{
+            new Opportunity(
+                Name = 'Rahul Main',
+                StageName = 'Prospecting',
+                CloseDate = System.today(),
+                Household__c = cus.Id,
+                Customer_Location__Latitude__s = 28.4595,
+                Customer_Location__Longitude__s = 77.0266
+            ),
+            new Opportunity(
+                Name = 'Rahul Y1',
+                StageName = 'Prospecting',
+                CloseDate = System.today(),
+                Household__c = cus.Id,
+                Customer_Location__Latitude__s = 28.4600,
+                Customer_Location__Longitude__s = 77.0270
+            ),
+            new Opportunity(
+                Name = 'Rahul Y2',
+                StageName = 'Prospecting',
+                CloseDate = System.today(),
+                Household__c = cus.Id,
+                Customer_Location__Latitude__s = 28.4610,
+                Customer_Location__Longitude__s = 77.0280
+            ),
+            new Opportunity(
+                Name = 'Rahul Y3',
+                StageName = 'Prospecting',
+                CloseDate = System.today(),
+                Household__c = cus.Id,
+                Customer_Location__Latitude__s = 28.4620,
+                Customer_Location__Longitude__s = 77.0290
+            )
+        };
+        insert oppList;
+
+        // Primary CAM (created today)
+        CAM__c mainCam = new CAM__c(
+            Loan_Application__c = oppList[0].Id,
+            Final_Decision__c = 'Pending',
+            Approval_Date__c = Date.today(),
+            LvalMtr__c = 10000,
+            Land_Area__c = 500,
+            Build_Up_Area__c = 1000
+        );
+
+        // Year 1 CAM (Flat: Land_Area__c == 0 && Build_Up_Area__c != 0)
+        CAM__c camY1 = new CAM__c(
+            Loan_Application__c = oppList[1].Id,
+            Final_Decision__c = 'Pending',
+            Approval_Date__c = Date.today().addMonths(-6),
+            LvalMtr__c = 12000,
+            Land_Area__c = 0,
+            Build_Up_Area__c = 800
+        );
+
+        // Year 2 CAM (Land: else branch)
+        CAM__c camY2 = new CAM__c(
+            Loan_Application__c = oppList[2].Id,
+            Final_Decision__c = 'Pending',
+            Approval_Date__c = Date.today().addMonths(-18),
+            LvalMtr__c = 10000,
+            Land_Area__c = 400,
+            Build_Up_Area__c = 900
+        );
+
+        // Year 3 CAM (Land)
+        CAM__c camY3 = new CAM__c(
+            Loan_Application__c = oppList[3].Id,
+            Final_Decision__c = 'Pending',
+            Approval_Date__c = Date.today().addMonths(-30),
+            LvalMtr__c = 8000,
+            Land_Area__c = 600,
+            Build_Up_Area__c = 1100
+        );
+
+        insert new List<CAM__c>{ mainCam, camY1, camY2, camY3 };
+
+        // Backdate CreatedDate so records fall inside the 1st, 2nd, and 3rd year windows
+        Test.setCreatedDate(camY1.Id, Datetime.now().addMonths(-6));
+        Test.setCreatedDate(camY2.Id, Datetime.now().addMonths(-18));
+        Test.setCreatedDate(camY3.Id, Datetime.now().addMonths(-30));
     }
-    
-    public pageReference Calculations(){
-        if(CAM != Null && CAM.Loan_Application__r.Customer_Location__latitude__s != Null && CAM.Loan_Application__r.Customer_Location__longitude__s != Null){
-            lat = CAM.Loan_Application__r.Customer_Location__latitude__s;
-            lon = CAM.Loan_Application__r.Customer_Location__longitude__s;
-            //lat2 = 29.282929;
-            //lon2 = 76.026532;
-            if(lat != Null && lon != Null)
-            {
-                displayError = false;
-                OppListRadialLow = new list<Opportunity>();
-                Querystr1 = 'select Id, Name, Customer_Location__latitude__s, Customer_Location__longitude__s, Loan_Number__c from Opportunity WHERE DISTANCE(Customer_Location__c, GEOLOCATION('+lat+','+lon+'), \'km\') < '+label.Radial_Low;
-               // system.debug('==Querystr1==='+Querystr1);
-                if(!test.isRunningTest()){
-                OppListRadialLow = database.query(Querystr1);
-              //  system.debug('==OppListRadialLow==='+OppListRadialLow);
-              
-                if(OppListRadialLow != Null && OppListRadialLow.size() > 0) 
-                { 
-                    for(opportunity opp:OppListRadialLow)
-                   opplist.add(opp.id);
-                    calculateAverage('low');
-                }
-                }
-                OppListRadialHigh = new list<Opportunity>();
-               
-                Querystr2 = 'select Id, Name, Customer_Location__latitude__s, Customer_Location__longitude__s, Loan_Number__c from Opportunity WHERE DISTANCE(Customer_Location__c, GEOLOCATION('+lat+','+lon+'), \'km\') < '+label.Radial_High;
-                system.debug('==Querystr2=='+Querystr2);
-                If(!test.isrunningtest()){
-                OppListRadialHigh = database.query(Querystr2);
-                }
-                if(test.isRunningTest()){
-                      //  calculateAverage('High');  
-                        calculateAverage('low');
-                
-                }
-               system.debug('==OppListRadialHigh=='+OppListRadialHigh);
-                if(OppListRadialHigh != Null && OppListRadialHigh.size() > 0)
-                {
-                    for(opportunity opp:OppListRadialHigh)
-                   opplist.add(opp.id);
-                    calculateAverage('High');
-                }
-             
-                displayTable = true;
-            }
-        }
-        else if(CAM == Null)
-        {
-            displayTable = false;
-            displayError = true;
-        }
-        
 
-        
-        return null;
+    private static showValuationsController initController(CAM__c cam) {
+        PageReference pageRef = new PageReference('/apex/showValuations');
+        pageRef.getParameters().put('CAMID', cam.Id);
+        Test.setCurrentPage(pageRef);
+        ApexPages.StandardController sc = new ApexPages.StandardController(cam);
+        return new showValuationsController(sc);
     }
-    public pageReference calculateAverage(string Radial)
-    {
-        
-        
-        
-        listofitem =new list<string>();
-        
-        if(Radial == 'Low')
-        {
-            
-            AggregateLow = [Select AVG(LvalMtr__c)aver from CAM__c Where Loan_Application__c IN: OppListRadialLow AND Approval_Date__c <> null];
-            system.debug('====AggregateLow===='+AggregateLow);
-            
-            if(AggregateLow != Null && AggregateLow.size() > 0){
-                RadialLowAVG = (Decimal)AggregateLow[0].get('aver');
-                system.debug('====RadialLowAVG===='+RadialLowAVG);
-            }
-            
-            lowRadial_Count = [Select Count() from CAM__c Where Loan_Application__c IN: OppListRadialLow AND Approval_Date__c <> null];
-            system.debug('====lowRadial_Count===='+lowRadial_Count);
-            CAMListRadialLow = [Select Id, Name,App_Purpose_of_Loan__c ,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                                Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                                Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where Loan_Application__c IN: OppListRadialLow AND Approval_Date__c <> null];
-            system.debug('====CAMListRadialLow===='+CAMListRadialLow);
-                       
-            if(CAMListRadialLow != Null && CAMListRadialLow.size() > 0)
-            { 
-                displayRadialLow = true;
-                //lstWrapperClass=new list<wrapperClass1>();
-                for(CAM__C cam1 :CAMListRadialLow )
-                {
-                    
-                 wrapperClass1 wrapperClassObj = new wrapperClass1();
-                    wrapperClassObj.Id = cam1.Id;
-                    wrapperClassObj.Name= cam1.Name;
-                    wrapperClassObj.LvalMtr= cam1.LvalMtr__c;
-                    wrapperClassObj.Land_Area= cam1.Land_Area__c;
-                    wrapperClassObj.Build_Up_Area= cam1.Build_Up_Area__c;
-                    wrapperClassObj.Total_Prop_Val= cam1.Total_Prop_Val__c;
-                    wrapperClassObj.Loan_Application_id= cam1.Loan_Application__c;
-                    wrapperClassObj.Radial_High_Count= cam1.Radial_High_Count__c;
-                    wrapperClassObj.Radial_Low_Count= cam1.Radial_Low_Count__c;
-                    wrapperClassObj.AppPurposeofLoan= cam1.App_Purpose_of_Loan__c;
-                    wrapperClassObj.Loan_Application_Name = cam1.Loan_Application__r.Name;
-                    wrapperClassObj.Customer_LocationLatitude= cam1.Loan_Application__r.Customer_Location__Latitude__s;
-                    wrapperClassObj.Customer_LocationLongitude= cam1.Loan_Application__r.Customer_Location__Longitude__s;
-                   
-                 
-                if(cam1.Land_Area__c == 0 && cam1.Build_Up_Area__c != 0)
-                {
-                    wrapperClassObj.Propetytype ='Flat';
-                }
-                else
-                {
-                    wrapperClassObj.Propetytype ='Land';  
-                }
-                    
-                     lstWrapperClass.add(wrapperClassObj);
-                    
 
-                   // system.debug('lstWrapperClass================'+lstWrapperClass);
-            }       
-                
-            }
-            else
-            {
-                displayRadialLow = false;
-            }
-           // system.debug('The Aggregate Low Value'+AggregateLow);
-            
-        }else if(Radial == 'High')
-        {
-            //lstWrapperClass1=new list<wrapperClass1>();
-            AggregateHigh = [Select AVG(LvalMtr__c)aver from CAM__c Where Loan_Application__c IN: OppListRadialHigh AND Approval_Date__c <> null];
-            system.debug('==AggregateHigh=='+AggregateHigh);
-            if(AggregateHigh != Null && AggregateHigh.size() > 0)
-            {
-                RadialHighAVG = (Decimal)AggregateHigh[0].get('aver');
-            }
-            
-            HighRadial_Count = [Select Count() from CAM__c Where Loan_Application__c IN: OppListRadialHigh AND Approval_Date__c <> null];
-            system.debug('==HighRadial_Count=='+HighRadial_Count);
-            CAMListRadialHigh = [Select Id, Name,App_Purpose_of_Loan__c, LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c,Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                                Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                                Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where Loan_Application__c IN: OppListRadialHigh AND Approval_Date__c <> null];
-            system.debug('==CAMListRadialHigh=='+CAMListRadialHigh);                    
-            if(CAMListRadialHigh != Null && CAMListRadialHigh.size() > 0)
-            {
-                displayRadialHigh = true;
-                //lstWrapperClass=new list<wrapperClass1>();
-                for(CAM__C cam1 :CAMListRadialHigh )
-                {
-                 wrapperClass1 wrapperClassObj = new wrapperClass1();
-                    wrapperClassObj.Id = cam1.Id;
-                    wrapperClassObj.Name= cam1.Name;
-                    wrapperClassObj.LvalMtr= cam1.LvalMtr__c;
-                    wrapperClassObj.Land_Area= cam1.Land_Area__c;
-                    wrapperClassObj.Build_Up_Area= cam1.Build_Up_Area__c;
-                    wrapperClassObj.Total_Prop_Val= cam1.Total_Prop_Val__c;
-                    wrapperClassObj.Loan_Application_id= cam1.Loan_Application__c;
-                    wrapperClassObj.Radial_High_Count= cam1.Radial_High_Count__c;
-                    wrapperClassObj.Radial_Low_Count= cam1.Radial_Low_Count__c;
-                    wrapperClassObj.AppPurposeofLoan= cam1.App_Purpose_of_Loan__c;
-                    wrapperClassObj.Loan_Application_Name = cam1.Loan_Application__r.Name;
-                    wrapperClassObj.Customer_LocationLatitude= cam1.Loan_Application__r.Customer_Location__Latitude__s;
-                    wrapperClassObj.Customer_LocationLongitude= cam1.Loan_Application__r.Customer_Location__Longitude__s;
-                   
-                 
-                if(cam1.Land_Area__c == 0 && cam1.Build_Up_Area__c != 0)
-                {
-                    wrapperClassObj.Propetytype ='Flat';
-                }
-                else
-                {
-                    wrapperClassObj.Propetytype ='Land';  
-                }
-                    
-                     lstWrapperClass1.add(wrapperClassObj);
-                    
+    @isTest
+    static void testCalculationsAndSubmitSuccess() {
+        List<Opportunity> opps = [SELECT Id, Name FROM Opportunity ORDER BY Name ASC];
+        CAM__c mainCam = [SELECT Id FROM CAM__c WHERE Loan_Application__r.Name = 'Rahul Main' LIMIT 1];
 
-                    system.debug('lstWrapperClass================'+lstWrapperClass1);
-            }
-            }else
-            {
-                displayRadialHigh = false;
-            }
-            system.debug('The Aggregate High Value'+AggregateHigh);
-           
-        }
-        
-        
-        
-/////////////////////////////////////////////////////////////////////////
+        Test.startTest();
+        showValuationsController ctrl = initController(mainCam);
 
-if(cam.Approval_Date__c != null){
-date camdate=date.valueof(cam.createddate);
-date yearfirst=camdate.addyears(-1);
-date yearsecond=camdate.addyears(-2);
-date yearthird=camdate.addyears(-3);
+        // Covers Calculations() with valid lat/lon and Test.isRunningTest() branch
+        ctrl.Calculations();
+        System.assertEquals(true, ctrl.displayTable);
+        System.assertEquals(false, ctrl.displayError);
 
-            
- if(OppListRadialLow != null && OppListRadialLow.Size()>0)        
-system.debug('OppListRadialLow'+OppListRadialLow);
- if(OppListRadialHigh != null && OppListRadialHigh.Size()>0)    
- system.debug('OppListRadialHigh'+OppListRadialHigh); 
+        // Populate OppListRadialLow, OppListRadialHigh, and opplist to cover Low/High loops (Flat & Land) + all 3 years
+        ctrl.OppListRadialLow = opps;
+        ctrl.OppListRadialHigh = opps;
+        for (Opportunity o : opps) {
+            ctrl.opplist.add(o.Id);
+        }
 
-      
-          if(OppListRadialLow != null && OppListRadialLow.Size()>0){
-                 camlistFirstYear=[Select Id, App_Purpose_of_Loan__c,Approval_Date__c ,Name,Loan_Application__r.Household__c,HLAmt__c,Loan_Application__r.Sanctioned_Date__c,Loan_Application__r.Household__r.name, First_Approval_Date__c,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                              Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                              Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where  Loan_Application__c IN: opplist AND Approval_Date__c <> null AND createddate<=:camdate AND createddate>=:yearfirst   ] ; 
-     
-        }
-        else{
-           camlistFirstYear=[Select Id, App_Purpose_of_Loan__c,Approval_Date__c ,Name,Loan_Application__r.Household__c,HLAmt__c,Loan_Application__r.Sanctioned_Date__c,Loan_Application__r.Household__r.name, First_Approval_Date__c,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                              Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                              Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where  Loan_Application__c IN: opplist AND Approval_Date__c <> null AND  createddate<=:camdate AND createddate>=:yearfirst   ];    
-        }
-        
-        if(OppListRadialLow != null && OppListRadialLow.Size()>0){
-                camlistsecondYear=[Select Id,App_Purpose_of_Loan__c ,Approval_Date__c, Name,Loan_Application__r.Household__c,HLAmt__c,Loan_Application__r.Sanctioned_Date__c,Loan_Application__r.Household__r.name, First_Approval_Date__c,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                              Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                              Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where    Loan_Application__c IN:opplist AND Approval_Date__c <> null AND createddate <=: yearfirst AND createddate >=: yearsecond   ];   
-        
-        } 
-        else{
-           camlistsecondYear=[Select Id,App_Purpose_of_Loan__c ,Approval_Date__c, Name,Loan_Application__r.Household__c,HLAmt__c,Loan_Application__r.Sanctioned_Date__c,Loan_Application__r.Household__r.name, First_Approval_Date__c,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                              Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                              Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where    Loan_Application__c IN:opplist AND Approval_Date__c <> null AND  createddate <=: yearfirst AND createddate >=: yearsecond   ];    
-        }
-        if(OppListRadialLow != null && OppListRadialLow.Size()>0){
-            camlistthirdYear=[Select Id, Name,App_Purpose_of_Loan__c ,Approval_Date__c,Loan_Application__r.Household__c,HLAmt__c,Loan_Application__r.Sanctioned_Date__c,Loan_Application__r.Household__r.name, First_Approval_Date__c,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                              Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                              Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where Loan_Application__c IN: opplist AND Approval_Date__c <> null AND    createddate <=: yearsecond AND createddate >=: yearthird  ];          
-        }
-        else{
-             camlistthirdYear=[Select Id, Name,App_Purpose_of_Loan__c ,Approval_Date__c,Loan_Application__r.Household__c,HLAmt__c,Loan_Application__r.Sanctioned_Date__c,Loan_Application__r.Household__r.name, First_Approval_Date__c,LvalMtr__c,Land_Area__c,Build_Up_Area__c, Total_Prop_Val__c, Loan_Application__c, Loan_Application__r.Name, Loan_Application__r.Customer_Location__latitude__s, 
-                              Loan_Application__r.Customer_Location__longitude__s, /*Loan_Application__r.Customer_Location__c,*/ Radial_High_Count__c, 
-                              Radial_Low_Count__c, Loan_Application__r.Loan_Number__c from CAM__c Where Loan_Application__c IN: opplist AND Approval_Date__c <> null AND     createddate <=: yearsecond AND createddate >=: yearthird ];   
-        }
-    
-    
-         system.debug('camlistFirstYear'+camlistFirstYear.size());
-        system.debug('camlistsecondYear'+camlistsecondYear.size());
-        system.debug('camlistthirdYear'+camlistthirdYear.size());
+        ctrl.calculateAverage('Low');
+        ctrl.calculateAverage('High');
 
+        System.assertEquals(true, ctrl.displayRadialLow);
+        System.assertEquals(true, ctrl.displayRadialHigh);
+        System.assert(ctrl.lstWrapperClass.size() > 0);
+        System.assert(ctrl.lstWrapperClass1.size() > 0);
+        System.assertEquals(true, ctrl.frstyear);
+        System.assertEquals(true, ctrl.scondyear);
+        System.assertEquals(true, ctrl.tirdyear);
 
-    if(camlistFirstYear.size()>0)
-      frstyear=true;
-     if(camlistsecondYear.size()>0)
-    scondyear=true;
-    if(camlistsecondYear.size()>0)
-      tirdyear=true;
-        
-        
-        decimal yearonedata=0;
-        decimal yeartwodata=0; 
-        decimal tearthreedata=0;
-        integer num1=0;
-        integer num2=0;
-        integer num3=0;
-   //     system.debug(camlistFirstYear.size());
-   //     system.debug(camlistFirstYear.size()+''+camlistFirstYear);
-        
-        if(camlistFirstYear.size()>0)
-        for(cam__c cam:camlistFirstYear){
-            if(cam.LvalMtr__c != Null){
-             yearonedata+=cam.LvalMtr__c;
-             num1=num1+1;
-            }
-        }
-       // system.debug(yearonedata);
-        
-         if(camlistsecondYear.size()>0)
-         for(cam__c cam:camlistsecondYear){
-              if(cam.LvalMtr__c != Null){
-         yeartwodata+=cam.LvalMtr__c;
-             num2=num2+1;
-              }
-        }
-        
-         if(camlistthirdYear.size()>0)
-         for(cam__c cam:camlistthirdYear){
-              if(cam.LvalMtr__c != Null){
-         tearthreedata+=cam.LvalMtr__c;
-             num3=num3+1;
-              }
-        }
-        if(yearonedata !=null && yearonedata !=0)
-        yearonedataavg=yearonedata/num1;
-        if(yeartwodata !=null && yeartwodata !=0)
-        yeartwodataavg=yeartwodata/num2;
-         if(tearthreedata !=null && tearthreedata!= 0)
-        tearthreedataavg=tearthreedata/num3;
-        
-        
-         if(yearonedataavg != null && yeartwodataavg != Null && tearthreedataavg!=Null )
-                finalavg=(yearonedataavg*0.50)+(yeartwodataavg*0.25)+(tearthreedataavg*0.25);
-            else if(tearthreedataavg == Null && yearonedataavg != null && yeartwodataavg != Null)
-                finalavg=(yearonedataavg*0.60)+(yeartwodataavg*0.40);
-            else if(tearthreedataavg != Null && yearonedataavg != null && yeartwodataavg == Null)
-                finalavg=(yearonedataavg*0.60)+(tearthreedataavg*0.40);
-           else if(tearthreedataavg != Null && yearonedataavg == null && yeartwodataavg != Null)
-                finalavg=(yeartwodataavg*0.50)+(tearthreedataavg*0.50);
-           else if(tearthreedataavg != Null && yearonedataavg == null && yeartwodataavg == Null)
-                finalavg=tearthreedataavg*1.0;
-           else if(tearthreedataavg == Null && yearonedataavg == null && yeartwodataavg != Null)
-                finalavg=yeartwodataavg*1.0;
-           else if(tearthreedataavg == Null && yearonedataavg != null && yeartwodataavg == Null)
-                finalavg=yearonedataavg*1.0;
-             else
-                  finalavg=0;
-        
-        
-        }
-        
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+        // Cover Submit() success path
+        ctrl.Submit();
+        System.assertEquals(true, ctrl.DisplayDone);
+        System.assertEquals(false, ctrl.displayTable);
 
- 
-        
- 
-            /*
-            if(yearone != null && yeartwo != Null && yearthree!=Null )
-                finalavg=(yearone*0.50)+(yeartwo*0.25)+(yearthree*0.25);
-            else if(yearthree == Null && yearone != null && yeartwo != Null)
-                finalavg=(yearone*0.60)+(yeartwo*0.40);
-            else if(yearthree != Null && yearone != null && yeartwo == Null)
-                finalavg=(yearone*0.60)+(yearthree*0.40);
-           else if(yearthree != Null && yearone == null && yeartwo != Null)
-                finalavg=(yeartwo*0.50)+(yearthree*0.50);
-           else if(yearthree != Null && yearone == null && yeartwo == Null)
-                finalavg=yearthree*1.0;
-           else if(yearthree == Null && yearone == null && yeartwo != Null)
-                finalavg=yeartwo*1.0;
-           else if(yearthree == Null && yearone != null && yeartwo == Null)
-                finalavg=yearone*1.0;
-             else
-                  finalavg=0;
-            */
-            
-            
-            /*
-            if(sequencNum==0){
-                yearone=lval/count;
-            }else if(sequencNum==1){
-                yeartwo=lval/count;
-            }else if(sequencNum==2){
-                yearthree=lval/count;
-            }
-            sequencNum++;
-            */
-        
-    
-        
-///////////////////////////////////////////////////////////////////////// 
-        return null;
+        // Cover Done() and cancel1()
+        PageReference donePr = ctrl.Done();
+        PageReference cancelPr = ctrl.cancel1();
+        System.assertEquals('/' + mainCam.Id, donePr.getUrl());
+        System.assertEquals('/' + mainCam.Id, cancelPr.getUrl());
+        Test.stopTest();
     }
-    
-    public pageReference Submit(){
-        if(AggregateLow != Null && AggregateLow.size() > 0){
-            CAM.Radial_Low__c = (Decimal)AggregateLow[0].get('aver');
-            CAM.Radial_Low_Count__c = LowRadial_Count;
-        }
-        if(AggregateHigh != Null && AggregateHigh.size() > 0){
-            CAM.Radial_High__c = (Decimal)AggregateHigh[0].get('aver');
-            CAM.Radial_High_Count__c = HighRadial_Count;
-        }
-        try{
-            update CAM;
-            displayTable = false;
-            displayError = false;
-            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.CONFIRM,'The CAM is updated successfully'));
-            DisplayDone = true;
-        }catch(Exception e){
-            system.debug('The Exception is'+e.getMessage());
-            displayTable = true;
-            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.Error,e.getMessage()));
-            DisplayDone = false;
-            return null;
-        }
-        return null;
-        //PageReference PR = new pageReference('/'+CAMID);
-        //return PR;
+
+    @isTest
+    static void testAllFinalAverageBranchesAndEmptyLists() {
+        Opportunity oppY1 = [SELECT Id FROM Opportunity WHERE Name = 'Rahul Y1' LIMIT 1];
+        Opportunity oppY2 = [SELECT Id FROM Opportunity WHERE Name = 'Rahul Y2' LIMIT 1];
+        Opportunity oppY3 = [SELECT Id FROM Opportunity WHERE Name = 'Rahul Y3' LIMIT 1];
+        CAM__c mainCam = [SELECT Id FROM CAM__c WHERE Loan_Application__r.Name = 'Rahul Main' LIMIT 1];
+
+        Test.startTest();
+        showValuationsController ctrl = initController(mainCam);
+
+        // Empty Radial Low & High -> covers else branches (displayRadialLow/High = false, OppListRadialLow empty else queries, finalavg = 0)
+        ctrl.OppListRadialLow = new List<Opportunity>();
+        ctrl.OppListRadialHigh = new List<Opportunity>();
+        ctrl.opplist = new Set<Id>();
+        ctrl.calculateAverage('Low');
+        ctrl.calculateAverage('High');
+        System.assertEquals(false, ctrl.displayRadialLow);
+        System.assertEquals(false, ctrl.displayRadialHigh);
+        System.assertEquals(0, ctrl.finalavg);
+
+        // Combination 1: Y1 + Y2 (Y3 null)
+        resetYearAverages(ctrl);
+        ctrl.opplist = new Set<Id>{ oppY1.Id, oppY2.Id };
+        ctrl.calculateAverage('Low');
+        System.assertNotEquals(0, ctrl.finalavg);
+
+        // Combination 2: Y1 + Y3 (Y2 null)
+        resetYearAverages(ctrl);
+        ctrl.opplist = new Set<Id>{ oppY1.Id, oppY3.Id };
+        ctrl.calculateAverage('Low');
+        System.assertNotEquals(0, ctrl.finalavg);
+
+        // Combination 3: Y2 + Y3 (Y1 null)
+        resetYearAverages(ctrl);
+        ctrl.opplist = new Set<Id>{ oppY2.Id, oppY3.Id };
+        ctrl.calculateAverage('Low');
+        System.assertNotEquals(0, ctrl.finalavg);
+
+        // Combination 4: Only Y3
+        resetYearAverages(ctrl);
+        ctrl.opplist = new Set<Id>{ oppY3.Id };
+        ctrl.calculateAverage('Low');
+        System.assertNotEquals(0, ctrl.finalavg);
+
+        // Combination 5: Only Y2
+        resetYearAverages(ctrl);
+        ctrl.opplist = new Set<Id>{ oppY2.Id };
+        ctrl.calculateAverage('Low');
+        System.assertNotEquals(0, ctrl.finalavg);
+
+        // Combination 6: Only Y1
+        resetYearAverages(ctrl);
+        ctrl.opplist = new Set<Id>{ oppY1.Id };
+        ctrl.calculateAverage('Low');
+        System.assertNotEquals(0, ctrl.finalavg);
+
+        // Cover else if (CAM == null) in Calculations()
+        ctrl.CAM = null;
+        ctrl.Calculations();
+        System.assertEquals(false, ctrl.displayTable);
+        System.assertEquals(true, ctrl.displayError);
+        Test.stopTest();
     }
-    
-    public pageReference Done(){
-        PageReference PR = new pageReference('/'+CAMID);
-        return PR;
+
+    @isTest
+    static void testSubmitExceptionBranch() {
+        CAM__c mainCam = [SELECT Id FROM CAM__c WHERE Loan_Application__r.Name = 'Rahul Main' LIMIT 1];
+
+        Test.startTest();
+        showValuationsController ctrl = initController(mainCam);
+
+        // Force DML exception on update (missing Id) to cover catch block in Submit()
+        ctrl.CAM = new CAM__c();
+        ctrl.Submit();
+        System.assertEquals(true, ctrl.displayTable);
+        System.assertEquals(false, ctrl.DisplayDone);
+        Test.stopTest();
     }
-    
-    public pageReference cancel1(){
-        PageReference PR = new pageReference('/'+CAMID);
-        return PR;
+
+    private static void resetYearAverages(showValuationsController ctrl) {
+        ctrl.yearonedataavg = null;
+        ctrl.yeartwodataavg = null;
+        ctrl.tearthreedataavg = null;
+        ctrl.finalavg = null;
     }
-    
-    public class wrapperClass1
-    {
-        Public String Id{get;set;}
-        Public string AppPurposeofLoan{get;set;}
-        Public String Name{get; set;}
-        Public Decimal LvalMtr{get; set;}
-        Public Decimal Land_Area{get; set;}
-        Public Decimal Build_Up_Area{get; set;}
-        Public Decimal Total_Prop_Val{get; set;}
-        Public String Loan_Application_id{get; set;}
-        Public Decimal Radial_High_Count{get; set;}
-        Public Decimal Radial_Low_Count{get;set;}
-        Public Decimal Customer_LocationLatitude{get;set;}
-        Public Decimal Customer_LocationLongitude{get;set;}
-        Public String Propetytype{get;set;}
-        Public String Loan_Application_Name {get;set;}
-        
-        public wrapperClass1()
-        {
-            
-            
-        }
-    
-    }
-    
 }
-
-
-
-
-
-this is an apex class create a test class for this with max coverage, add the general objects i add in all my test setups , give the test class
