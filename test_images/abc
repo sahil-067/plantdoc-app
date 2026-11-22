@@ -1,175 +1,298 @@
 here is an apex class 
 
-
-public class MicroSoftCreateAccountAPI {
-    
-    public static void doPostForGetAccessToken(string sEmail,string sId){
+/*
+@Author: Siddharth Gupta
+@Description: 
+@ModifiedDate : 11/12/2025
+ModifiedDate : 11/12/2025
+*/
+@RestResource(urlMapping='/CallBotCollection/*')
+global class CallBotCollectionWebhookService {
+    @HttpPost
+    global static void doPost(){
         
-        MicroSoftCreateAccountAPIHelper.ApiMaterialForToken();
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
-        request.setEndpoint(MicroSoftCreateAccountAPIHelper.sUrlForToken);
-        request.setMethod(MicroSoftCreateAccountAPIHelper.sMethodType);
-        request.setHeader(MicroSoftCreateAccountAPIHelper.sHeaderType,MicroSoftCreateAccountAPIHelper.sHeaderValue);
-        request.setBody(MicroSoftCreateAccountAPIHelper.sBody);
-        try {
-            HttpResponse response= new HttpResponse();
-            if(!test.isRunningTest())
-                Response = http.send(request);
-            system.debug('response'+response.getBody());
-            system.debug('response.getStatusCode()'+response.getStatusCode());
-            if (response.getStatusCode() != 201) {
-                if(!test.isRunningTest()){
-                    System.debug(MicroSoftCreateAccountAPIHelper.sMessageError + response.getStatusCode() + ' ' + response.getStatus());
-                    MicroSoftCreateAccountAPIHelper.Wrapper wrapper = (MicroSoftCreateAccountAPIHelper.Wrapper)JSON.deserialize(response.getBody(), MicroSoftCreateAccountAPIHelper.Wrapper.class);
-                    System.debug('@Tokan '+MicroSoftCreateAccountAPIHelper.sMessageSuccess +wrapper.access_token);
-                    doPostInvitationsAPI(wrapper.access_token,sEmail,sId);
-                }
-            } else {
-                System.debug(MicroSoftCreateAccountAPIHelper.sMessageSuccess +response.getBody());
+        RestRequest req = RestContext.request;
+        RestResponse res = RestContext.response;
+        
+        CallResponse response = new CallResponse();
+        
+        Integer payAmount;
+        Opportunity opp;
+        Id recordTypeId;
+        String mobile;
+        String body;
+        
+        try{
+            body = req.requestBody.toString();
+            System.debug('body24: '+body);
+            Whatsapp_collect_send_request__c wc = new Whatsapp_collect_send_request__c();
+            wc.Request_Body__c = body; 
+            
+            if(String.isBlank(body)){
+                response.success = false;
+                response.message = 'Empty request body';
+                res.statusCode = 400;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                
+                wc.BOT_Request__c = String.valueOf(JSON.serializePretty(response));
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+                return;
             }
-        } catch( System.Exception e) { 
-            System.debug('ERROR: '+ e); 
-            throw e; 
+            
+            CallWebhookWrapper payload = (CallWebhookWrapper) JSON.deserialize(body, CallWebhookWrapper.class);
+            
+            if(String.isBlank(payload.loan_id) || (String.isBlank(payload.phone_Number) && String.isBlank(payload.customer_number))){
+                response.success = false;
+                response.message = 'Required parameters are missing like Loan Id, Phone Number etc.';
+                res.statusCode = 400;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                
+                wc.BOT_Request__c = String.valueOf(JSON.serializePretty(response));
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+                
+                return;
+            }
+            
+            System.debug('payload.loan_id: '+payload.loan_id);
+            opp =  [SELECT Id,Name,Loan_Number__c,BouncingcountFTM__c, Balance_Collectable__c,Due_For_the_Month__c,Due_for_the_Month_PEMI__c
+                    FROM Opportunity WHERE Loan_Number__c = :payload.loan_id LIMIT 1];
+            wc.Application__c = opp.Id;
+            wc.Source__c=payload.source;
+              if(payload.OnlyDueFortheMonth=='Yes' && opp.Due_For_the_Month__c == 0)
+            {
+                response.success = false;
+                response.message = 'If OnlyDueFortheMonth is Yes then Due For the Month should not be zero';
+                res.statusCode = 403;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                
+                wc.BOT_Request__c = body;
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+                return;
+            }
+            else if(opp.Balance_Collectable__c==0 && payload.OnlyDueFortheMonth!='Yes')
+            {
+                 if(opp.BouncingcountFTM__c<=0){
+                  
+                response.success = false;
+                response.message = 'Balance Collectable Should not be Zero ';
+                res.statusCode = 403;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                
+                wc.BOT_Request__c = body;
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+                return;
+                 }
+            }
+            Double emiDueForMonth = Math.min((opp.Balance_Collectable__c != null ? opp.Balance_Collectable__c : 0), (opp.Due_For_the_Month__c != null ? opp.Due_For_the_Month__c : 0) + (opp.Due_for_the_Month_PEMI__c != null ? opp.Due_for_the_Month_PEMI__c : 0));
+            Double arrearEmi = Math.max(0,((opp.Balance_Collectable__c != null ? opp.Balance_Collectable__c : 0)  - (opp.Due_For_the_Month__c != null ? opp.Due_For_the_Month__c : 0) - (opp.Due_for_the_Month_PEMI__c != null ? opp.Due_for_the_Month_PEMI__c : 0)));
+            
+            if(payload.source == 'CC-003'){
+                recordTypeId = Schema.sObjectType.Whatsapp_collect_send_request__c.getRecordTypeInfosByName().get('GreyLabs').getRecordTypeId();
+                mobile = payload.customer_number;
+            }
+            else if(payload.source == 'CC-002'){
+                recordTypeId = Schema.sObjectType.Whatsapp_collect_send_request__c.getRecordTypeInfosByName().get('Gnani').getRecordTypeId();
+                mobile = payload.phone_Number;
+            }
+            else if(payload.source == 'CC-004'){
+                recordTypeId = Schema.sObjectType.Whatsapp_collect_send_request__c.getRecordTypeInfosByName().get('Internal bot').getRecordTypeId();
+                mobile = payload.phone_Number;
+            }
+            wc.RecordTypeId = recordTypeId;
+            String token = SetuSendBill_GenerateTokenAPI.getToken(null);
+            System.debug('Token::: '+token);
+            if(String.isBlank(token)){
+                response.success = false;
+                response.message = 'Payment API Authentication failed.';
+                res.statusCode = 403;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                
+                wc.BOT_Request__c = body;
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+                return;
+            }
+            
+            
+            if(payload.OnlyDueFortheMonth=='Yes')
+            {
+                payAmount = Integer.ValueOf((opp.Due_For_the_Month__c != null ? opp.Due_For_the_Month__c : 0)*100);
+            	wc.Amount__c = payAmount;
+            }
+            else
+            {
+                Integer temp=0;
+                if(opp.BouncingcountFTM__c>0){
+                    temp=Integer.valueof((opp.BouncingcountFTM__c*700));
+                }
+                System.debug('Temp val '+temp);
+                payAmount = Integer.ValueOf(((emiDueForMonth + arrearEmi) * 100)+(temp*100));
+           	    wc.Amount__c = payAmount;
+            }
+            
+            
+            // Calculate the due date as the 7th of the current                     
+            Date dueDate = Date.today().toStartOfMonth().addDays(6);
+            
+            // Convert Date → DateTime so that custom format works
+            DateTime dt = DateTime.newInstance(dueDate, Time.newInstance(0, 0, 0, 0));
+            String formattedDate = dt.format('dd.MM.yyyy');
+            
+            // Calculate the expiry date as the last day of the current month
+           /* Datetime expiryDT = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
+            String expiryDate = expiryDT.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'').split('T')[0]+'T20:55:22Z';
+            System.debug('Due Date: ' + formattedDate+' Expiry Date: ' + expiryDate); */
+            Date expiry = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
+            String expiryDate = Datetime.newInstanceGmt(expiry, Time.newInstance(0, 0, 0, 0)).formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
+            System.debug('Due Date: ' + formattedDate + ' Expiry Date: ' + expiryDate);
+			
+            
+            String paymentAPIBody = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"'+mobile+'","loan_number":"'+payload.loan_id+'","due_date":"'+formattedDate+'","referenceID":"123412","Collector_Name":"'+payload.collector_name+'","Source":"'+payload.source+'" ,"MobileTriggered":"'+mobile+'"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"'+mobile+'","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"'+payload.loan_id+'","due_date":"'+formattedDate+'"}}]}';
+            System.debug('paymentAPIBody: '+paymentAPIBody);
+            
+            // FIX: sendBillForBOT returns SetuSendBillAPI.ResponseWrapper, not String.
+            SetuSendBillAPI.ResponseWrapper botResponse = SetuSendBillAPI.sendBillForBOT(token, paymentAPIBody);
+            
+            if(botResponse != null && botResponse.success == true){
+                response.success = true;
+                response.message = 'Call data received and Payment Link sent successfully.';
+                res.statusCode = 200;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                wc.Request_Body__c = botResponse.result;
+                wc.BOT_Request__c = body;
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+                
+            }
+            else{
+                response.success = false;
+                response.message = 'Payment Link generation failed, Please connect admin.';
+                res.statusCode = 400;
+                res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+                wc.BOT_Request__c = body;
+                wc.Response__c = botResponse != null ? botResponse.result : String.valueOf(JSON.serializePretty(response));
+                insert wc;
+            }
+            
+            
+        }
+        catch(Exception e){
+            System.debug('Exception: '+e.getMessage()+' Line '+e.getLineNumber());
+            
+            response.success = false;
+            response.message = 'Error processing call data';
+            response.errors.add(e.getMessage());
+            response.errors.add(e.getStackTraceString());
+            res.statusCode = 500;
+            res.responseBody = Blob.valueOf(JSON.serializePretty(response));
+            
+            if(opp != null){
+                Whatsapp_collect_send_request__c wc = new Whatsapp_collect_send_request__c();
+                System.debug('recordTypeId '+recordTypeId);
+                wc.RecordTypeId = recordTypeId;
+                wc.Application__c = opp.Id;
+                wc.Amount__c = payAmount;
+                wc.Request_Body__c = body;
+                wc.BOT_Request__c = body;
+                wc.Response__c = String.valueOf(JSON.serializePretty(response));
+                insert wc;
+            }
         } 
     }
-    //@future (callout=true)
-    public static void doPostInvitationsAPI(string sToken,string sEmail,string sId){                   
-        //  string sbody='{"inviteduseremailaddress":"'+sEmail+'","inviteRedirectUrl":"https://isfctest-partnercommunity.cs59.force.com/login","sendInvitationMessage":"true"}';
-        string sbody='{"inviteduseremailaddress":"'+sEmail+'","inviteRedirectUrl":"https://myapp.com","sendInvitationMessage":"true"}';
+    
+    // Request Wrapper
+    global class CallWebhookWrapper {
         
-        HttpRequest request = new HttpRequest();
-        request.setEndpoint('https://graph.microsoft.com/v1.0/invitations'); 
-        request.setMethod('POST'); 
-        request.setHeader('Accept', 'application/json');
-        request.setHeader('Content-Type','application/json');     
-        request.setHeader('Authorization', 'Bearer ' + sToken);
-        request.setBody(sBody);
-        String response11 = '';
+        // Ganani
+        public String loan_id;
+        public String phone_Number;
+        public String name; 
+        public Integer due_amount; 
+        public String due_month;
+        public String language; 
+        public String disposition; 
+        public String callstatus; 
+        public String source_phone;
+        public Integer call_duration;
+        public String calling_date; 
+        public String campaign_name; 
         
-        System.debug('  request  : ' + request); 
-        Http http = new Http();
+        // GreyLab
+        public String call_id;
+        public String recording_id;
+        public String call_date;
         
-        HttpResponse response= new HttpResponse();
-        if(!test.isRunningTest())
-            response = http.send(request); 
-        if(response.getStatusCode()==201){
-            Wrapper wrapper = (Wrapper)JSON.deserialize(response.getBody(), Wrapper.class);
-            System.debug('@Tokan ' +wrapper);
-            String keyPrefix = TechnicalUserOnBoard__c.sobjecttype.getDescribe().getKeyPrefix();
-            if(keyPrefix.equals(Label.TechnicalBoardObjectPrefix)){ 
-                Microsoft_Response1__c obj=new Microsoft_Response1__c();
-                obj.Response__c=string.valueOf(wrapper);
-                obj.TechnicalUserOnBoard__c=sId;
-                insert obj;
-            }else {
-                MicroSoft_Response__c obj=new MicroSoft_Response__c();
-                obj.Response__c=string.valueOf(wrapper);
-                obj.Legal_vendor_onboard_registration__c=sId;
-                insert obj;
-            }
-        }
-        System.debug('  response  : ' + response.getBody()); 
-        system.debug(' StatusCode @@ '+response.getStatusCode());
-        System.debug('  response  : ' + response.getBody()); 
+        public String call_start_time;
+        public String call_answer_time;
+        public String call_end_time;
         
+        public Integer total_call_duration_sec;
+        public String call_direction;
+        public String call_status;
+        public String hangup_source;
+        public String hangup_cause;
+        public Integer hangup_cause_code;
+        public String hangup_cause_name;
         
+        public String agent_id;
+        public String agent_number;
+        public String agent_sentiment;
+        
+        public String customer_id;
+        public String customer_number;
+        public String customer_name;
+        public String customer_sentiment;
+        
+        public String detected_language;
+        public String final_disposition;
+        public Decimal compliance_score;
+        
+        public String call_summary;
+        public String call_transcript;
+        
+        public String template_name;
+        public String template_id;
+        public String recording_url;
+        public String telephony_call_uuid;
+        
+        public String product_type;
+        public String product;
+        
+        public Decimal emi_amount;
+        public Integer emi_pending;
+        public Integer days_overdue;
+        public Decimal balance_collectable;
+        public String loan_last_4;
+        public Integer no_of_months_defaulted;
+        public Decimal monthly_bouncing_charges;
+        public Decimal monthly_penal_interest_rate;
+        
+        public String initiation_time;
+        public String answer_time;
+        public String end_time;
+        public String current_datetime;
+        
+        public String current_day;
+        public String current_month;
+        
+        public String from_number;
+        public String to_number;
+        
+        public String source;
+        public String collector_name;
+        public String OnlyDueFortheMonth;
     }
     
-    
-    //
-    //Generated by AdminBooster
-    //
-    public class Wrapper{
-        public String id{get;set;}
-        public String inviteRedeemUrl{get;set;}
-        public cls_invitedUserDisplayName invitedUserDisplayName{get;set;}
-        public String invitedUserType{get;set;}
-        public String invitedUserEmailAddress{get;set;}
-        public boolean sendInvitationMessage{get;set;}
-        public String inviteRedirectUrl{get;set;}
-        public String status{get;set;}
-        public cls_invitedUserMessageInfo invitedUserMessageInfo{get;set;}
-        public cls_invitedUser invitedUser{get;set;}
-    }
-    class cls_invitedUserDisplayName {
-    }
-    class cls_invitedUserMessageInfo {
-        public String messageLanguage{get;set;}
-        public String customizedMessageBody{get;set;}
-        public cls_ccRecipients[] ccRecipients;
-    }
-    class cls_ccRecipients {
-        public cls_emailAddress emailAddress{get;set;}
-    }
-    class cls_emailAddress {
-        public String name{get;set;} 
-        public String address{get;set;}
-    }
-    class cls_invitedUser {
-        public String id{get;set;}	//fe3184c1-4154-4833-ab07-3694ba57e0b1
-    }
-    
-}
-
-
-
-
-
-
-
-
-
-
-and here is the test class for this
-
-
-
-@istest
-public class MicroSoftCreateAccountAPITest {
-    
-    public static testmethod void mytest(){
-        
-        
-        Test.startTest();
-        
-        MicroSoftCreateAccountAPI Classobj = new MicroSoftCreateAccountAPI();
-        RestRequest request = new RestRequest();
-        request.requestURI = '/services/apexrest/MicroSoftCreateAccountAPI'; 
-        request.httpMethod = 'POST';
-	    MicroSoftCreateAccountAPI.doPostForGetAccessToken('sEmail', 'sId');
-        MicroSoftCreateAccountAPI.doPostInvitationsAPI('sToken', 'sEmail', 'sId');
-        Test.stopTest();        
-    }
-    
-    public static testmethod void mytest1(){
-        
-        
-        Test.startTest();
-        
-        MicroSoftCreateAccountAPI Classobj = new MicroSoftCreateAccountAPI();
-        MicroSoftCreateAccountAPI.Wrapper Reqobj = new MicroSoftCreateAccountAPI.Wrapper();
-        Reqobj.id='ytu';
-        Reqobj.inviteRedeemUrl='ycj';
-        Reqobj.invitedUserType='test';
-        Reqobj.invitedUserEmailAddress='Address';
-        Reqobj.sendInvitationMessage=True;
-        Reqobj.inviteRedirectUrl='657';
-        Reqobj.status='Success';
-        
-        
-        
-        RestRequest request = new RestRequest();
-        request.requestURI = '/services/apexrest/sUrlForToken'; 
-        request.httpMethod = 'POST';
-        
-        request.requestBody = Blob.valueof('Reqobj');  
-
-        request.requestBody = Blob.valueof('{"access_token":"test"}');  
-        MicroSoftCreateAccountAPI.doPostForGetAccessToken('sEmail', 'sId');
-        MicroSoftCreateAccountAPI.doPostInvitationsAPI('sToken', 'sEmail', 'sId');
-        
-        Test.stopTest();        
+    // Response Wrapper
+    global class CallResponse {
+        public Boolean success;
+        public String message;
+        public String referenceId;
+        public List<String> errors = new List<String>();
     }
     
 }
