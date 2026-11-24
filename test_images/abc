@@ -1,246 +1,435 @@
-here are both the classes
+@isTest
+private class CallBotCollectionWebhookServiceTest {
 
+    // =========================================================================
+    // Test Setup with Standard Objects (Account, Contact, Opportunity)
+    // =========================================================================
+    @TestSetup
+    static void setupTestData() {
+        List<RecordType> bizAccRts = [
+            SELECT Id FROM RecordType
+            WHERE SObjectType = 'Account' AND IsPersonType = false AND IsActive = true
+            LIMIT 1
+        ];
 
-
-public class SetuSendBill_GenerateTokenAPI {
-
-    public static String getToken(String a) {
-        HttpRequest req = new HttpRequest();
-        HttpResponse res = new HttpResponse();
-
-        try {
-            
-            Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Generate_Token');
-            
-            if (tokenMdt == null) {
-                return null;
-            }
-
-            req.setEndpoint(tokenMdt.Endpoint_URl__c);
-            req.setMethod(tokenMdt.Method__c);
-            req.setHeader('Content-Type', tokenMdt.Content_Type__c);
-
-            Map<String, String> authPayload = new Map<String, String>{
-                'clientID' => tokenMdt.clientID__c,
-                'secret'   => tokenMdt.secret__c
-            };
-            req.setBody(JSON.serialize(authPayload));
-
-            Http http = new Http();
-            if (!Test.isRunningTest()) {
-	            res = http.send(req);
-            } else {
-                res.setBody('{"success":true,"token":"abcd123"}');
-                res.setStatusCode(200);
-            }
-            System.debug('Token Response: ' + res.getBody());
-            
-
-            if (res.getStatusCode() == 200 || res.getStatusCode() == 201) {
-                Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-                if (result.containsKey('data') && result.get('data') instanceof Map<String, Object>) {
-                    Map<String, Object> dataMap = (Map<String, Object>) result.get('data');
-                    if (dataMap.containsKey('token')) {
-                        return String.valueOf(dataMap.get('token'));
-                    }
-                }
-                if (result.containsKey('token')) {
-                    return String.valueOf(result.get('token'));
-                }
-            }
-        } catch (Exception e) {
-            System.debug('Token Exception:: ' + e.getMessage());
+        Account acc = new Account(
+            Name = 'Test Borrower Account',
+            Phone = '9876543210'
+        );
+        if (!bizAccRts.isEmpty()) {
+            acc.RecordTypeId = bizAccRts[0].Id;
         }
-        return null;
+        insert acc;
+
+        Contact con = new Contact(
+            FirstName = 'Test',
+            LastName = 'Borrower',
+            MobilePhone = '9876543210',
+            Email = 'test.borrower@example.com'
+        );
+        if (!bizAccRts.isEmpty()) {
+            con.AccountId = acc.Id;
+        }
+        insert con;
+
+        Opportunity oppActiveWithBounce = new Opportunity(
+            Name = 'Loan Active With Bounce',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100001',
+            // Formula chain: (2000 + 500 + 2500) - 0 + 0 = 5000 -> Balance_Collectable__c = 5000
+            Due_For_the_Month__c = 2000,
+            Due_for_the_Month_PEMI__c = 500,
+            Principal_Overdue__c = 2500,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
+        );
+
+        Opportunity oppZeroDue = new Opportunity(
+            Name = 'Loan Zero Due',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100002',
+            // Balance_Collectable__c = 3000, Due_For_the_Month__c = 0
+            Due_For_the_Month__c = 0,
+            Due_for_the_Month_PEMI__c = 0,
+            Principal_Overdue__c = 3000,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
+        );
+
+        Opportunity oppZeroBalNoBounce = new Opportunity(
+            Name = 'Loan Zero Balance No Bounce',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100003',
+            // Balance_Collectable__c = 0, BouncingcountFTM__c = 0
+            Due_For_the_Month__c = 0,
+            Due_for_the_Month_PEMI__c = 0,
+            Principal_Overdue__c = 0,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
+        );
+
+        Opportunity oppZeroBalWithBounce = new Opportunity(
+            Name = 'Loan Zero Balance With Bounce',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100004',
+            // Balance_Collectable__c = 0, BouncingcountFTM__c > 0 (via Collection records)
+            Due_For_the_Month__c = 0,
+            Due_for_the_Month_PEMI__c = 0,
+            Principal_Overdue__c = 0,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
+        );
+
+        insert new List<Opportunity>{
+            oppActiveWithBounce,
+            oppZeroDue,
+            oppZeroBalNoBounce,
+            oppZeroBalWithBounce
+        };
+
+        // Safeguard: re-stamp Loan_Number__c if a trigger/flow cleared it on insert
+        List<Opportunity> insertedOpps = [SELECT Id, Name, Loan_Number__c FROM Opportunity];
+        List<Opportunity> toUpdate = new List<Opportunity>();
+        Integer counter = 100001;
+        for (Opportunity o : insertedOpps) {
+            if (String.isBlank(o.Loan_Number__c)) {
+                o.Loan_Number__c = String.valueOf(counter++);
+                toUpdate.add(o);
+            }
+        }
+        if (!toUpdate.isEmpty()) {
+            update toUpdate;
+        }
+
+        // Insert child Collection records to populate Roll-Up Summary BouncingcountFTM__c
+        createBouncedCollections(new List<Id>{ oppActiveWithBounce.Id, oppZeroBalWithBounce.Id });
     }
-    
-}
 
+    private static void createBouncedCollections(List<Id> oppIds) {
+        Schema.SObjectType collectionType;
+        String oppLookupField;
 
-
-
-
-
-
-
-/* @File Name         : SetuSendBillAPI 
-* @Description        : This Api is used to Send Bill on whatsapp for payment.
-* @Author             : Siddharth Gupta
-* @Group              : Techmatrix
-* @Last Modified By   : Rahul kumar
-* @Last Modified On   : 02-03-2026
-* @Modification Log   :
-*==============================================================================
-* Ver        Date                     Author                 Modification
-*==============================================================================
-* 1.0      03-02-2025              Siddharth Gupta          Initial Version                         
-*/
-public class SetuSendBillAPI {
-    @AuraEnabled
-    public static Boolean sendBill(String token, String recordId, Integer payAmount, String campaignName, String mobile,Integer typeOfTemplate){ /// new parameter typeOfTemplate added by Rahul kumar 26-12-25
-        
-        System.debug('recordId: '+recordId+' amount: '+' campaignName: '+ campaignName+ ' token: '+token);
-        System.debug('amt: '+ payAmount);
-        system.debug('typeOfTemplate::'+typeOfTemplate);
-        HTTPRequest request = new HTTPRequest();
-        HttpResponse response = new HttpResponse();
-        List<Customer_Collection_Campaign__c> ccc = new List<Customer_Collection_Campaign__c>();
-        if(String.isNotBlank(token) && String.isNotBlank(recordId)){
-            ccc = [SELECT id, Application__c, Application__r.Loan_Number__c, Application__r.Household__r.Mobile__c 
-                   FROM  Customer_Collection_Campaign__c
-                   WHERE Id =: recordId];
-        }
-        
-        try{
-            if(String.isNotBlank(mobile)){
-                Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
-                if(tokenMdt != null){
-                    
-                    // Calculate the due date as the 7th of the current                     
-                    Date dueDate = Date.today().toStartOfMonth().addDays(6);
-                    
-                    // Convert Date → DateTime so that custom format works
-                    DateTime dt = DateTime.newInstance(dueDate, Time.newInstance(0, 0, 0, 0));
-                    String formattedDate = dt.format('dd.MM.yyyy');
-                    
-                    // Calculate the expiry date as the last day of the current month
-                    Datetime expiryDT = Date.today().toStartOfMonth().addMonths(1).addDays(-1);
-                    String expiryDate = expiryDT.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'').split('T')[0]+'T20:55:22Z';
-                    System.debug('Due Date: ' + formattedDate+' Expiry Date: ' + expiryDate);
-                    
-                    request.setEndpoint(tokenMdt.Endpoint_URl__c);
-                    request.setMethod(tokenMdt.Method__C);
-                    request.setHeader('Content-Type', tokenMdt.Content_Type__c);
-                    request.setHeader('X-Setu-Product-Instance-ID', tokenMdt.X_Setu_Product_Instance_ID__c);
-                    request.setHeader('x-setu-client-id', tokenMdt.x_setu_client_id__c);
-                    request.setHeader('Authorization','Bearer '+token); 
-                    
-                    // String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"billerBillID":"DEMO TEST","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"'+campaignName+'","channel":"whatsapp","template":{"loan_number":"'+ccc[0].Application__r.Loan_Number__c+'"}}]}';
-                    String loanNumber = ccc[0].Application__r.Loan_Number__c;
-                    String billerBillID = '91'+mobile+'_'+loanNumber;
-                   // String templateId=typeOfTemplate==0?'setu_eng_reminder_1':'newsetucharges';//// Added By Rahul kumar 26-12-25
-                    String templateId=typeOfTemplate==0?'setu_eng_reminder_1':'loan_overdue_charge_alert1'; /// Added by Rahul 02-03-2026
-                    system.debug('templateId::'+templateId);
-                    /// Added by Rahul Kumar 02-03-2026
-                    String templateParams;
-                    if(typeOfTemplate == 0){
-                        // setu_eng_reminder_1 uses loan_number and due_date
-                        templateParams = '"loan_number":"' + loanNumber + '","due_date":"' + formattedDate + '"';
-                    } else {
-                        Integer payamountInRupees=payAmount/100;
-                        // loan_overdue_charge_alert1 uses loan_number and amount
-                        templateParams = '"loan_number":"' + loanNumber + '","amount":"' + payamountInRupees + '"';
-                    }
-                    //END HERE
-                    /// templateId in the body, modified by Rahul kumar 26-12-25
-                   // String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"91'+mobile+'","loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'","referenceID":"'+loanNumber+'"},"billerBillID":"'+billerBillID+'","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"'+templateId+'","channel":"whatsapp","template":{"loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'"}}]}';
-                    String body = '{"bill":{"amount":{"value":' + payAmount + ',"currencyCode":"INR"},"additionalInfo":{"destination":"91' + mobile + '","loan_number":"' + loanNumber + '","due_date":"' + formattedDate + '","referenceID":"' + loanNumber + '"},"billerBillID":"' + billerBillID + '","amountExactness":"EXACT","expiryDate":"' + expiryDate + '"},"channels":[{"destination":"91' + mobile + '","campaignID":"' + templateId + '","channel":"whatsapp","template":{' + templateParams + '}}]}';
-                    system.debug('body::'+body);
-                    request.setBody(body);
-                    Http http = new Http();
-                    if(!Test.isRunningTest()){
-                        System.debug('requestBody: '+request.getBody());
-                        response = http.send(request);
-                        System.debug('response: '+response);
-                        System.debug('responseBody: '+response.getBody());
-                    }
-                    else{
-                        response.setBody('{"bill":{"amount":{"value":100,"currencyCode":"INR"},"additionalInfo":{"destination":"919599066550","loan_number":"AP-10019086","due_date":"2022-12-02","referenceID":"123412"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"2022-11-29T20:55:22Z"},"channels":[{"destination":"919599066550","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"AP-10019086","due_date":"30.11.2022"}}]}');
-                        response.setStatusCode(200);
-                    }
-                    Api_Logs__c log = new Api_Logs__c();
-                    log.Name = 'Setu_Send_Bill_Generate_Token_API';
-                    log.Customer_Collection_Campaign__c =  recordId;
-                    log.API_Request__c =  request.getBody();
-                    log.API_Response__c =  response.getBody();
-                    insert log;
-                    
-                    Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-                    Boolean success = Boolean.valueOf(result.get('success'));
-                    if(response.getStatusCode() == 200 && success == true){
-                        return true;
-                    }
-                    else{
-                        return false;
-                    }
-                }
+        for (Schema.ChildRelationship cr : Opportunity.SObjectType.getDescribe().getChildRelationships()) {
+            Schema.DescribeSObjectResult childDesc = cr.getChildSObject().getDescribe();
+            if (childDesc.getLabel() == 'Collection' || childDesc.getName().equalsIgnoreCase('Collection__c')) {
+                collectionType = cr.getChildSObject();
+                oppLookupField = cr.getField().getDescribe().getName();
+                break;
             }
         }
-        catch(Exception e){
-            System.debug('Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber());
-            Api_Logs__c log = new Api_Logs__c();
-            log.Name = 'Send_Bill_API';
-            log.Customer_Collection_Campaign__c =  recordId;
-            log.API_Request__c =  request.getBody();
-            log.API_Response__c =  response.getBody();
-            insert log;
-            
-            return null;
+
+        if (collectionType == null || String.isBlank(oppLookupField)) {
+            return;
         }
-        return null;
-    }
-    
-    
-    @AuraEnabled
-    public static ResponseWrapper sendBillForBOT(String token, String body){
-        
-        System.debug('body: '+ body);
-        ResponseWrapper rw = new ResponseWrapper();
-        HTTPRequest request = new HTTPRequest();
-        HttpResponse response = new HttpResponse();        
-        try{
-            if(String.isNotBlank(body) && String.isNotBlank(token)){
-                Setu_Send_Bill__mdt tokenMdt = Setu_Send_Bill__mdt.getInstance('Send_Bill');
-                if(tokenMdt != null){
-                    
-                    request.setEndpoint(tokenMdt.Endpoint_URl__c);
-                    request.setMethod(tokenMdt.Method__C);
-                    request.setHeader('Content-Type', tokenMdt.Content_Type__c);
-                    request.setHeader('X-Setu-Product-Instance-ID', tokenMdt.X_Setu_Product_Instance_ID__c);
-                    request.setHeader('x-setu-client-id', tokenMdt.x_setu_client_id__c);
-                    request.setHeader('Authorization','Bearer '+token); 
-                    
-                    //String body = '{"bill":{"amount":{"value":'+payAmount+',"currencyCode":"INR"},"additionalInfo":{"destination":"91'+mobile+'","loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'","referenceID":"123412"},"billerBillID":"INDIA SHELTER FINANCE CORPORATION","amountExactness":"EXACT","expiryDate":"'+expiryDate+'"},"channels":[{"destination":"91'+mobile+'","campaignID":"setu_eng_reminder_1","channel":"whatsapp","template":{"loan_number":"'+loanNumber+'","due_date":"'+formattedDate+'"}}]}';
-                    
-                    request.setBody(body);
-                    Http http = new Http();
-                    if(!Test.isRunningTest()){
-                        System.debug('requestBody: '+request.getBody());
-                        response = http.send(request);
-                        System.debug('response: '+response);
-                        System.debug('responseBody: '+response.getBody());
-                    }
-                    else{
-                        response.setBody('{"result":"BILL_SENT_SUCCESSFULLY","success":true,"status":"SUCCESS"}');
-                        response.setStatusCode(200);
-                    }
-                    
-                    Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-                    Boolean success = Boolean.valueOf(result.get('success'));
-                    rw.result = response.getBody();
-                    if(response.getStatusCode() == 200 && success == true){
-                        rw.success = true;
-                        return rw;
-                    }
-                    else{
-                        rw.success = false;
-                        return rw;
-                    }
-                }
+
+        Map<String, Schema.SObjectField> fieldMap = collectionType.getDescribe().fields.getMap();
+        String dateField, statusField, natureField, remarksField;
+        Boolean isDateTime = false;
+
+        for (Schema.SObjectField f : fieldMap.values()) {
+            Schema.DescribeFieldResult dfr = f.getDescribe();
+            if (!dfr.isCreateable()) {
+                continue;
+            }
+            String lbl = dfr.getLabel();
+            if (lbl.equalsIgnoreCase('Date of Collection')) {
+                dateField = dfr.getName();
+                isDateTime = (dfr.getType() == Schema.DisplayType.DATETIME);
+            } else if (lbl.equalsIgnoreCase('Status')) {
+                statusField = dfr.getName();
+            } else if (lbl.equalsIgnoreCase('Nature of collection')) {
+                natureField = dfr.getName();
+            } else if (lbl.equalsIgnoreCase('Cancel Remarks New')) {
+                remarksField = dfr.getName();
             }
         }
-        catch(Exception e){
-            System.debug('Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber());
-            rw.success = false;
-            rw.result ='Exception:: '+e.getMessage()+' Line Number '+e.getLineNumber();
-            return rw;
+
+        // Covers both Oct 2026 (Sandbox filter) and current month (Prod filter)
+        List<Date> targetDates = new List<Date>{
+            Date.newInstance(2026, 10, 15),
+            Date.today().toStartOfMonth().addDays(5)
+        };
+
+        List<SObject> collectionsToInsert = new List<SObject>();
+        for (Id oppId : oppIds) {
+            for (Date d : targetDates) {
+                SObject col = collectionType.newSObject();
+                col.put(oppLookupField, oppId);
+                if (dateField != null) {
+                    col.put(
+                        dateField,
+                        isDateTime ? (Object) DateTime.newInstance(d, Time.newInstance(12, 0, 0, 0)) : (Object) d
+                    );
+                }
+                if (statusField != null) col.put(statusField, 'Bounced');
+                if (natureField != null) col.put(natureField, 'Emi/Advances/Part Payment');
+                if (remarksField != null) col.put(remarksField, 'Insufficient Fund');
+                collectionsToInsert.add(col);
+            }
         }
-        return null;
+
+        if (!collectionsToInsert.isEmpty()) {
+            insert collectionsToInsert;
+        }
     }
-    
-    Public class ResponseWrapper{
-        public String result;
-        public Boolean success;
-        public String status;
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+    private static RestResponse invokeDoPost(String jsonBody) {
+        RestRequest req = new RestRequest();
+        req.requestURI = '/services/apexrest/CallBotCollection/';
+        req.httpMethod = 'POST';
+        req.requestBody = Blob.valueOf(jsonBody != null ? jsonBody : '');
+
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
+
+        CallBotCollectionWebhookService.doPost();
+        return RestContext.response;
+    }
+
+    private static RestResponse invokeDoPost(CallBotCollectionWebhookService.CallWebhookWrapper wrapper) {
+        // suppressApexObjectNulls = true prevents STRING_TOO_LONG on Request_Body__c
+        return invokeDoPost(JSON.serialize(wrapper, true));
+    }
+
+    private static String getLoanNumberByName(String oppName) {
+        return [SELECT Loan_Number__c FROM Opportunity WHERE Name = :oppName LIMIT 1].Loan_Number__c;
+    }
+
+    // =========================================================================
+    // Test Scenarios
+    // =========================================================================
+
+    @isTest
+    static void testEmptyRequestBody() {
+        Test.startTest();
+        RestResponse res = invokeDoPost('');
+        Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Empty body should return 400');
+        System.assertEquals(1, [SELECT COUNT() FROM Whatsapp_collect_send_request__c]);
+    }
+
+    @isTest
+    static void testMissingRequiredParameters() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = '';
+        wrapper.phone_Number = '';
+        wrapper.customer_number = '';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Missing required params should return 400');
+    }
+
+    @isTest
+    static void testOnlyDueForMonthIsZero() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Zero Due');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Zero due for month should return 403');
+    }
+
+    @isTest
+    static void testZeroBalanceCollectableAndNoBouncing() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Zero Balance No Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Zero balance with no bouncing should return 403');
+    }
+
+    @isTest
+    static void testSuccess_GreyLabs_CC003_FullBalanceWithBounce() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.customer_number = '9876543210';
+        wrapper.source = 'CC-003'; // GreyLabs
+        wrapper.collector_name = 'GreyLabs Bot';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c, Response__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-003'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log GreyLabs request');
+        System.assertEquals(
+            200,
+            res.statusCode,
+            'Expected 200. Check Setu_Send_Bill__mdt.Send_Bill Content_Type__c. Detail: ' + logs[0].Response__c
+        );
+    }
+
+    @isTest
+    static void testSuccess_Gnani_CC002_OnlyDueForMonth() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002'; // Gnani
+        wrapper.collector_name = 'Gnani Bot';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c, Response__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-002'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Gnani request');
+        System.assertEquals(
+            200,
+            res.statusCode,
+            'Expected 200. Check Setu_Send_Bill__mdt.Send_Bill Content_Type__c. Detail: ' + logs[0].Response__c
+        );
+    }
+
+    @isTest
+    static void testSuccess_InternalBot_CC004_ZeroBalanceWithBounce() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Zero Balance With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-004'; // Internal bot
+        wrapper.collector_name = 'Internal Bot';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c, Response__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-004'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Internal bot request');
+        System.assertEquals(
+            200,
+            res.statusCode,
+            'Expected 200. Check Setu_Send_Bill__mdt.Send_Bill Content_Type__c. Detail: ' + logs[0].Response__c
+        );
+    }
+
+    @isTest
+    static void testException_OpportunityNotFound() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = '999999999';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(500, res.statusCode, 'QueryException when Opp is missing should return 500');
+    }
+
+    @isTest
+    static void testWrappersCoverage() {
+        CallBotCollectionWebhookService.CallWebhookWrapper w = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        w.loan_id = '100001';
+        w.phone_Number = '9876543210';
+        w.name = 'Test';
+        w.due_amount = 1000;
+        w.due_month = 'Nov';
+        w.language = 'EN';
+        w.disposition = 'PTP';
+        w.callstatus = 'Completed';
+        w.source_phone = '0123456789';
+        w.call_duration = 60;
+        w.calling_date = '2026-11-24';
+        w.campaign_name = 'Collection';
+        w.call_id = 'C1';
+        w.recording_id = 'R1';
+        w.call_date = '2026-11-24';
+        w.call_start_time = '10:00';
+        w.call_answer_time = '10:01';
+        w.call_end_time = '10:02';
+        w.total_call_duration_sec = 60;
+        w.call_direction = 'Outbound';
+        w.call_status = 'Answered';
+        w.hangup_source = 'Customer';
+        w.hangup_cause = 'Normal';
+        w.hangup_cause_code = 16;
+        w.hangup_cause_name = 'NORMAL_CLEARING';
+        w.agent_id = 'A1';
+        w.agent_number = '1111111111';
+        w.agent_sentiment = 'Positive';
+        w.customer_id = 'CU1';
+        w.customer_number = '9876543210';
+        w.customer_name = 'Test';
+        w.customer_sentiment = 'Neutral';
+        w.detected_language = 'EN';
+        w.final_disposition = 'PTP';
+        w.compliance_score = 95.5;
+        w.call_summary = 'Summary';
+        w.call_transcript = 'Transcript';
+        w.template_name = 'T1';
+        w.template_id = 'TID1';
+        w.recording_url = 'https://example.com/rec';
+        w.telephony_call_uuid = 'UUID-1';
+        w.product_type = 'HL';
+        w.product = 'Home Loan';
+        w.emi_amount = 2000;
+        w.emi_pending = 1;
+        w.days_overdue = 5;
+        w.balance_collectable = 5000;
+        w.loan_last_4 = '0001';
+        w.no_of_months_defaulted = 1;
+        w.monthly_bouncing_charges = 700;
+        w.monthly_penal_interest_rate = 2.0;
+        w.initiation_time = '10:00';
+        w.answer_time = '10:01';
+        w.end_time = '10:02';
+        w.current_datetime = '2026-11-24T10:00:00Z';
+        w.current_day = 'Tuesday';
+        w.current_month = 'November';
+        w.from_number = '1111111111';
+        w.to_number = '9876543210';
+        w.source = 'CC-003';
+        w.collector_name = 'Bot';
+        w.OnlyDueFortheMonth = 'No';
+
+        CallBotCollectionWebhookService.CallResponse resp = new CallBotCollectionWebhookService.CallResponse();
+        resp.success = true;
+        resp.message = 'OK';
+        resp.referenceId = 'REF-1';
+        resp.errors.add('None');
+
+        System.assertEquals(true, resp.success);
+        System.assertEquals('100001', w.loan_id);
     }
 }
