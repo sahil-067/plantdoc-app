@@ -1,334 +1,373 @@
-@isTest
-public class AttendanceCalculatorTest {
-
     @testSetup
-    static void setupTestData() {
-        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
-        String uniqueSuffix = String.valueOf(System.currentTimeMillis());
-
-        // 1. Insert Users first without Branch__c (Setup Object)
-        User hoUser = createTestUser('HO', 'User', 'ho' + uniqueSuffix + '@test.com', p.Id, 'EMP_HO');
-        User ncmUser = createTestUser('NCM', 'User', 'ncm' + uniqueSuffix + '@test.com', p.Id, 'EMP_NCM');
-        User zcmUser = createTestUser('ZCM', 'User', 'zcm' + uniqueSuffix + '@test.com', p.Id, 'EMP_ZCM');
-        User rcmUser = createTestUser('RCM', 'User', 'rcm' + uniqueSuffix + '@test.com', p.Id, 'EMP_RCM');
-        User acmUser = createTestUser('ACM', 'User', 'acm' + uniqueSuffix + '@test.com', p.Id, 'EMP_ACM');
-        User noBranchUser = createTestUser('None', 'User', 'none' + uniqueSuffix + '@test.com', p.Id, 'EMP_NONE');
-
-        insert new List<User>{ hoUser, ncmUser, zcmUser, rcmUser, acmUser, noBranchUser };
-
-        Branch__c hoBranch;
-        Branch__c br1;
-
-        // 2. Insert non-setup objects inside System.runAs to avoid MIXED_DML_OPERATION
-        System.runAs(hoUser) {
-            Id accRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByName().get('ISFCL - Employee').getRecordTypeId();
-            Id attRecordTypeId = Schema.SObjectType.Attendance__c.getRecordTypeInfosByName().get('iCollect').getRecordTypeId();
-
-            hoBranch = new Branch__c(
-                Name = 'Headoffice',
-                Branch_State__c = 'Delhi',
-                Branch_City__c = 'New Delhi'
-            );
-
-            br1 = new Branch__c(
-                Name = 'Test Branch 1',
-                Branch_State__c = 'Haryana',
-                Branch_City__c = 'Gurugram',
-                National_Collection_Manager__c = ncmUser.Id,
-                Zonal_Collection_Manager__c = zcmUser.Id,
-                Branch_Regional_Collection__c = rcmUser.Id,
-                Branch_Area_Collection__c = acmUser.Id
-            );
-
-            Branch__c br2 = new Branch__c(
-                Name = 'Test Branch 2',
-                Branch_State__c = 'Haryana',
-                Branch_City__c = 'Rohtak',
-                National_Collection_Manager__c = ncmUser.Id,
-                Zonal_Collection_Manager__c = zcmUser.Id,
-                Branch_Regional_Collection__c = rcmUser.Id,
-                Branch_Area_Collection__c = acmUser.Id
-            );
-            insert new List<Branch__c>{ hoBranch, br1, br2 };
-
-            // Create Person Accounts for BCMs and COs on both branches
-            Account bcm1 = new Account(
-                RecordTypeId = accRecordTypeId,
-                FirstName = 'BCM',
-                LastName = 'One',
-                Branch__c = br1.Id,
-                Empl_Code__pc = 'EMP_BCM1',
-                Designation__pc = 'BCM',
-                Mobile__pc = '9876543210'
-            );
-            Account bcm2 = new Account(
-                RecordTypeId = accRecordTypeId,
-                FirstName = 'BCM',
-                LastName = 'Two',
-                Branch__c = br2.Id,
-                Empl_Code__pc = 'EMP_BCM2',
-                Designation__pc = 'BCM',
-                Mobile__pc = '9876543211'
-            );
-            Account co1 = new Account(
-                RecordTypeId = accRecordTypeId,
-                FirstName = 'CO',
-                LastName = 'One',
-                Branch__c = br1.Id,
-                Empl_Code__pc = 'EMP_CO1',
-                Designation__pc = 'C.O',
-                Mobile__pc = '9876543212'
-            );
-            Account co2 = new Account(
-                RecordTypeId = accRecordTypeId,
-                FirstName = 'CO',
-                LastName = 'Two',
-                Branch__c = br2.Id,
-                Empl_Code__pc = 'EMP_CO2',
-                Designation__pc = 'CO',
-                Mobile__pc = '9876543213'
-            );
-            insert new List<Account>{ bcm1, bcm2, co1, co2 };
-
-            Map<Id, Account> insertedAccMap = new Map<Id, Account>([
-                SELECT Id, PersonContactId FROM Account WHERE Id IN :new List<Id>{ bcm1.Id, bcm2.Id }
-            ]);
-
-            br1.Collection_Manager__c = insertedAccMap.get(bcm1.Id).PersonContactId;
-            br2.Collection_Manager__c = insertedAccMap.get(bcm2.Id).PersonContactId;
-            update new List<Branch__c>{ br1, br2 };
-
-            // Attendance records: active (< 45 mins) and inactive (>= 45 mins)
-            DateTime recentTime = DateTime.now().addMinutes(-10);
-            DateTime oldTime = DateTime.now().addMinutes(-60);
-
-            insert new List<Attendance__c>{
-                new Attendance__c(
-                    RecordTypeId = attRecordTypeId,
-                    Account__c = bcm1.Id,
-                    Date__c = recentTime,
-                    Active__c = true
-                ),
-                new Attendance__c(
-                    RecordTypeId = attRecordTypeId,
-                    Account__c = co1.Id,
-                    Date__c = oldTime,
-                    Active__c = true
-                ),
-                new Attendance__c(
-                    RecordTypeId = attRecordTypeId,
-                    Account__c = bcm2.Id,
-                    Date__c = recentTime,
-                    Active__c = true
-                ),
-                new Attendance__c(
-                    RecordTypeId = attRecordTypeId,
-                    Account__c = co2.Id,
-                    Date__c = oldTime,
-                    Active__c = false
-                )
-            };
-
-            insert new List<Opportunity>{
-                new Opportunity(
-                    Name = 'Test Opp 1',
-                    StageName = 'Prospecting',
-                    CloseDate = Date.today().addDays(30),
-                    Legal_Action_Person__c = 'EMP_BCM1'
-                ),
-                new Opportunity(
-                    Name = 'Test Opp 2',
-                    StageName = 'Prospecting',
-                    CloseDate = Date.today().addDays(30),
-                    Legal_Action_Person__c = 'EMP_NCM'
-                )
-            };
-        }
-
-        // 3. Update User.Branch__c lookup IDs in a separate runAs context to prevent MIXED_DML_OPERATION
-        System.runAs(new User(Id = UserInfo.getUserId())) {
-            hoUser.Branch__c = hoBranch.Id;
-            ncmUser.Branch__c = br1.Id;
-            zcmUser.Branch__c = br1.Id;
-            rcmUser.Branch__c = br1.Id;
-            acmUser.Branch__c = br1.Id;
-            noBranchUser.Branch__c = br1.Id;
-            update new List<User>{ hoUser, ncmUser, zcmUser, rcmUser, acmUser, noBranchUser };
-        }
-    }
-
-    private static User createTestUser(String fName, String lName, String email, Id profileId, String empNum) {
-        return new User(
-            FirstName = fName,
-            LastName = lName,
-            Email = email,
-            Username = email,
-            Alias = (fName.substring(0, 1) + lName.substring(0, 3)).toLowerCase(),
-            TimeZoneSidKey = 'Asia/Kolkata',
+    public static void testsetup(){
+        
+        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
+        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
+        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
+            
+        Customer__c cus = new Customer__c(Name = 'Rahul');
+        cus.Query_Raised_count__c=17;
+        cus.Hindsight_Approval__c='Pending';
+        cus.Credit_Hindsight_Approval__c='Approved';
+        cus.Property_Paper_Storage_Date__c=System.today();
+        insert cus;
+        Bank_Account_Detail__c badc = new Bank_Account_Detail__c();
+        badc.Bank_name__c='HDFC';
+        badc.Disbursement_in_this_Account__c='Yes';
+        badc.Household__c = cus.Id;
+        badc.Bank_Account_Number__c = '12345678';
+        badc.IFSC_Code__c = 'ABC123456';
+        badc.Percentage__c='91';
+        badc.Is_PennyDrop_Done__c=true;
+        badc.Name_of_Account_Holder__c = 'John Doe';
+        badc.PennyDrop_Status_Code__c='NP001';
+        insert badc;
+        
+        Account ac = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
+                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
+        ac.Is_Screenza_Done__c=true;
+        ac.Pan_Verified__c=true;
+        ac.Sex__pc='Male';
+        ac.Salutation='Mr.';
+        insert ac;
+        
+        Id kycRecId=Schema.SObjectType.KYC_Log__c.getRecordTypeInfosByName().get('Faceliveness').getRecordTypeId();
+        KYC_Log__c kyc=new KYC_Log__c();
+        kyc.Applicant__c=ac.id;
+        kyc.RecordTypeId=kycRecId;
+        kyc.Face_Match__c='yes';
+        kyc.Liveliness__c='yes';
+        insert kyc;
+        
+        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
+        insert cf;
+        
+        NucleusStateCity__c nsc = new NucleusStateCity__c(ZIP_CODE__c = 124001);
+        insert nsc;
+        
+        Loan_Product__c lp=new Loan_Product__c();
+        lp.PF_Rate_1__c=5.0;
+        lp.Status__c='Active';
+        insert lp;
+        
+        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
+                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
+                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
+                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
+                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
+                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
+                                  Pin_Code__c=12345);
+        insert con;
+        Profile p = [SELECT Id FROM Profile WHERE Name='System Administrator']; 
+        User testUser = new User(
+            FirstName = 'Test',
+            LastName = 'User',
+            Email = 'testuser@example.com',
+            Username = 'testuser' + DateTime.now().getTime() + '@testorg.com',
+            Alias = 'tuser',
+            TimeZoneSidKey = 'America/Los_Angeles',
             LocaleSidKey = 'en_US',
             EmailEncodingKey = 'UTF-8',
-            LanguageLocaleKey = 'en_US',
-            ProfileId = profileId,
-            EmployeeNumber = empNum,
-            MobilePhone = '9999999999'
+            ProfileId = p.Id,
+            LanguageLocaleKey = 'en_US'
         );
-    }
-
-    private static User getUserByEmpNum(String empNum) {
-        return [SELECT Id, Name, EmployeeNumber, MobilePhone, Branch__c FROM User WHERE EmployeeNumber = :empNum LIMIT 1];
-    }
-
-    @isTest
-    static void testUtil1_AsNCM_AllFilters() {
-        User ncmUser = getUserByEmpNum('EMP_NCM');
-        DateTime startDt = DateTime.now().addHours(-2);
-        DateTime endDt = DateTime.now().addHours(1);
-
-        Test.startTest();
-        System.runAs(ncmUser) {
-            // Both startDate & endDate, status = null, with state & selectedTimeFilter
-            String res1 = AttendanceCalculator.Util_1('Haryana', null, startDt, endDt, 120);
-            System.assertNotEquals(null, res1, 'NCM response should not be null');
-
-            // Only startDate, status = true
-            String res2 = AttendanceCalculator.Util_1('Haryana', true, startDt, null, null);
-            System.assertNotEquals(null, res2);
-
-            // Only endDate, status = false
-            String res3 = AttendanceCalculator.Util_1(null, false, null, endDt, null);
-            System.assertNotEquals(null, res3);
+        testUser.EmployeeNumber='ISFC12121';
+        insert testUser;
+        System.runAs(testUser) {
+            String employeeCode = [Select Id, EmployeeNumber from User where Id =: UserInfo.getUserId()].EmployeeNumber;
+            String profileName = [SELECT Id, Name FROM Profile WHERE Id = :UserInfo.getProfileId()].Name;
         }
-        Test.stopTest();
-    }
+        
+        Branch__c branch = new Branch__c();
+        branch.Name = 'Jaipur-1';
+        branch.Branch_Category__c = 'B';
+        branch.Critical_Insurance_Company__c='ICICI Lombard CI';
+        branch.Insurance_Company__c='ICICI';
+        branch.Property_Insurance_Company__c='ICICI Lombard';
+        insert branch;
+        
+        Opportunity op = new Opportunity(CloseDate=System.today(), Name='Rahul',
+                                         PennyDrop_Status__c='Success', AccountId=ac.Id,
+                                         HLA_Sign_Date__c=Date.newInstance(2024,11,01),
+                                         Collateral_Pin_Code_New__c=nsc.Id,
+                                         Address_Pin_Code_New__c=nsc.Id,
+                                         Household__c=cus.Id, Sanctioned_Amont__c=300000, 
+                                         Loan_Product__c=lp.Id,
+                                         LM_Loan_Status__c='Sanctioned');
+        op.Loan_Number__c='6983162387';
+        op.Branch__c=branch.Id;
+        op.First_Sanction_Date__c=system.today();
+        op.Loan_Product_Type__c='HL';
+        op.Purpose_of_taking_the_loan__c='HOME EXTENSION';
+        op.Loan_Amount_Required__c=1500001;
+        op.DE_Done_By__c='By-Pass Ten Thousand Validation';
+        op.ACH_Registration_Status__c='Registered';
+        op.FCU_Status__c='Cleared';
+        op.Finnone_Loan_Id__c='FN1234';
 
-    @isTest
-    static void testUtil1_AsHO() {
-        User hoUser = getUserByEmpNum('EMP_HO');
-
+        insert op;
+        
+        NEILON__File__c nc=new NEILON__File__c();
+        nc.Subcategory__c='Signed Home Loan Agreement';
+        nc.Name='zaxdjfh';
+        nc.NEILON__Opportunity__c=op.Id;
+        insert nc;  
+        
+        Monthly_Collectable_Charge__c mc =new Monthly_Collectable_Charge__c();
+        mc.Visiting_Charges__c=766;
+        mc.Application__c=op.Id;
+        insert mc;
+        
+        CAM__c camObj = new CAM__c();
+        camObj.Branch_Name__c = 'Jaipur';
+        camObj.Name_of_Main_Applicant__c = 'Rohit Test 3';
+        camObj.Loan_Application__c = op.Id;
+        camObj.Branch_Manager_Name__c = 'Gaurav';
+        camObj.NHB_PURPOSE_OF_LOAN__c='New Construction (Other than P+C)';
+        camObj.Land_Area__c = 22;
+        camObj.Build_Up_Area__c = 44;
+        camObj.Final_Decision__c = 'Pending';
+        camObj.Property_Type__c='Commercial Building';
+        camObj.NHB_Categories__c='Construction/purchase of new units';
+        camObj.HLAmt__c=1200;
+        camObj.Base_ROI_Generated__c=true;
+        camObj.Score_Generated__c=true;
+        insert camObj;
+        camObj.Final_Decision__c = 'Approved';
+        camObj.BRE_Rule_Approved__c=true;
+        camObj.BRE__c=true;
+        camObj.Loan_Product__c=lp.id;
+        camObj.Purpose_of_Loan__c='Construction Loan';
+        
+        Post_Sanction_Pre_Disbursement_Changes__c pspdcRecord = new Post_Sanction_Pre_Disbursement_Changes__c(LTV__c=80, CAM__c=camObj.Id);
+        insert pspdcRecord;
+        
+        Insurance_Generation_Data__c life = new Insurance_Generation_Data__c();
+        life.Life_Insurance_Company_Name__c='ICICI';
+        life.Life_Insurance_Tenure__c=10;
+        life.Life_Insurance_Premium_2__c=1000;
+        life.Accidental_Death_Insurance_Premium__c=1000;
+        life.Property_Insurance_Premium__c=1000;
+        life.Property_Insurance_Required__c='Yes';
+        life.Property_Insurance_Company_Name__c='ICICI Lombard';
+        life.Critical_illness_Required__c='Yes';
+        life.Critical_Insurance_Company_Name__c='ICICI Lombard CI';
+        life.Health_Insurance_Required__c='Yes';
+        life.Application__c=op.id;
+        life.Life_Insurance__c='Yes';
+        life.Contact__c=con.Id;
+        life.Nominee_Name__c='jatin';
+        insert life;
         Test.startTest();
-        System.runAs(hoUser) {
-            // Note: Returns null unless AttendanceCalculator checks hoUser.Branch__r.Name == 'Headoffice'
-            AttendanceCalculator.Util_1('Haryana', null, null, null, null);
-        }
-        Test.stopTest();
-    }
+        Collection__c collec = new Collection__c(Amount__c=6000, Collector__c=con.Id,
+                                                 Date_of_Deposit__c=System.today(),
+                                                 SFDC_Customer__c=op.Id, Deposited_In_bank__c=true,
+                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
+                                                 Status__c='Active', RMobile_No__c='1234567891',
+                                                 Branch_Name__c='testBranch',
+                                                 Nature_of_Collection__c='Other Administrative Charges');
+        insert collec;
+        cus.LoanAppID__c=op.Id;
+        update cus;
+        
+        Id rctype = Schema.SObjectType.Pay_Slip__c.getRecordTypeInfosByName().get('Online payment').getRecordTypeId();
+        
+        Document_Checklist__c docChecklist = new Document_Checklist__c(Date_of_Disbursement__c=System.now(),
+                                                                       Application__c=op.Id,
+                                                                       Physical_file_status__c='Approved',
+                                                                       Scan_image_status__c='Rejected');
+        insert docChecklist;
+        
+        Document_Checklist_History__c docHistoryPurchase = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Purchase');
+        insert docHistoryPurchase;
+        Check_List_History_Line_Item__c lineItemPurchase = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistoryPurchase.Id,
+                                                                                               CPU_RPU_Comments__c='Not Applicable',
+                                                                                               Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
+        insert lineItemPurchase;
 
-    @isTest
-    static void testUtil1_AsZCM() {
-        User zcmUser = getUserByEmpNum('EMP_ZCM');
+        Document_Checklist_History__c docHistory = new Document_Checklist_History__c(Document_Checklist__c=docChecklist.Id,Type_Of_Case__c='Top-UP');
+        insert docHistory;
 
-        Test.startTest();
-        System.runAs(zcmUser) {
-            String res = AttendanceCalculator.Util_1('Haryana', true, null, null, null);
-            System.assertNotEquals(null, res, 'ZCM response should not be null');
-        }
-        Test.stopTest();
-    }
-
-    @isTest
-    static void testUtil1_AsRCM() {
-        User rcmUser = getUserByEmpNum('EMP_RCM');
-
-        Test.startTest();
-        System.runAs(rcmUser) {
-            String res = AttendanceCalculator.Util_1('Haryana', false, null, null, null);
-            System.assertNotEquals(null, res, 'RCM response should not be null');
-        }
-        Test.stopTest();
-    }
-
-    @isTest
-    static void testUtil1_AsACM() {
-        User acmUser = getUserByEmpNum('EMP_ACM');
-
-        Test.startTest();
-        System.runAs(acmUser) {
-            String res = AttendanceCalculator.Util_1('Haryana', null, null, null, null);
-            System.assertNotEquals(null, res, 'ACM response should not be null');
-        }
-        Test.stopTest();
-    }
-
-    @isTest
-    static void testUtil1_NoBranchesFound() {
-        User noBranchUser = getUserByEmpNum('EMP_NONE');
-
-        Test.startTest();
-        System.runAs(noBranchUser) {
-            String res = AttendanceCalculator.Util_1('NonExistentState', null, null, null, null);
-            System.assertEquals(null, res, 'Should return null when no branches match');
-        }
-        Test.stopTest();
-    }
-
-    @isTest
-    static void testGetNCMDetailsAndHOWrapper() {
-        User ncmUser = getUserByEmpNum('EMP_NCM');
-        Map<String, User> userMap = new Map<String, User>{ ncmUser.EmployeeNumber => ncmUser };
-
-        Test.startTest();
-        List<AttendanceCalculator.NCMWrapper> ncmList = AttendanceCalculator.getNCMDetails(
-            userMap,
-            new List<String>{ ncmUser.EmployeeNumber }
+        Check_List_History_Line_Item__c lineItem = new Check_List_History_Line_Item__c(Document_Checklist_History__c=docHistory.Id,
+                                                                                        CPU_RPU_Comments__c='2nd Tranche',
+                                                                                        Dependency__c='Internal',EBS_Document_Enclosed_Physical_File__c='Yes',EBS_Scan_Image_Uploaded_in_Salesforce__c='Yes');
+        insert lineItem;
+        
+        Bank_Detail__c bank=new Bank_Detail__c();
+        bank.Name='abcd';
+        bank.IFSC__c='ABCD12345678';
+        insert bank;
+        
+        Vendor_Rate__c vr=new Vendor_Rate__c();
+        vr.Work_Name__c='Pre - Sanction Technical Report';
+        vr.Vendor_Name__c=con.Id;
+        insert vr; 
+        
+        vr.Work_Name__c='Pre - Sanction Technical Report';
+        update vr;
+        
+        Cibil__c ci=new Cibil__c();
+        ci.Application__c=op.Id;
+        insert ci; 
+        
+        OpportunityContactRole opc=new  OpportunityContactRole();
+        opc.OpportunityId=op.id;
+        opc.ContactId=con.id;
+        insert opc;
+        
+        Customer_App_Login_Log__c cal=new Customer_App_Login_Log__c();
+        cal.Customer__c=cus.id;
+        cal.Auth_code__c='dfghjhgfdsdfghjkjhgfdfgggggggggggggggggggggggggggggggggggggggggg';
+        insert cal;
+        
+        Property_Master__c pr=new Property_Master__c();
+        pr.Customer__c=cus.id;
+        pr.Legal_Status__c='Legal Approved';
+        insert pr;
+        
+        Case cs=new Case();
+        cs.Application_Name__c=op.id;
+        cs.Status='Closed';
+        cs.Request__c='Property Papers Verification';
+        cs.Reason='Complete Document Received';
+        insert cs;
+        
+        Id RecordTypeIdContact = Schema.SObjectType.Technical_Verification__c.getRecordTypeInfosByName().get('Pre-Sanction').getRecordTypeId();
+        
+        Technical_Verification__c techVerification = new Technical_Verification__c(
+            Percent_completion_as_on_date__c=80,
+            Status__c='Approved',
+            Occupancy__c=88,
+            Report_Type__c='Pre - Sanction Technical Report',
+            Radial_High_Count__c=89,
+            Application__c=op.Id,
+            Construction_FF_Area__c=100,
+            Construction_FF_Value__c=1000,
+            Approval_Date__c=System.today(),
+            Area_Proposed_Construction__c=100,
+            Value_per_unit_propsed_construction__c=100,
+            Area_Existing_Construction__c=44,
+            Value_per_unit_existing_construction__c=100,
+            Area__c=100,
+            Length_Land_Measurement__c=100,
+            Breadth_Land_Measurement__c=100,
+            Value_per_unit_land_Vaue__c=100,
+            Disbursal_Recommendation_Status__c='Positive'
         );
-        AttendanceCalculator.HOWrapper hoWrap = new AttendanceCalculator.HOWrapper();
-        hoWrap.name = 'HO Test';
-        hoWrap.children = ncmList;
-        Test.stopTest();
-
-        System.assertEquals(1, ncmList.size());
-        System.assertEquals('EMP_NCM', ncmList[0].employeeId);
+        techVerification.Basement_LGF__c=1233;
+        techVerification.RecordTypeId=RecordTypeIdContact;
+        techVerification.Self_Occupied_by_Owner__c='Seller';
+        techVerification.Re_initiate__c=true;
+        techVerification.CAM_Number__c=camObj.Id;
+        techVerification.Construction_as_per_approved_plans__c='No Caution area';
+        insert techVerification;
+        
+        camObj.TV_considered__c=techVerification.Id;
+        
+        Id RecordTypeIdContact2 = Schema.SObjectType.Vendor_Request__c.getRecordTypeInfosByName().get('Legal').getRecordTypeId();
+        
+        Vendor_Request__c vendorReq = new Vendor_Request__c(Date_First_Submitted__c=System.today(),
+                                                            Application__c=op.Id, Request_Type__c='Technical',
+                                                            Report_Type__c ='Pre - Sanction Technical Report',
+                                                            Prior_Disbursement__c=454,
+                                                            Is_Submitted_through_Legal__c=True,
+                                                            Date_Recevied__c=System.today());
+        vendorReq.RecordTypeId=RecordTypeIdContact2;
+        insert vendorReq;
+        
+        techVerification.Vendor_Request__c=vendorReq.Id;
+        
+        Manual_Bureau__c mb=new Manual_Bureau__c();
+        mb.Customer__c=cus.Id;
+        mb.Report_Required_for__c='Seller';
+        mb.Status__c='Request Generated';
+        mb.Seller_Cersai__c='Matched - Not BT';
+        mb.Any_active_property_loan_in_seller_CIBIL__c='No';
+        mb.Is_seller_having_any_defaults__c='No';
+        mb.Account_opening_date__c=Date.today().addYears(-2);
+        mb.Date_of_Seller_Meeting__c=System.today();
+        mb.Seller_Meeting_Done_by__c='Agent';
+        mb.Current_Property_possession_with__c='Seller';   
+        mb.Any_relation_between_seller_buyer__c='No';
+        mb.Is_OCR_Received__c='Yes';
+        mb.Original_Chain_documents_seen_at_meeting__c='Yes';
+        mb.Tentative_Date_of_Registration__c=System.today();
+        insert mb;
+        
+        List<Deviation__c> devBatch = new List<Deviation__c>();
+        List<String> waivers = new List<String>{
+            'Seller CIBIL - Active loan proof Validation','Seller Account recently Opened',
+            'Seller Visit / Meeting deviation','Cersai Search OTC',
+            'Legal and vetting report - Legal/Vetting OTC Approval','OTC Approval - BT/Purchase cases',
+            'OTC Approval - Fresh Cases','Technical Charges Deviation','Screenzaa hit check approval',
+            'Crime check negative match','iServe App Deviation','faceliveness','Udyam Verification Deviation',
+            'RCU HOLD OTC','Scan based approval','DM Check - PF Received','RCU Initiated – OTC Approval',
+            'Seller cersai search output deviation','Tech - RNR 15 Days Norms',
+            'NOI / Lien / EC -SRO / MODT / Khata-OTC','NOI / Lien / EC -SRO / MODT / Khata PDD-Fully Disburse'
+        };
+        Map<String,String> waiverApprover = new Map<String,String>{
+            'Seller CIBIL - Active loan proof Validation' => 'Amit Gupta',
+            'Seller Account recently Opened' => 'Amit Gupta',
+            'Seller Visit / Meeting deviation' => 'Amit Gupta',
+            'Cersai Search OTC' => 'Savan Chauhan',
+            'Legal and vetting report - Legal/Vetting OTC Approval' => 'Savan Chauhan',
+            'OTC Approval - BT/Purchase cases' => 'Amit Gupta',
+            'OTC Approval - Fresh Cases' => 'Amit Gupta',
+            'Technical Charges Deviation' => 'Savan Chauhan',
+            'Screenzaa hit check approval' => 'Anshul Gupta',
+            'Crime check negative match' => 'Sachin Behl',
+            'iServe App Deviation' => 'Jiten Malik',
+            'faceliveness' => 'Manu Soni',
+            'Udyam Verification Deviation' => 'Savan Chauhan',
+            'RCU HOLD OTC' => 'Anshul Gupta',
+            'Scan based approval' => 'Jiten Malik',
+            'DM Check - PF Received' => 'Murshid alam',
+            'RCU Initiated – OTC Approval' => 'Amit Gupta',
+            'Seller cersai search output deviation' => 'Sachin Behl',
+            'Tech - RNR 15 Days Norms' => 'Pankaj Khurana',
+            'NOI / Lien / EC -SRO / MODT / Khata-OTC' => 'Nitin Goel',
+            'NOI / Lien / EC -SRO / MODT / Khata PDD-Fully Disburse' => 'Amit Gupta'
+        };
+        for(String w:waivers){
+            Deviation__c d=new Deviation__c();
+            d.Reason_For_Waiver__c='test';
+            d.Type_of_Waiver__c='OTC';
+            d.Opportunity__c=op.Id;
+            d.Approval_Status__c='Pending';
+            d.Approved_By__c=testUser.Id;
+            d.OTC_Submission_Date__c=Date.newinstance(2026,10,10);
+            d.Waiver__c=w;
+            d.Person_who_can_Approve__c=waiverApprover.get(w);
+            d.Deviation_Approved__c=system.now();
+            devBatch.add(d);
+        }
+        Deviation__c referral = new Deviation__c();
+        referral.Reason_For_Waiver__c='test';
+        referral.Type_of_Waiver__c='Waiver';
+        referral.Opportunity__c=op.Id;
+        referral.Approval_Status__c='Pending';
+        referral.Approved_By__c=testUser.Id;
+        referral.OTC_Submission_Date__c=Date.newinstance(2026,10,10);
+        referral.Waiver__c='Referral Deviation';
+        referral.Person_who_can_Approve__c='Nitin Goel';
+        referral.Deviation_Approved__c=system.now();
+        devBatch.add(referral);
+        Deviation__c searchFeeDev = new Deviation__c();
+        searchFeeDev.Reason_For_Waiver__c='test';
+        searchFeeDev.Type_of_Waiver__c='OTC';
+        searchFeeDev.Opportunity__c=op.Id;
+        searchFeeDev.Approval_Status__c='Pending';
+        searchFeeDev.Approved_By__c=testUser.Id;
+        searchFeeDev.OTC_Submission_Date__c=Date.newinstance(2026,10,10);
+        searchFeeDev.Waiver__c='Search Fee Waiver';
+        searchFeeDev.Person_who_can_Approve__c='Nitin Singh';
+        searchFeeDev.Deviation_Approved__c=system.now();
+        devBatch.add(searchFeeDev);
+        insert devBatch;
+        
+        referral.Approval_Status__c='Approved';
+        searchFeeDev.Approval_Status__c='Approved';
+        update new List<Deviation__c>{referral, searchFeeDev};
+        
+        Test.stoptest();
     }
-
-    @isTest
-    static void testGetUserDetails_AllRoles() {
-        Test.startTest();
-
-        System.runAs(getUserByEmpNum('EMP_HO')) {
-            AttendanceCalculator.UserWrapper hoWrap = AttendanceCalculator.getUserDetails();
-            System.assertNotEquals(null, hoWrap);
-        }
-        System.runAs(getUserByEmpNum('EMP_NCM')) {
-            AttendanceCalculator.UserWrapper ncmWrap = AttendanceCalculator.getUserDetails();
-            System.assertEquals('NCM', ncmWrap.designation);
-        }
-        System.runAs(getUserByEmpNum('EMP_ZCM')) {
-            AttendanceCalculator.UserWrapper zcmWrap = AttendanceCalculator.getUserDetails();
-            System.assertEquals('ZCM', zcmWrap.designation);
-        }
-        System.runAs(getUserByEmpNum('EMP_RCM')) {
-            AttendanceCalculator.UserWrapper rcmWrap = AttendanceCalculator.getUserDetails();
-            System.assertEquals('RCM', rcmWrap.designation);
-        }
-        System.runAs(getUserByEmpNum('EMP_ACM')) {
-            AttendanceCalculator.UserWrapper acmWrap = AttendanceCalculator.getUserDetails();
-            System.assertEquals('ACM', acmWrap.designation);
-        }
-        System.runAs(getUserByEmpNum('EMP_NONE')) {
-            AttendanceCalculator.UserWrapper noneWrap = AttendanceCalculator.getUserDetails();
-            System.assertEquals(null, noneWrap.designation);
-        }
-
-        Test.stopTest();
-    }
-
-    @isTest
-    static void testGetOpportunities() {
-        Test.startTest();
-
-        List<Opportunity> foundOpps = AttendanceCalculator.getOpportunities('EMP_BCM1');
-        System.assertNotEquals(null, foundOpps);
-        System.assertEquals(1, foundOpps.size());
-
-        List<Opportunity> notFoundOpps = AttendanceCalculator.getOpportunities('INVALID_CODE');
-        System.assertEquals(null, notFoundOpps);
-
-        List<Opportunity> blankOpps = AttendanceCalculator.getOpportunities('');
-        System.assertEquals(null, blankOpps);
-
-        List<Opportunity> nullOpps = AttendanceCalculator.getOpportunities(null);
-        System.assertEquals(null, nullOpps);
-
-        Test.stopTest();
-    }
-}
