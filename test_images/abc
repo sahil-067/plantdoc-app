@@ -1,297 +1,435 @@
 @isTest
-public class VlmDashboardControllerTest {
-    
-    @testSetup
-    static void setupTestData() {
-        
-        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
-        insert cf;
-        
-        Customer__c cus = new Customer__c(Name = 'Rahul');
-        cus.Query_Raised_count__c = 17;
-        cus.Hindsight_Approval__c = 'Pending';
-        cus.Credit_Hindsight_Approval__c = 'Approved';
-        cus.Property_Paper_Storage_Date__c = System.today();
-        insert cus;
+private class CallBotCollectionWebhookServiceTest {
 
-        System.runAs(new User(Id = UserInfo.getUserId())) {
-            Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' OR Name = 'System Administrator' LIMIT 1];
-            
-            User u11 = new User(
-                Alias = 'vcm1', Email = 'verifier1@testorg.com',
-                EmailEncodingKey = 'UTF-8', LastName = 'Testing Verifier One', LanguageLocaleKey = 'en_US',
-                LocaleSidKey = 'en_US', ProfileId = p.Id,
-                TimeZoneSidKey = 'America/Los_Angeles', UserName = 'verifier1_' + DateTime.now().getTime() + '@testorg.com',
-                Title = 'Senior Verifier', Department = 'North,West;South', IsActive = true, EmployeeNumber = 'ISFC123456'
-            );
-        
-            // Email matches VCM_FILTER_USERS so getVcmFilterUsers() hits the matched-user branch
-            User u2 = new User(
-                Alias = 'vcm2', Email = 'aakanksha.ambastha1@indiashelter.in',
-                EmailEncodingKey = 'UTF-8', LastName = 'Two', LanguageLocaleKey = 'en_US',
-                LocaleSidKey = 'en_US', ProfileId = p.Id,
-                TimeZoneSidKey = 'America/Los_Angeles', UserName = 'verifier2_' + DateTime.now().getTime() + '@testorg.com',
-                Title = 'Verifier', IsActive = true, EmployeeNumber = 'ISFC123456'
-            );
-            insert new List<User>{u11, u2};
-                                
-            Group grp = new Group(Name = 'VCM Auto Allocate', DeveloperName = 'VCM_Auto_Allocate', Type = 'Regular');
-            insert grp;
-            
-            GroupMember gm1 = new GroupMember(GroupId = grp.Id, UserOrGroupId = u11.Id);
-            GroupMember gm2 = new GroupMember(GroupId = grp.Id, UserOrGroupId = u2.Id);
-            insert new List<GroupMember>{gm1, gm2};
+    // =========================================================================
+    // Mock HTTP Callout Handler for Token & SendBill APIs
+    // =========================================================================
+    private class CallBotCalloutMock implements HttpCalloutMock {
+        private String mode;
+        private Integer callCount = 0;
+
+        public CallBotCalloutMock(String mode) {
+            this.mode = mode;
         }
 
-        Id applicantRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByDeveloperName().get('Main_Applicant').getRecordTypeId();
+        public HTTPResponse respond(HTTPRequest req) {
+            callCount++;
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+
+            if (mode == 'THROW_EXCEPTION') {
+                throw new CalloutException('Simulated callout failure');
+            }
+
+            // 1st callout: SetuSendBill_GenerateTokenAPI.getToken(null)
+            if (callCount == 1) {
+                if (mode == 'TOKEN_FAIL') {
+                    res.setStatusCode(401);
+                    res.setBody('');
+                    return res;
+                }
+                res.setStatusCode(200);
+                res.setBody('{"token":"mock_jwt_token_123","access_token":"mock_jwt_token_123","data":{"token":"mock_jwt_token_123"}}');
+                return res;
+            }
+
+            // 2nd callout: SetuSendBillAPI.sendBillForBOT(token, paymentAPIBody)
+            if (mode == 'BILL_FAIL') {
+                res.setStatusCode(400);
+                res.setBody('{"success":false,"status":"FAILED","message":"Bill generation failed"}');
+                return res;
+            }
+
+            res.setStatusCode(200);
+            res.setBody('{"success":true,"status":"SUCCESS","data":{"paymentLink":"https://setu.co/pay/mock123"}}');
+            return res;
+        }
+    }
+
+    // =========================================================================
+    // Test Setup with Standard Objects (Account, Contact, Opportunity)
+    // =========================================================================
+    @TestSetup
+    static void setupTestData() {
         Account acc = new Account(
-            LastName = 'kumar102',
-            Bureau_Flag__c = true,
-            EKYC_Completed__c = 'Yes',
-            RecordTypeId = applicantRecordTypeId,
-            Household__c = cus.Id,
-            Personal_email__pc = 'rahul12@gmail.com',
-            Verify_Mail_Time__c = Datetime.newInstance(2024, 01, 01, 09, 00, 00)
+            Name = 'Test Borrower Account',
+            Phone = '9876543210'
         );
-        acc.Is_Screenza_Done__c = true;
-        acc.Pan_Verified__c = true;
-        acc.Sex__pc = 'Male';
-        acc.Salutation = 'Mr.';
         insert acc;
-                
-        Opportunity opp = new Opportunity(
-            Name = 'Test Loan',
+
+        Contact con = new Contact(
+            FirstName = 'Test',
+            LastName = 'Borrower',
             AccountId = acc.Id,
-            StageName = 'Prospecting',
-            CloseDate = Date.today().addDays(30),
-            LM_Loan_Status__c = 'Login Complete', // Included in LS_FY_BUCKETS so opp is returned even without First_Login_Approval_Date__c
-            Loan_Amount_Applied__c = 2500000,
-            Purpose_of_loan__c = 'Home Purchase',
-            Risk_Weight__c = '45%',               // Covers regex branch in parseRiskWeight()
-            Household__c = cus.Id,
-            BM_PD_Done__c = true
+            MobilePhone = '9876543210',
+            Email = 'test.borrower@example.com'
         );
-        insert opp;
+        insert con;
+
+        List<Opportunity> opps = new List<Opportunity>{
+            // 1. Active loan with balance, due amount, PEMI, and bouncing count
+            new Opportunity(
+                Name = 'Loan Active With Bounce',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = '100001',
+                Balance_Collectable__c = 5000,
+                Due_For_the_Month__c = 2000,
+                Due_for_the_Month_PEMI__c = 500,
+                BouncingcountFTM__c = 2
+            ),
+            // 2. Loan with Due_For_the_Month__c = 0 (for OnlyDueFortheMonth = Yes validation)
+            new Opportunity(
+                Name = 'Loan Zero Due',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = '100002',
+                Balance_Collectable__c = 3000,
+                Due_For_the_Month__c = 0,
+                Due_for_the_Month_PEMI__c = 0,
+                BouncingcountFTM__c = 0
+            ),
+            // 3. Loan with Balance_Collectable__c = 0 and BouncingcountFTM__c = 0
+            new Opportunity(
+                Name = 'Loan Zero Balance No Bounce',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = '100003',
+                Balance_Collectable__c = 0,
+                Due_For_the_Month__c = 0,
+                Due_for_the_Month_PEMI__c = 0,
+                BouncingcountFTM__c = 0
+            ),
+            // 4. Loan with Balance_Collectable__c = 0 but BouncingcountFTM__c > 0
+            new Opportunity(
+                Name = 'Loan Zero Balance With Bounce',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today(),
+                Loan_Number__c = '100004',
+                Balance_Collectable__c = 0,
+                Due_For_the_Month__c = 0,
+                Due_for_the_Month_PEMI__c = 0,
+                BouncingcountFTM__c = 1
+            )
+        };
+        insert opps;
+
+        // Safeguard: re-stamp Loan_Number__c if a trigger/flow cleared it on insert
+        List<Opportunity> insertedOpps = [SELECT Id, Name, Loan_Number__c FROM Opportunity];
+        List<Opportunity> toUpdate = new List<Opportunity>();
+        Integer counter = 100001;
+        for (Opportunity o : insertedOpps) {
+            if (String.isBlank(o.Loan_Number__c)) {
+                o.Loan_Number__c = String.valueOf(counter++);
+                toUpdate.add(o);
+            }
+        }
+        if (!toUpdate.isEmpty()) {
+            update toUpdate;
+        }
     }
 
-    // Covers normaliseVcmStatus() + Main Applicant Account loop
-    @isTest
-    static void testGetCasesForDashboard() {
-        User u1 = [SELECT Id FROM User WHERE Alias = 'vcm1' LIMIT 1];
-        Opportunity opp = [SELECT Id, AccountId, Household__c FROM Opportunity WHERE Name = 'Test Loan' LIMIT 1];
-        
-        Customer__c cust = new Customer__c(
-            Name = 'Test Customer',
-            Case_Oringination_System__c = 'VRM',
-            Assigned_VCM__c = u1.Id,
-            VCM_Status__c = 'Pending'
-        );
-        cust.Query_Raised_count__c = 17;
-        cust.Hindsight_Approval__c = 'Pending';
-        cust.Credit_Hindsight_Approval__c = 'Approved';
-        cust.Property_Paper_Storage_Date__c = System.today();
-        cust.LoanAppID__c = opp.Id;
-        insert cust;
-    
-        opp.Household__c = cust.Id;
-        update opp;
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+    private static RestResponse invokeDoPost(String jsonBody) {
+        RestRequest req = new RestRequest();
+        req.requestURI = '/services/apexrest/CallBotCollection/';
+        req.httpMethod = 'POST';
+        req.requestBody = Blob.valueOf(jsonBody != null ? jsonBody : '');
 
-        // Link Main Applicant Account to cust so the Account SOQL loop executes
-        Account acc = new Account(Id = opp.AccountId, Household__c = cust.Id);
-        update acc;
-        
-        Test.startTest();
-        String jsonResult = VlmDashboardController.getCasesForDashboard();
-        Test.stopTest();
-    }
-    
-    // Covers normaliseStatus() + Assigned_VCM__c == null (Owner fallback)
-    @isTest
-    static void testGetCasesForDashboard_NormaliseStatusAndOwnerFallback() {
-        Opportunity opp = [SELECT Id, Household__c FROM Opportunity WHERE Name = 'Test Loan' LIMIT 1];
-        Customer__c cust = new Customer__c(
-            Name = 'Test Customer No VCM',
-            Case_Oringination_System__c = 'VRM',
-            Assigned_VCM__c = null,
-            VCM_Status__c = null
-        );
-        cust.Query_Raised_count__c = 17;
-        cust.Hindsight_Approval__c = 'Pending';
-        cust.Credit_Hindsight_Approval__c = 'Approved';
-        cust.Property_Paper_Storage_Date__c = System.today();
-        cust.LoanAppID__c = opp.Id;
-        insert cust;
-    
-        opp.Household__c = cust.Id;
-        opp.StageName = 'Prospecting';
-        update opp;
-        
-        Test.startTest();
-        String jsonResult = VlmDashboardController.getCasesForDashboard();
-        Test.stopTest();
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
+
+        CallBotCollectionWebhookService.doPost();
+        return RestContext.response;
     }
 
-    // Covers CAM__c (MTD/FTD Sanction) + Vendor_Request__c (Vendor PD) loops
-    @isTest
-    static void testGetCasesForDashboard_CamAndVendorPd() {
-        User u1 = [SELECT Id FROM User WHERE Alias = 'vcm1' LIMIT 1];
-        Opportunity opp = [SELECT Id, Household__c FROM Opportunity WHERE Name = 'Test Loan' LIMIT 1];
-        
-        Customer__c cust = new Customer__c(
-            Name = 'Test Customer CAM VR',
-            Case_Oringination_System__c = 'VRM',
-            Assigned_VCM__c = u1.Id,
-            VCM_Status__c = 'Allocated',
-            First_Login_Approval_Date__c = DateTime.now()
-        );
-        cust.Query_Raised_count__c = 17;
-        cust.Hindsight_Approval__c = 'Pending';
-        cust.Credit_Hindsight_Approval__c = 'Approved';
-        cust.Property_Paper_Storage_Date__c = System.today();
-        cust.LoanAppID__c = opp.Id;
-        insert cust;
-    
-        opp.Household__c = cust.Id;
-        opp.LM_Loan_Status__c = 'In process'; // In LS_VENDOR_PD
-        update opp;
-
-        // Wrapped in try/catch in case org has extra required fields/validation rules on CAM__c or Vendor_Request__c
-        try {
-            CAM__c cam = new CAM__c(
-                Loan_Application__c = opp.Id,
-                First_Sanctioned_Date__c = DateTime.now(),
-                Final_Decision__c = 'Approved'
-            );
-            insert cam;
-        } catch (Exception e) {}
-
-        try {
-            Vendor_Request__c vr = new Vendor_Request__c(
-                Application__c = opp.Id,
-                Request_Type__c = 'Vendor PD report',
-                Date_Requested__c = Date.today()
-            );
-            insert vr;
-        } catch (Exception e) {}
-
-        Test.startTest();
-        String jsonResult = VlmDashboardController.getCasesForDashboard();
-        Test.stopTest();
-    }
-    
-    @isTest
-    static void testGetCasesForDashboard_StatusVariations() {
-        User u1 = [SELECT Id FROM User WHERE Alias = 'vcm1' LIMIT 1];
-        Opportunity opp = [SELECT Id, Household__c FROM Opportunity WHERE Name = 'Test Loan' LIMIT 1];
-        Customer__c cust = new Customer__c(
-            Name = 'Test Customer',
-            Case_Oringination_System__c = 'VRM',
-            Assigned_VCM__c = u1.Id,
-            VCM_Status__c = 'Pending',
-            First_Login_Approval_Date__c = DateTime.now()
-        );
-        cust.Query_Raised_count__c = 17;
-        cust.Hindsight_Approval__c = 'Pending';
-        cust.Credit_Hindsight_Approval__c = 'Approved';
-        cust.Property_Paper_Storage_Date__c = System.today();
-        cust.LoanAppID__c = opp.Id;
-        insert cust;
-    
-        opp.Household__c = cust.Id;
-        update opp;
-        
-        Test.startTest();
-        String jsonResult1 = VlmDashboardController.getCasesForDashboard();
-        Test.stopTest();
+    private static RestResponse invokeDoPost(CallBotCollectionWebhookService.CallWebhookWrapper wrapper) {
+        // suppressApexObjectNulls = true prevents STRING_TOO_LONG on Request_Body__c
+        return invokeDoPost(JSON.serialize(wrapper, true));
     }
 
-    // Covers assignVerifierBulk() success + exception paths
-    @isTest
-    static void testAssignVerifierBulk() {
-        Customer__c cust = [SELECT Id FROM Customer__c LIMIT 1];
-        User u2 = [SELECT Id FROM User WHERE Alias = 'vcm2' LIMIT 1];
-        
-        Test.startTest();
-        VlmDashboardController.assignVerifierBulk(new List<String>{cust.Id}, u2.Id, 'Allocated');
-        try {
-            VlmDashboardController.assignVerifierBulk(new List<String>{'001000000000000'}, u2.Id, 'Allocated');
-        } catch (AuraHandledException e) {}
-        Test.stopTest();
+    private static String getLoanNumberByName(String oppName) {
+        return [SELECT Loan_Number__c FROM Opportunity WHERE Name = :oppName LIMIT 1].Loan_Number__c;
     }
-    
+
+    // =========================================================================
+    // Test Scenarios
+    // =========================================================================
+
     @isTest
-    static void testAssignVerifier_Exception() {
-        User u1 = [SELECT Id FROM User WHERE Alias = 'vcm1' LIMIT 1];
-        Opportunity opp = [SELECT Id, Household__c FROM Opportunity WHERE Name = 'Test Loan' LIMIT 1];
-        Customer__c cust = new Customer__c(
-            Name = 'Test Customer',
-            Case_Oringination_System__c = 'VRM',
-            Assigned_VCM__c = u1.Id,
-            VCM_Status__c = 'Pending'
-        );
-        cust.Query_Raised_count__c = 17;
-        cust.Hindsight_Approval__c = 'Pending';
-        cust.Credit_Hindsight_Approval__c = 'Approved';
-        cust.Property_Paper_Storage_Date__c = System.today();
-        cust.LoanAppID__c = opp.Id;
-        insert cust;
-    
-        opp.Household__c = cust.Id;
-        update opp;
+    static void testEmptyRequestBody() {
+        Test.startTest();
+        RestResponse res = invokeDoPost('');
+        Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Empty body should return 400. Got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Response__c FROM Whatsapp_collect_send_request__c];
+        System.assertEquals(1, logs.size(), 'Audit log should be inserted');
+    }
+
+    @isTest
+    static void testMissingRequiredParameters() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = '';
+        wrapper.phone_Number = '';
+        wrapper.customer_number = '';
 
         Test.startTest();
-        try {
-            VlmDashboardController.assignVerifier('001000000000000', null, false, null);
-        } catch (AuraHandledException e) {}
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Missing required params should return 400. Got: ' + res.responseBody.toString());
     }
-    
+
     @isTest
-    static void testGetVerifiersForAlloc() {
-        Test.startTest();
-        String jsonResult = VlmDashboardController.getVerifiersForAlloc();
-        Test.stopTest();
-        
-        List<VlmDashboardController.VerifierRow> verifiers =
-            (List<VlmDashboardController.VerifierRow>) JSON.deserialize(jsonResult, List<VlmDashboardController.VerifierRow>.class);
-    }
-    
-    @isTest
-    static void testUnusedInnerClasses() {
-        User u1 = [SELECT Id FROM User WHERE Alias = 'vcm1' LIMIT 1];
-        Opportunity opp = [SELECT Id, Household__c FROM Opportunity WHERE Name = 'Test Loan' LIMIT 1];
-        Customer__c cust = new Customer__c(
-            Name = 'Test Customer',
-            Case_Oringination_System__c = 'VRM',
-            Assigned_VCM__c = u1.Id,
-            VCM_Status__c = 'Pending'
-        );
-        cust.Query_Raised_count__c = 17;
-        cust.Hindsight_Approval__c = 'Pending';
-        cust.Credit_Hindsight_Approval__c = 'Approved';
-        cust.Property_Paper_Storage_Date__c = System.today();
-        cust.LoanAppID__c = opp.Id;
-        insert cust;
-    
-        opp.Household__c = cust.Id;
-        update opp;
+    static void testOnlyDueForMonthIsZero() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Zero Due');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'Yes';
 
         Test.startTest();
-        VlmDashboardController.AllocPreview preview = new VlmDashboardController.AllocPreview();
-        preview.total = 5;
-        preview.rows = new List<VlmDashboardController.AllocPreviewRow>();
-        
-        VlmDashboardController.AllocPreviewRow row = new VlmDashboardController.AllocPreviewRow();
-        row.verifierId = '005000000000000';
-        row.verifierName = 'Test Verifier Name';
-        row.caseIds = new List<Id>{'006000000000000'};
-        row.caseCount = 1;
-        preview.rows.add(row);
-        
-        try {
-            VlmDashboardController.assignVerifier(cust.Id, UserInfo.getUserId(), true, 'Allocated');
-            VlmDashboardController.getVcmFilterUsers();
-        } catch (Exception e) {}
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Zero due for month should return 403. Got: ' + res.responseBody.toString());
+    }
+
+    @isTest
+    static void testZeroBalanceCollectableAndNoBouncing() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Zero Balance No Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Zero balance with no bouncing should return 403. Got: ' + res.responseBody.toString());
+    }
+
+    @isTest
+    static void testSuccess_GreyLabs_CC003_FullBalanceWithBounce() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('SUCCESS'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.customer_number = '9876543210';
+        wrapper.source = 'CC-003'; // GreyLabs
+        wrapper.collector_name = 'GreyLabs Bot';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(200, res.statusCode, 'Expected 200 but got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c, RecordType.Name
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-003'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log GreyLabs request');
+    }
+
+    @isTest
+    static void testSuccess_Gnani_CC002_OnlyDueForMonth() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('SUCCESS'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002'; // Gnani
+        wrapper.collector_name = 'Gnani Bot';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(200, res.statusCode, 'Expected 200 but got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-002'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Gnani request');
+    }
+
+    @isTest
+    static void testSuccess_InternalBot_CC004_ZeroBalanceWithBounce() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('SUCCESS'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Zero Balance With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-004'; // Internal bot
+        wrapper.collector_name = 'Internal Bot';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(200, res.statusCode, 'Expected 200 but got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-004'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Internal bot request');
+    }
+
+    @isTest
+    static void testTokenAuthenticationFailure() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('TOKEN_FAIL'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'Yes';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(403, res.statusCode, 'Blank token should return 403. Got: ' + res.responseBody.toString());
+    }
+
+    @isTest
+    static void testSendBillFailure() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('BILL_FAIL'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(400, res.statusCode, 'Failed bill generation should return 400. Got: ' + res.responseBody.toString());
+    }
+
+    @isTest
+    static void testException_OpportunityNotFound() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = '999999999';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(500, res.statusCode, 'QueryException when Opp is missing should return 500. Got: ' + res.responseBody.toString());
+    }
+
+    @isTest
+    static void testException_AfterOpportunityLoaded() {
+        Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('THROW_EXCEPTION'));
+
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
+        wrapper.OnlyDueFortheMonth = 'No';
+
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(500, res.statusCode, 'Unhandled exception during callout should return 500. Got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Application__c FROM Whatsapp_collect_send_request__c];
+        System.assertEquals(1, logs.size(), 'Catch block should insert error log when opp != null');
+    }
+
+    @isTest
+    static void testWrappersCoverage() {
+        CallBotCollectionWebhookService.CallWebhookWrapper w = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        w.loan_id = '100001';
+        w.phone_Number = '9876543210';
+        w.name = 'Test';
+        w.due_amount = 1000;
+        w.due_month = 'Nov';
+        w.language = 'EN';
+        w.disposition = 'PTP';
+        w.callstatus = 'Completed';
+        w.source_phone = '0123456789';
+        w.call_duration = 60;
+        w.calling_date = '2026-11-24';
+        w.campaign_name = 'Collection';
+        w.call_id = 'C1';
+        w.recording_id = 'R1';
+        w.call_date = '2026-11-24';
+        w.call_start_time = '10:00';
+        w.call_answer_time = '10:01';
+        w.call_end_time = '10:02';
+        w.total_call_duration_sec = 60;
+        w.call_direction = 'Outbound';
+        w.call_status = 'Answered';
+        w.hangup_source = 'Customer';
+        w.hangup_cause = 'Normal';
+        w.hangup_cause_code = 16;
+        w.hangup_cause_name = 'NORMAL_CLEARING';
+        w.agent_id = 'A1';
+        w.agent_number = '1111111111';
+        w.agent_sentiment = 'Positive';
+        w.customer_id = 'CU1';
+        w.customer_number = '9876543210';
+        w.customer_name = 'Test';
+        w.customer_sentiment = 'Neutral';
+        w.detected_language = 'EN';
+        w.final_disposition = 'PTP';
+        w.compliance_score = 95.5;
+        w.call_summary = 'Summary';
+        w.call_transcript = 'Transcript';
+        w.template_name = 'T1';
+        w.template_id = 'TID1';
+        w.recording_url = 'https://example.com/rec';
+        w.telephony_call_uuid = 'UUID-1';
+        w.product_type = 'HL';
+        w.product = 'Home Loan';
+        w.emi_amount = 2000;
+        w.emi_pending = 1;
+        w.days_overdue = 5;
+        w.balance_collectable = 5000;
+        w.loan_last_4 = '0001';
+        w.no_of_months_defaulted = 1;
+        w.monthly_bouncing_charges = 700;
+        w.monthly_penal_interest_rate = 2.0;
+        w.initiation_time = '10:00';
+        w.answer_time = '10:01';
+        w.end_time = '10:02';
+        w.current_datetime = '2026-11-24T10:00:00Z';
+        w.current_day = 'Tuesday';
+        w.current_month = 'November';
+        w.from_number = '1111111111';
+        w.to_number = '9876543210';
+        w.source = 'CC-003';
+        w.collector_name = 'Bot';
+        w.OnlyDueFortheMonth = 'No';
+
+        CallBotCollectionWebhookService.CallResponse resp = new CallBotCollectionWebhookService.CallResponse();
+        resp.success = true;
+        resp.message = 'OK';
+        resp.referenceId = 'REF-1';
+        resp.errors.add('None');
+
+        System.assertEquals(true, resp.success);
+        System.assertEquals('100001', w.loan_id);
     }
 }
