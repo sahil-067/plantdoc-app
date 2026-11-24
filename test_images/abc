@@ -1,10 +1,9 @@
-wait i forgot to tell that my current test class is change because two fields are roll up summary of collection object one is on sum amount and one is on count
-
-so below is my current code do fixes too it
-
 @isTest
 private class CallBotCollectionWebhookServiceTest {
 
+    // =========================================================================
+    // Mock HTTP Callout Handler for Token & SendBill APIs
+    // =========================================================================
     private class CallBotCalloutMock implements HttpCalloutMock {
         private String mode;
         private Integer callCount = 0;
@@ -22,6 +21,7 @@ private class CallBotCollectionWebhookServiceTest {
                 throw new CalloutException('Simulated callout failure');
             }
 
+            // 1st callout: SetuSendBill_GenerateTokenAPI.getToken(null)
             if (callCount == 1) {
                 if (mode == 'TOKEN_FAIL') {
                     res.setStatusCode(401);
@@ -33,6 +33,7 @@ private class CallBotCollectionWebhookServiceTest {
                 return res;
             }
 
+            // 2nd callout: SetuSendBillAPI.sendBillForBOT(token, paymentAPIBody)
             if (mode == 'BILL_FAIL') {
                 res.setStatusCode(400);
                 res.setBody('{"success":false,"status":"FAILED","message":"Bill generation failed"}');
@@ -45,108 +46,91 @@ private class CallBotCollectionWebhookServiceTest {
         }
     }
 
+    // =========================================================================
+    // Test Setup with Standard Objects (Account, Contact, Opportunity)
+    // =========================================================================
     @TestSetup
     static void setupTestData() {
-        
-        Trigger_BYPass__c tbObj1 = new Trigger_BYPass__c(Name = 'WhatsappApplication', isActive__c = false);
-        Trigger_BYPass__c tbObj2 = new Trigger_BYPass__c(Name = 'Deactivate', isActive__c = false);
-        insert new List<Trigger_BYPass__c>{tbObj1, tbObj2};
-            
-        Config__c cf = new Config__c(Name__c = 'Test Config', Value__c = '009870');
-        insert cf;
-            
-        Customer__c cus = new Customer__c(Name = 'Rahul');
-        cus.Query_Raised_count__c=17;
-        cus.Hindsight_Approval__c='Pending';
-        cus.Credit_Hindsight_Approval__c='Approved';
-        cus.Property_Paper_Storage_Date__c=System.today();
-        insert cus;
-
-        Account acc = new Account(LastName = 'kumar102', RecordTypeId = '012A0000000yth8IAA', 
-                                 Personal_email__pc = 'rahul12@gmail.com', Household__c = cus.Id,Verify_Mail_Time__c=Datetime.newInstance(2024, 01, 01, 09, 00, 00));
+        Account acc = new Account(
+            Name = 'Test Borrower Account',
+            Phone = '9876543210'
+        );
         insert acc;
 
-        Contact con = new Contact(LastName = 'sde12', Address_Line_1__c = 'noida',
-                                  Name_of_Organization_Firm_Concern__c = 'techmatrix',
-                                  Address_Office__c = 'sector 12', City_Office__c = 'Jaipur',
-                                  State_Office__c = 'Rajasthan', Pin_Code_Office__c = 244567,
-                                  FirstName = 'dev', Empl_Code__c='ISFC0001',
-                                  Address_Line_2__c='tmhall', Address_Line_3__c='apart',
-                                  Pin_Code__c=12345);
+        Contact con = new Contact(
+            FirstName = 'Test',
+            LastName = 'Borrower',
+            AccountId = acc.Id,
+            MobilePhone = '9876543210',
+            Email = 'test.borrower@example.com'
+        );
         insert con;
 
-        Opportunity op1 = new Opportunity(
-                Name = 'Loan Active With Bounce',
-                AccountId = acc.Id,
-                StageName = 'Closed Won',
-                CloseDate = Date.today(),
-                Loan_Number__c = 'LN-ACTIVE-001',
-                Due_For_the_Month__c = 2000,
-                Due_for_the_Month_PEMI__c = 500
+        Opportunity oppActiveWithBounce = new Opportunity(
+            Name = 'Loan Active With Bounce',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100001',
+            // Formula chain: (2000 + 500 + 2500) - 0 + 0 = 5000 -> Balance_Collectable__c = 5000
+            Due_For_the_Month__c = 2000,
+            Due_for_the_Month_PEMI__c = 500,
+            Principal_Overdue__c = 2500,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
         );
 
-        Opportunity op2 = new Opportunity(
-                Name = 'Loan Zero Due',
-                AccountId = acc.Id,
-                StageName = 'Closed Won',
-                CloseDate = Date.today(),
-                Loan_Number__c = 'LN-ZERODUE-002',
-                Due_For_the_Month__c = 0,
-                Due_for_the_Month_PEMI__c = 0
+        Opportunity oppZeroDue = new Opportunity(
+            Name = 'Loan Zero Due',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100002',
+            // Balance_Collectable__c = 3000, Due_For_the_Month__c = 0
+            Due_For_the_Month__c = 0,
+            Due_for_the_Month_PEMI__c = 0,
+            Principal_Overdue__c = 3000,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
         );
 
-        Opportunity op3 = new Opportunity(
-                Name = 'Loan Zero Balance No Bounce',
-                AccountId = acc.Id,
-                StageName = 'Closed Won',
-                CloseDate = Date.today(),
-                Loan_Number__c = 'LN-ZEROBAL-003',
-                Due_For_the_Month__c = 0,
-                Due_for_the_Month_PEMI__c = 0
+        Opportunity oppZeroBalNoBounce = new Opportunity(
+            Name = 'Loan Zero Balance No Bounce',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100003',
+            // Balance_Collectable__c = 0, BouncingcountFTM__c = 0
+            Due_For_the_Month__c = 0,
+            Due_for_the_Month_PEMI__c = 0,
+            Principal_Overdue__c = 0,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
         );
 
-        Opportunity op4 = new Opportunity(
-                Name = 'Loan Zero Balance With Bounce',
-                AccountId = acc.Id,
-                StageName = 'Closed Won',
-                CloseDate = Date.today(),
-                Loan_Number__c = 'LN-ZEROBAL-BOUNCE-004',
-                Due_For_the_Month__c = 0,
-                Due_for_the_Month_PEMI__c = 0
+        Opportunity oppZeroBalWithBounce = new Opportunity(
+            Name = 'Loan Zero Balance With Bounce',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Loan_Number__c = '100004',
+            // Balance_Collectable__c = 0, BouncingcountFTM__c > 0 (via Collection records)
+            Due_For_the_Month__c = 0,
+            Due_for_the_Month_PEMI__c = 0,
+            Principal_Overdue__c = 0,
+            Due_For_the_Month_Advance__c = 0,
+            PEMI_ThisMDue__c = 0
         );
 
-        insert new List<Opportunity>{op1, op2, op3, op4};
-        
-        Collection__c collec1 = new Collection__c(Amount__c=6000, Collector__c=con.Id,
-                                                 Date_of_Deposit__c=System.today(),Date_of_Collection__c=Date.newInstance(2026, 10, 10),
-                                                 SFDC_Customer__c=op1.Id, Deposited_In_bank__c=true,
-                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
-                                                 Status__c='Bounced', RMobile_No__c='1234567891',
-                                                 Branch_Name__c='testBranch', Cancel_Remarks_New__c='Insufficient Fund',
-                                                 Nature_of_Collection__c='Emi/Advances/Part Payment');
-        Collection__c collec2 = new Collection__c(Amount__c=6000, Collector__c=con.Id,
-                                                 Date_of_Deposit__c=System.today(),Date_of_Collection__c=Date.newInstance(2026, 10, 10),
-                                                 SFDC_Customer__c=op2.Id, Deposited_In_bank__c=true,
-                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
-                                                 Status__c='Bounced', RMobile_No__c='1234567891',
-                                                 Branch_Name__c='testBranch', Cancel_Remarks_New__c='Insufficient Fund',
-                                                 Nature_of_Collection__c='Emi/Advances/Part Payment');
-        Collection__c collec3 = new Collection__c(Amount__c=6000, Collector__c=con.Id,
-                                                 Date_of_Deposit__c=System.today(),Date_of_Collection__c=Date.newInstance(2026, 10, 10),
-                                                 SFDC_Customer__c=op3.Id, Deposited_In_bank__c=true,
-                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
-                                                 Status__c='Bounced', RMobile_No__c='1234567891',
-                                                 Branch_Name__c='testBranch', Cancel_Remarks_New__c='Insufficient Fund',
-                                                 Nature_of_Collection__c='Emi/Advances/Part Payment');
-        Collection__c collec4 = new Collection__c(Amount__c=6000, Collector__c=con.Id,
-                                                 Date_of_Deposit__c=System.today(),Date_of_Collection__c=Date.newInstance(2026, 10, 10),
-                                                 SFDC_Customer__c=op4.Id, Deposited_In_bank__c=true,
-                                                 Instrument__c='Cash', ClearenceStatus__c='Handover pending',
-                                                 Status__c='Bounced', RMobile_No__c='1234567891',
-                                                 Branch_Name__c='testBranch', Cancel_Remarks_New__c='Insufficient Fund',
-                                                 Nature_of_Collection__c='Emi/Advances/Part Payment');
-        insert new List<Collection__c>{collec1, collec2, collec3, collec4};
-        
+        List<Opportunity> opps = new List<Opportunity>{
+            oppActiveWithBounce,
+            oppZeroDue,
+            oppZeroBalNoBounce,
+            oppZeroBalWithBounce
+        };
+        insert opps;
+
+        // Safeguard: re-stamp Loan_Number__c if a trigger/flow cleared it on insert
         List<Opportunity> insertedOpps = [SELECT Id, Name, Loan_Number__c FROM Opportunity];
         List<Opportunity> toUpdate = new List<Opportunity>();
         Integer counter = 100001;
@@ -159,9 +143,83 @@ private class CallBotCollectionWebhookServiceTest {
         if (!toUpdate.isEmpty()) {
             update toUpdate;
         }
-            
+
+        // Insert child Collection records to populate Roll-Up Summary BouncingcountFTM__c
+        createBouncedCollections(new List<Id>{ oppActiveWithBounce.Id, oppZeroBalWithBounce.Id });
     }
 
+    // Dynamically resolves the Collection child object & fields by Label
+    private static void createBouncedCollections(List<Id> oppIds) {
+        Schema.SObjectType collectionType;
+        String oppLookupField;
+
+        for (Schema.ChildRelationship cr : Opportunity.SObjectType.getDescribe().getChildRelationships()) {
+            Schema.DescribeSObjectResult childDesc = cr.getChildSObject().getDescribe();
+            if (childDesc.getLabel() == 'Collection' || childDesc.getName().equalsIgnoreCase('Collection__c')) {
+                collectionType = cr.getChildSObject();
+                oppLookupField = cr.getField().getDescribe().getName();
+                break;
+            }
+        }
+
+        if (collectionType == null || String.isBlank(oppLookupField)) {
+            return;
+        }
+
+        Map<String, Schema.SObjectField> fieldMap = collectionType.getDescribe().fields.getMap();
+        String dateField, statusField, natureField, remarksField;
+        Boolean isDateTime = false;
+
+        for (Schema.SObjectField f : fieldMap.values()) {
+            Schema.DescribeFieldResult dfr = f.getDescribe();
+            if (!dfr.isCreateable()) {
+                continue;
+            }
+            String lbl = dfr.getLabel();
+            if (lbl.equalsIgnoreCase('Date of Collection')) {
+                dateField = dfr.getName();
+                isDateTime = (dfr.getType() == Schema.DisplayType.DATETIME);
+            } else if (lbl.equalsIgnoreCase('Status')) {
+                statusField = dfr.getName();
+            } else if (lbl.equalsIgnoreCase('Nature of collection')) {
+                natureField = dfr.getName();
+            } else if (lbl.equalsIgnoreCase('Cancel Remarks New')) {
+                remarksField = dfr.getName();
+            }
+        }
+
+        // Covers both Oct 2026 (Sandbox filter) and current month (Prod filter)
+        List<Date> targetDates = new List<Date>{
+            Date.newInstance(2026, 10, 15),
+            Date.today().toStartOfMonth().addDays(5)
+        };
+
+        List<SObject> collectionsToInsert = new List<SObject>();
+        for (Id oppId : oppIds) {
+            for (Date d : targetDates) {
+                SObject col = collectionType.newSObject();
+                col.put(oppLookupField, oppId);
+                if (dateField != null) {
+                    col.put(
+                        dateField,
+                        isDateTime ? (Object) DateTime.newInstance(d, Time.newInstance(12, 0, 0, 0)) : (Object) d
+                    );
+                }
+                if (statusField != null) col.put(statusField, 'Bounced');
+                if (natureField != null) col.put(natureField, 'Emi/Advances/Part Payment');
+                if (remarksField != null) col.put(remarksField, 'Insufficient Fund');
+                collectionsToInsert.add(col);
+            }
+        }
+
+        if (!collectionsToInsert.isEmpty()) {
+            insert collectionsToInsert;
+        }
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
     private static RestResponse invokeDoPost(String jsonBody) {
         RestRequest req = new RestRequest();
         req.requestURI = '/services/apexrest/CallBotCollection/';
@@ -176,13 +234,28 @@ private class CallBotCollectionWebhookServiceTest {
         return RestContext.response;
     }
 
+    private static RestResponse invokeDoPost(CallBotCollectionWebhookService.CallWebhookWrapper wrapper) {
+        // suppressApexObjectNulls = true prevents STRING_TOO_LONG on Request_Body__c
+        return invokeDoPost(JSON.serialize(wrapper, true));
+    }
+
+    private static String getLoanNumberByName(String oppName) {
+        return [SELECT Loan_Number__c FROM Opportunity WHERE Name = :oppName LIMIT 1].Loan_Number__c;
+    }
+
+    // =========================================================================
+    // Test Scenarios
+    // =========================================================================
+
     @isTest
     static void testEmptyRequestBody() {
         Test.startTest();
         RestResponse res = invokeDoPost('');
         Test.stopTest();
 
+        System.assertEquals(400, res.statusCode, 'Empty body should return 400. Got: ' + res.responseBody.toString());
         List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Response__c FROM Whatsapp_collect_send_request__c];
+        System.assertEquals(1, logs.size(), 'Audit log should be inserted');
     }
 
     @isTest
@@ -193,9 +266,10 @@ private class CallBotCollectionWebhookServiceTest {
         wrapper.customer_number = '';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
+        System.assertEquals(400, res.statusCode, 'Missing required params should return 400. Got: ' + res.responseBody.toString());
     }
 
     @isTest
@@ -207,9 +281,10 @@ private class CallBotCollectionWebhookServiceTest {
         wrapper.OnlyDueFortheMonth = 'Yes';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
+        System.assertEquals(403, res.statusCode, 'Zero due for month should return 403. Got: ' + res.responseBody.toString());
     }
 
     @isTest
@@ -221,9 +296,10 @@ private class CallBotCollectionWebhookServiceTest {
         wrapper.OnlyDueFortheMonth = 'No';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
+        System.assertEquals(403, res.statusCode, 'Zero balance with no bouncing should return 403. Got: ' + res.responseBody.toString());
     }
 
     @isTest
@@ -238,10 +314,16 @@ private class CallBotCollectionWebhookServiceTest {
         wrapper.OnlyDueFortheMonth = 'No';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
-        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Source__c, Amount__c, RecordType.Name FROM Whatsapp_collect_send_request__c WHERE Source__c = 'CC-003'];
+        System.assertEquals(200, res.statusCode, 'Expected 200 but got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c, RecordType.Name
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-003'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log GreyLabs request');
     }
 
     @isTest
@@ -250,17 +332,22 @@ private class CallBotCollectionWebhookServiceTest {
 
         CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
         wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-
         wrapper.phone_Number = '9876543210';
         wrapper.source = 'CC-002'; // Gnani
         wrapper.collector_name = 'Gnani Bot';
         wrapper.OnlyDueFortheMonth = 'Yes';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
-        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Source__c, Amount__c FROM Whatsapp_collect_send_request__c WHERE Source__c = 'CC-002'];
+        System.assertEquals(200, res.statusCode, 'Expected 200 but got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-002'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Gnani request');
     }
 
     @isTest
@@ -269,17 +356,22 @@ private class CallBotCollectionWebhookServiceTest {
 
         CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
         wrapper.loan_id = getLoanNumberByName('Loan Zero Balance With Bounce');
-
         wrapper.phone_Number = '9876543210';
         wrapper.source = 'CC-004'; // Internal bot
         wrapper.collector_name = 'Internal Bot';
         wrapper.OnlyDueFortheMonth = 'No';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
-        List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Source__c, Amount__c FROM Whatsapp_collect_send_request__c WHERE Source__c = 'CC-004'];
+        System.assertEquals(200, res.statusCode, 'Expected 200 but got: ' + res.responseBody.toString());
+        List<Whatsapp_collect_send_request__c> logs = [
+            SELECT Id, Source__c, Amount__c
+            FROM Whatsapp_collect_send_request__c
+            WHERE Source__c = 'CC-004'
+        ];
+        System.assertEquals(1, logs.size(), 'Should log Internal bot request');
     }
 
     @isTest
@@ -288,15 +380,15 @@ private class CallBotCollectionWebhookServiceTest {
 
         CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
         wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-
         wrapper.phone_Number = '9876543210';
         wrapper.source = 'CC-002';
         wrapper.OnlyDueFortheMonth = 'Yes';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
+        System.assertEquals(403, res.statusCode, 'Blank token should return 403. Got: ' + res.responseBody.toString());
     }
 
     @isTest
@@ -310,27 +402,24 @@ private class CallBotCollectionWebhookServiceTest {
         wrapper.OnlyDueFortheMonth = 'No';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
+        System.assertEquals(400, res.statusCode, 'Failed bill generation should return 400. Got: ' + res.responseBody.toString());
     }
 
     @isTest
-    static void testSendBillFailure2() {
-        try{
-            Test.setMock(HttpCalloutMock.class, new CallBotCalloutMock('BILL_FAIL'));
-    
-            CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-            wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-            wrapper.phone_Number = '9876543210';
-            wrapper.source = 'CC-002';
-            wrapper.OnlyDueFortheMonth = 'No';
-    
-            Test.startTest();
-            RestResponse res = invokeDoPost(JSON.serialize(wrapper));
-            Test.stopTest();
-        } catch (Exception e) {}
+    static void testException_OpportunityNotFound() {
+        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
+        wrapper.loan_id = '999999999';
+        wrapper.phone_Number = '9876543210';
+        wrapper.source = 'CC-002';
 
+        Test.startTest();
+        RestResponse res = invokeDoPost(wrapper);
+        Test.stopTest();
+
+        System.assertEquals(500, res.statusCode, 'QueryException when Opp is missing should return 500. Got: ' + res.responseBody.toString());
     }
 
     @isTest
@@ -344,29 +433,18 @@ private class CallBotCollectionWebhookServiceTest {
         wrapper.OnlyDueFortheMonth = 'No';
 
         Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
+        RestResponse res = invokeDoPost(wrapper);
         Test.stopTest();
 
+        System.assertEquals(500, res.statusCode, 'Unhandled exception during callout should return 500. Got: ' + res.responseBody.toString());
         List<Whatsapp_collect_send_request__c> logs = [SELECT Id, Application__c FROM Whatsapp_collect_send_request__c];
-    }
-
-    @isTest
-    static void testException_OpportunityNotFound() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = 'LN-NON-EXISTENT-999';
-        wrapper.phone_Number = '9876543210';
-        wrapper.source = 'CC-002';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(JSON.serialize(wrapper, true));
-        Test.stopTest();
-
+        System.assertEquals(1, logs.size(), 'Catch block should insert error log when opp != null');
     }
 
     @isTest
     static void testWrappersCoverage() {
         CallBotCollectionWebhookService.CallWebhookWrapper w = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        w.loan_id = 'LN-ACTIVE-001';
+        w.loan_id = '100001';
         w.phone_Number = '9876543210';
         w.name = 'Test';
         w.due_amount = 1000;
@@ -376,11 +454,11 @@ private class CallBotCollectionWebhookServiceTest {
         w.callstatus = 'Completed';
         w.source_phone = '0123456789';
         w.call_duration = 60;
-        w.calling_date = '2026-11-22';
+        w.calling_date = '2026-11-24';
         w.campaign_name = 'Collection';
         w.call_id = 'C1';
         w.recording_id = 'R1';
-        w.call_date = '2026-11-22';
+        w.call_date = '2026-11-24';
         w.call_start_time = '10:00';
         w.call_answer_time = '10:01';
         w.call_end_time = '10:02';
@@ -420,8 +498,8 @@ private class CallBotCollectionWebhookServiceTest {
         w.initiation_time = '10:00';
         w.answer_time = '10:01';
         w.end_time = '10:02';
-        w.current_datetime = '2026-11-22T10:00:00Z';
-        w.current_day = 'Sunday';
+        w.current_datetime = '2026-11-24T10:00:00Z';
+        w.current_day = 'Tuesday';
         w.current_month = 'November';
         w.from_number = '1111111111';
         w.to_number = '9876543210';
@@ -435,9 +513,7 @@ private class CallBotCollectionWebhookServiceTest {
         resp.referenceId = 'REF-1';
         resp.errors.add('None');
 
-    }
-    
-    private static String getLoanNumberByName(String oppName) {
-        return [SELECT Loan_Number__c FROM Opportunity WHERE Name = :oppName LIMIT 1].Loan_Number__c;
+        System.assertEquals(true, resp.success);
+        System.assertEquals('100001', w.loan_id);
     }
 }
