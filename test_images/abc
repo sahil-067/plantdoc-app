@@ -1,445 +1,1028 @@
-@isTest
-private class CallBotCollectionWebhookServiceTest {
+Here is an apex class craete a test class for this with max coverage
 
-    // =========================================================================
-    // Test Setup with Standard Objects (Account, Contact, Opportunity)
-    // =========================================================================
-    @TestSetup
-    static void setupTestData() {
-        List<RecordType> bizAccRts = [
-            SELECT Id FROM RecordType
-            WHERE SObjectType = 'Account' AND IsPersonType = false AND IsActive = true
-            LIMIT 1
-        ];
 
-        Account acc = new Account(
-            Name = 'Test Borrower Account',
-            Phone = '9876543210'
-        );
-        if (!bizAccRts.isEmpty()) {
-            acc.RecordTypeId = bizAccRts[0].Id;
-        }
-        insert acc;
+/* @File Name         : AttendanceController (iCollect)
+* @Description        : this the the controller method for Attendance Based upon Hierarchy
+* @Author             : Shivam Agarwal/Tushar Jain
+* @Group              : Techmatrix
+* @Last Modified By   : Shivam Agarwal/Tushar Jain
+* @Last Modified On   : 06-08-2025
+* @Modification Log   :
+*==============================================================================
+* Ver         Date                     Author                 Modification
+*==============================================================================
+* 1.0      06-08-2025               Shivam Agarwal/Tushar Jain           Initial Version                           
+*/
+public class AttendanceCalculator {
+    private static final Map<String, Integer> LEVELS = new Map<String, Integer>{'HO' => 1, 'NCM' => 2, 'ZCM' => 3, 'RCM' => 4, 'ACM' => 5, 'BCM' => 6, 'CO' => 7};
+    private static final Map<String, String> employeeDesignationMap = new Map<String, String>();
+    private static final Map<String, Integer> EmpIdByCasesMap = new Map<String, Integer>();
 
-        Contact con = new Contact(
-            FirstName = 'Test',
-            LastName = 'Borrower',
-            MobilePhone = '9876543210',
-            Email = 'test.borrower@example.com'
-        );
-        if (!bizAccRts.isEmpty()) {
-            con.AccountId = acc.Id;
-        }
-        insert con;
+        @AuraEnabled(cacheable=true)
+        public static String Util_1(String state, Boolean status,DateTime startDate,DateTime endDate,Integer selectedTimeFilter){
+            try{
+                System.debug('status :: '+status);
+                System.debug('startDate :: '+startDate);
+                System.debug('endDate :: '+endDate);
+                System.debug('selectedTimeFilter :: '+selectedTimeFilter);
 
-        Opportunity oppActiveWithBounce = new Opportunity(
-            Name = 'Loan Active With Bounce',
-            AccountId = acc.Id,
-            StageName = 'Closed Won',
-            CloseDate = Date.today(),
-            Loan_Number__c = '100001',
-            Due_For_the_Month__c = 2000,
-            Due_for_the_Month_PEMI__c = 500,
-            Principal_Overdue__c = 2500,
-            Due_For_the_Month_Advance__c = 0,
-            PEMI_ThisMDue__c = 0
-        );
+                String attRecordType = Schema.sObjectType.Attendance__c.getRecordTypeInfosByName().get('iCollect').getRecordTypeId();
+                String accRecordType = Schema.sObjectType.Account.getRecordTypeInfosByName().get('ISFCL - Employee').getRecordTypeId();
+                
+                String role;
+                List<HOWrapper> hoWrapList = new List<HOWrapper>();
+                List<NCMWrapper> ncmWrapList = new List<NCMWrapper>();
+                List<ZCMWrapper> zcmWrapList = new List<ZCMWrapper>();
+                List<RCMWrapper> rcmWrapList = new List<RCMWrapper>();
+                List<ACMWrapper> acmWrapList = new List<ACMWrapper>();
+                
+                List<BranchWrapper> branchWrapList = new List<BranchWrapper>();
+                List<BCM_AND_CO_Wrapper> bcmAndCoWrapList = new List<BCM_AND_CO_Wrapper>();
 
-        Opportunity oppZeroDue = new Opportunity(
-            Name = 'Loan Zero Due',
-            AccountId = acc.Id,
-            StageName = 'Closed Won',
-            CloseDate = Date.today(),
-            Loan_Number__c = '100002',
-            Due_For_the_Month__c = 0,
-            Due_for_the_Month_PEMI__c = 0,
-            Principal_Overdue__c = 3000,
-            Due_For_the_Month_Advance__c = 0,
-            PEMI_ThisMDue__c = 0
-        );
+               // List<BCMWrapper> bcmWrapList = new List<BCMWrapper>();
+               // List<COWrapper> coWrapList = new List<COWrapper>();
+                String currentUserId = UserInfo.getUserId();
+               // currentUserId = '005D4000006L0hUIAS';
 
-        Opportunity oppZeroBalNoBounce = new Opportunity(
-            Name = 'Loan Zero Balance No Bounce',
-            AccountId = acc.Id,
-            StageName = 'Closed Won',
-            CloseDate = Date.today(),
-            Loan_Number__c = '100003',
-            Due_For_the_Month__c = 0,
-            Due_for_the_Month_PEMI__c = 0,
-            Principal_Overdue__c = 0,
-            Due_For_the_Month_Advance__c = 0,
-            PEMI_ThisMDue__c = 0
-        );
+                user hoUser = [SELECT Id, Name,EmployeeNumber, Branch__c FROM User WHERE Id =: currentUserId LIMIT 1];
+                
+                String soqlQuery = 'SELECT Id, Name, Collection_Manager__c, Collection_Manager__r.Empl_Code__c, Branch_Area_Collection__c, Branch_Area_Collection__r.EmployeeNumber, ' +
+                    'Branch_Regional_Collection__c, Branch_Regional_Collection__r.EmployeeNumber,Branch_City__c,Branch_State__c	,Zonal_Collection_Manager__c, ' +
+                    'Zonal_Collection_Manager__r.EmployeeNumber, National_Collection_Manager__c, National_Collection_Manager__r.EmployeeNumber ' +
+                    'FROM Branch__c';
+                
+                List<String> whereClauses = new List<String>();
 
-        Opportunity oppZeroBalWithBounce = new Opportunity(
-            Name = 'Loan Zero Balance With Bounce',
-            AccountId = acc.Id,
-            StageName = 'Closed Won',
-            CloseDate = Date.today(),
-            Loan_Number__c = '100004',
-            Due_For_the_Month__c = 0,
-            Due_for_the_Month_PEMI__c = 0,
-            Principal_Overdue__c = 0,
-            Due_For_the_Month_Advance__c = 0,
-            PEMI_ThisMDue__c = 0
-        );
-
-        insert new List<Opportunity>{
-            oppActiveWithBounce,
-            oppZeroDue,
-            oppZeroBalNoBounce,
-            oppZeroBalWithBounce
-        };
-
-        List<Opportunity> insertedOpps = [SELECT Id, Name, Loan_Number__c FROM Opportunity];
-        List<Opportunity> toUpdate = new List<Opportunity>();
-        Integer counter = 100001;
-        for (Opportunity o : insertedOpps) {
-            if (String.isBlank(o.Loan_Number__c)) {
-                o.Loan_Number__c = String.valueOf(counter++);
-                toUpdate.add(o);
-            }
-        }
-        if (!toUpdate.isEmpty()) {
-            update toUpdate;
-        }
-
-        createBouncedCollections(new List<Id>{ oppActiveWithBounce.Id, oppZeroBalWithBounce.Id });
-    }
-
-    private static void createBouncedCollections(List<Id> oppIds) {
-        Schema.SObjectType collectionType;
-        String oppLookupField;
-
-        for (Schema.ChildRelationship cr : Opportunity.SObjectType.getDescribe().getChildRelationships()) {
-            Schema.DescribeSObjectResult childDesc = cr.getChildSObject().getDescribe();
-            if (childDesc.getLabel() == 'Collection' || childDesc.getName().equalsIgnoreCase('Collection__c')) {
-                collectionType = cr.getChildSObject();
-                oppLookupField = cr.getField().getDescribe().getName();
-                break;
-            }
-        }
-
-        if (collectionType == null || String.isBlank(oppLookupField)) {
-            return;
-        }
-
-        Map<String, Schema.SObjectField> fieldMap = collectionType.getDescribe().fields.getMap();
-        String dateField, statusField, natureField, remarksField;
-        Boolean isDateTime = false;
-
-        for (Schema.SObjectField f : fieldMap.values()) {
-            Schema.DescribeFieldResult dfr = f.getDescribe();
-            if (!dfr.isCreateable()) {
-                continue;
-            }
-            String lbl = dfr.getLabel();
-            if (lbl.equalsIgnoreCase('Date of Collection')) {
-                dateField = dfr.getName();
-                isDateTime = (dfr.getType() == Schema.DisplayType.DATETIME);
-            } else if (lbl.equalsIgnoreCase('Status')) {
-                statusField = dfr.getName();
-            } else if (lbl.equalsIgnoreCase('Nature of collection')) {
-                natureField = dfr.getName();
-            } else if (lbl.equalsIgnoreCase('Cancel Remarks New')) {
-                remarksField = dfr.getName();
-            }
-        }
-
-        List<Date> targetDates = new List<Date>{
-            Date.newInstance(2026, 10, 15),
-            Date.today().toStartOfMonth().addDays(5)
-        };
-
-        List<SObject> collectionsToInsert = new List<SObject>();
-        for (Id oppId : oppIds) {
-            for (Date d : targetDates) {
-                SObject col = collectionType.newSObject();
-                col.put(oppLookupField, oppId);
-                if (dateField != null) {
-                    col.put(
-                        dateField,
-                        isDateTime ? (Object) DateTime.newInstance(d, Time.newInstance(12, 0, 0, 0)) : (Object) d
-                    );
+                if(hoUser.Branch__c == 'Headoffice'){
+                    whereClauses.add('(National_Collection_Manager__c != NULL AND National_Collection_Manager__r.EmployeeNumber != NULL)');
+                } else {
+                    whereClauses.add('( (National_Collection_Manager__c = :currentUserId AND National_Collection_Manager__r.EmployeeNumber != NULL ) OR ' +
+                                     '(Zonal_Collection_Manager__c = :currentUserId AND Zonal_Collection_Manager__r.EmployeeNumber != NULL) OR ' +
+                                     '(Branch_Regional_Collection__c = :currentUserId AND Branch_Regional_Collection__r.EmployeeNumber != NULL) OR ' +
+                                     '(Branch_Area_Collection__c = :currentUserId AND Branch_Area_Collection__r.EmployeeNumber != NULL) )');
                 }
-                if (statusField != null) col.put(statusField, 'Bounced');
-                if (natureField != null) col.put(natureField, 'Emi/Advances/Part Payment');
-                if (remarksField != null) col.put(remarksField, 'Insufficient Fund');
-                collectionsToInsert.add(col);
+                
+                
+                if (String.isNotBlank(state)) {
+                    whereClauses.add('Branch_State__c = :state');
+                }
+                
+                if (!whereClauses.isEmpty()) {
+                    soqlQuery += ' WHERE ' + String.join(whereClauses, ' AND ');
+                }
+                
+                List<Branch__c> Branches = Database.query(soqlQuery);
+                
+                if(Branches.isEmpty()){
+                    return null;
+                }
+				
+                System.debug('Branches :: '+Branches);
+                
+                Set<String> empCodeSet = new Set<String>();
+                Set<String> acmBcmCodeSet = new Set<String>();
+                
+                Set<String> bcmCodeSet = new Set<String>();
+                Set<String> coCodeSet = new Set<String>();
+                Map<String, Set<String>> HO_To_NCM_Map = new Map<String, Set<String>>();
+                Map<String, Set<String>> NCM_To_ZCM_Map = new Map<String, Set<String>>();
+                Map<String, Set<String>> ZCM_To_RCM_Map = new Map<String, Set<String>>();
+                Map<String, Set<String>> RCM_To_ACM_Map = new Map<String, Set<String>>();
+                
+                Map<String, Set<String>> ACM_To_Branch_Map = new Map<String, Set<String>>();
+                Map<String, Set<String>> BRANCH_To_BCMCO_Map = new Map<String, Set<String>>();
+                
+                
+               // Map<String, Set<String>> ACM_To_BCM_Map = new Map<String, Set<String>>();
+               // Map<String, Set<String>> BCM_To_CO_Map = new Map<String, Set<String>>();
+
+                for(Branch__c br : Branches){
+                    if(hoUser != NULL && hoUser.Branch__c == 'Headoffice')role = 'HO';
+                    if (br.National_Collection_Manager__c == currentUserId) role = 'NCM';
+                    if (br.Zonal_Collection_Manager__c == currentUserId) role = 'ZCM';
+                    if (br.Branch_Regional_Collection__c == currentUserId) role = 'RCM';
+                    if (br.Branch_Area_Collection__c == currentUserId) role = 'ACM';   
+                    
+                    Integer Level = LEVELS.get(role);
+                    
+                    if(Level <=1 && Level <= LEVELS.size() && hoUser.Branch__c == 'Headoffice'){
+                        if(hoUser.EmployeeNumber != null){
+                            empCodeSet.add(hoUser.EmployeeNumber);
+                            employeeDesignationMap.put(hoUser.EmployeeNumber, 'HO');
+                        }
+                        if(br.National_Collection_Manager__r.EmployeeNumber != null){
+                            empCodeSet.add(br.National_Collection_Manager__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.National_Collection_Manager__r.EmployeeNumber, 'NCM');
+                        }
+                        if(br.Zonal_Collection_Manager__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Zonal_Collection_Manager__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Zonal_Collection_Manager__r.EmployeeNumber, 'ZCM');
+                        }
+                        if(br.Branch_Regional_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Regional_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Regional_Collection__r.EmployeeNumber, 'RCM');
+                        }
+                        if(br.Branch_Area_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            acmBcmCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Area_Collection__r.EmployeeNumber, 'ACM');
+                        }
+                        if(br.Collection_Manager__r.Empl_Code__c != null){
+                            empCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            bcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            acmBcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            employeeDesignationMap.put(br.Collection_Manager__r.Empl_Code__c, 'BCM');
+
+                            
+                        }
+                        if(hoUser.Branch__c == 'Headoffice'){
+                            if(HO_To_NCM_Map.containskey(hoUser.EmployeeNumber)){
+                                Set<String> tempList = HO_To_NCM_Map.get(hoUser.EmployeeNumber);
+                                tempList.add(br.National_Collection_Manager__r.EmployeeNumber);
+                                HO_To_NCM_Map.put(hoUser.EmployeeNumber, tempList);
+                            }
+                            else{
+                                HO_To_NCM_Map.put(hoUser.EmployeeNumber, new Set<String>{br.National_Collection_Manager__r.EmployeeNumber});
+                            } 
+                        }
+                        
+                    }
+                    
+                    
+                    if(Level <=2 && Level <= LEVELS.size()){
+                        if(br.National_Collection_Manager__r.EmployeeNumber != null){
+                            empCodeSet.add(br.National_Collection_Manager__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.National_Collection_Manager__r.EmployeeNumber, 'NCM');
+
+                        }
+                        if(br.Zonal_Collection_Manager__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Zonal_Collection_Manager__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Zonal_Collection_Manager__r.EmployeeNumber, 'ZCM');
+
+                        }
+                        if(br.Branch_Regional_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Regional_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Regional_Collection__r.EmployeeNumber, 'RCM');
+
+                        }
+                        if(br.Branch_Area_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            acmBcmCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Area_Collection__r.EmployeeNumber, 'ACM');
+
+                        }
+                        if(br.Collection_Manager__r.Empl_Code__c != null){
+                            empCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            bcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            acmBcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            employeeDesignationMap.put(br.Collection_Manager__r.Empl_Code__c, 'BCM');
+
+                            
+                        }
+                        if(NCM_To_ZCM_Map.containskey(br.National_Collection_Manager__r.EmployeeNumber)){
+                            Set<String> tempList = NCM_To_ZCM_Map.get(br.National_Collection_Manager__r.EmployeeNumber);
+                            tempList.add(br.Zonal_Collection_Manager__r.EmployeeNumber);
+                            NCM_To_ZCM_Map.put(br.National_Collection_Manager__r.EmployeeNumber, tempList);
+                        }
+                        else{
+                            NCM_To_ZCM_Map.put(br.National_Collection_Manager__r.EmployeeNumber, new Set<String>{br.Zonal_Collection_Manager__r.EmployeeNumber});
+                        }
+                    }
+                    if(Level <=3 && Level <= LEVELS.size()){
+                        if(br.Zonal_Collection_Manager__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Zonal_Collection_Manager__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Zonal_Collection_Manager__r.EmployeeNumber, 'ZCM');
+
+                        }
+                        if(br.Branch_Regional_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Regional_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Regional_Collection__r.EmployeeNumber, 'RCM');
+
+                        }
+                        if(br.Branch_Area_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            acmBcmCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Area_Collection__r.EmployeeNumber, 'ACM');
+
+                            
+                        }
+                        if(br.Collection_Manager__r.Empl_Code__c != null){
+                            empCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            bcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            acmBcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            employeeDesignationMap.put(br.Collection_Manager__r.Empl_Code__c, 'BCM');
+
+                        }
+                        if(ZCM_To_RCM_Map.containskey(br.Zonal_Collection_Manager__r.EmployeeNumber)){
+                            Set<String> tempList = ZCM_To_RCM_Map.get(br.Zonal_Collection_Manager__r.EmployeeNumber);
+                            tempList.add(br.Branch_Regional_Collection__r.EmployeeNumber);
+                            ZCM_To_RCM_Map.put(br.Zonal_Collection_Manager__r.EmployeeNumber, tempList);
+                        }
+                        else{
+                            ZCM_To_RCM_Map.put(br.Zonal_Collection_Manager__r.EmployeeNumber, new Set<String>{br.Branch_Regional_Collection__r.EmployeeNumber});
+                        }
+                    }
+                    if(Level <=4 && Level <= LEVELS.size()){
+                        if(br.Branch_Regional_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Regional_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Regional_Collection__r.EmployeeNumber, 'RCM');
+
+                        }
+                        if(br.Branch_Area_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            acmBcmCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Area_Collection__r.EmployeeNumber, 'ACM');
+
+                            
+                        }
+                        if(br.Collection_Manager__r.Empl_Code__c != null){
+                            bcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            empCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            acmBcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            employeeDesignationMap.put(br.Collection_Manager__r.Empl_Code__c, 'BCM');
+
+                        }
+                        if(RCM_To_ACM_Map.containskey(br.Branch_Regional_Collection__r.EmployeeNumber)){
+                            Set<String> tempList = RCM_To_ACM_Map.get(br.Branch_Regional_Collection__r.EmployeeNumber);
+                            tempList.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            RCM_To_ACM_Map.put(br.Branch_Regional_Collection__r.EmployeeNumber, tempList);
+                        }
+                        else{
+                            RCM_To_ACM_Map.put(br.Branch_Regional_Collection__r.EmployeeNumber, new Set<String>{br.Branch_Area_Collection__r.EmployeeNumber});
+                        }
+                    }
+                    if(Level <=5 && Level <= LEVELS.size()){
+                        if(br.Branch_Area_Collection__r.EmployeeNumber != null){
+                            empCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            acmBcmCodeSet.add(br.Branch_Area_Collection__r.EmployeeNumber);
+                            employeeDesignationMap.put(br.Branch_Area_Collection__r.EmployeeNumber, 'ACM');
+
+                        }
+                        if(br.Collection_Manager__r.Empl_Code__c != null){
+                            bcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            empCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            acmBcmCodeSet.add(br.Collection_Manager__r.Empl_Code__c);
+                            employeeDesignationMap.put(br.Collection_Manager__r.Empl_Code__c, 'BCM');
+
+                            
+                        }
+                    /*    if(ACM_To_BCM_Map.containskey(br.Branch_Area_Collection__r.EmployeeNumber)){
+                            Set<String> tempList = ACM_To_BCM_Map.get(br.Branch_Area_Collection__r.EmployeeNumber);
+                            tempList.add(br.Collection_Manager__r.Empl_Code__c);
+                            ACM_To_BCM_Map.put(br.Branch_Area_Collection__r.EmployeeNumber, tempList);
+                        }
+                        else{
+                            ACM_To_BCM_Map.put(br.Branch_Area_Collection__r.EmployeeNumber, new Set<String>{br.Collection_Manager__r.Empl_Code__c});
+                        }*/
+                        
+                        if(ACM_To_Branch_Map.containskey(br.Branch_Area_Collection__r.EmployeeNumber)){
+                            Set<String> tempList = ACM_To_Branch_Map.get(br.Branch_Area_Collection__r.EmployeeNumber);
+                            tempList.add(br.Name);
+                            ACM_To_Branch_Map.put(br.Branch_Area_Collection__r.EmployeeNumber, tempList);
+                        }
+                        else{
+                            if(br.Branch_Area_Collection__r.EmployeeNumber != null){
+                                ACM_To_Branch_Map.put(br.Branch_Area_Collection__r.EmployeeNumber, new Set<String>{br.Name});
+                            }
+                        }
+                    }
+                    
+                }
+                System.debug('employeeDesignationMap :: '+employeeDesignationMap);
+
+                
+                System.debug('empCodeSet :: '+empCodeSet);
+                System.debug('bcmCodeSet :: '+bcmCodeSet);
+                System.debug('acmBcmCodeSet :: '+acmBcmCodeSet);
+                
+                
+                
+                
+                System.debug('EmpIdByCasesMap :: '+EmpIdByCasesMap);
+                Set<String> branchIds = new Set<String>();
+                if(!bcmCodeSet.isEmpty()){
+                    for(Contact con : [SELECT Id, Empl_Code__c, Empl_Reporting_Manager__c, Empl_Reporting_Manager__r.Empl_Code__c,Account.Branch__r.Name FROM Contact WHERE 
+                                       Account.RecordTypeId =: accRecordType AND Empl_Code__c IN :bcmCodeSet]){
+                                           employeeDesignationMap.put(con.Empl_Code__c, 'BCM');
+                                           branchIds.add(con.Account.Branch__c);
+                                           if(BRANCH_To_BCMCO_Map.containskey(con.Account.Branch__r.Name)){
+                                               Set<String> tempList = BRANCH_To_BCMCO_Map.get(con.Account.Branch__r.Name);
+                                               tempList.add(con.Empl_Code__c);
+                                               BRANCH_To_BCMCO_Map.put(con.Account.Branch__r.Name, tempList);
+                                           }
+                                           else{
+                                               BRANCH_To_BCMCO_Map.put(con.Account.Branch__r.Name, new Set<String>{con.Empl_Code__c});
+                                           }
+                                       }
+                    
+                    
+                    for(Contact con : [SELECT Id, Empl_Code__c, Empl_Reporting_Manager__c, Empl_Reporting_Manager__r.Empl_Code__c,Account.Branch__r.Name FROM Contact WHERE 
+                                       Account.RecordTypeId =: accRecordType AND 
+                                       Account.Branch__c IN: branchIds AND (Designation__c = 'C.O' OR Designation__c ='CO')]){
+                                           if(BRANCH_To_BCMCO_Map.containskey(con.Account.Branch__r.Name)){
+                                               Set<String> tempList = BRANCH_To_BCMCO_Map.get(con.Account.Branch__r.Name);
+                                               tempList.add(con.Empl_Code__c);
+                                               BRANCH_To_BCMCO_Map.put(con.Account.Branch__r.Name, tempList);
+                                           }
+                                           else{
+                                               BRANCH_To_BCMCO_Map.put(con.Account.Branch__r.Name, new Set<String>{con.Empl_Code__c});
+                                           }
+                                           employeeDesignationMap.put(con.Empl_Code__c, 'C.O');
+                                           coCodeSet.add(con.Empl_Code__c);
+                                       } 
+                }
+                
+                List<AggregateResult> aggList = [
+                    SELECT Legal_Action_Person__c, COUNT(Id) cnt
+                    FROM Opportunity
+                    WHERE Legal_Action_Person__c IN :empCodeSet 
+                    OR Legal_Action_Person__c IN :coCodeSet OR 
+                    Legal_Action_Person__c IN :bcmCodeSet
+                    GROUP BY Legal_Action_Person__c
+                ];
+                
+                for (AggregateResult ar : aggList) {
+                    String empCode = (String) ar.get('Legal_Action_Person__c');
+                    Integer count = (Integer) ar.get('cnt');
+                    EmpIdByCasesMap.put(empCode, count);
+                }
+                
+                System.debug('HO_To_NCM_Map :: '+HO_To_NCM_Map);
+                System.debug('NCM_To_ZCM_Map :: '+NCM_To_ZCM_Map);
+                System.debug('ZCM_To_RCM_Map :: '+ZCM_To_RCM_Map);
+                System.debug('RCM_To_ACM_Map :: '+RCM_To_ACM_Map);
+                System.debug('ACM_To_Branch_Map :: '+ACM_To_Branch_Map);
+                System.debug('BRANCH_To_BCMCO_Map :: '+BRANCH_To_BCMCO_Map);
+                
+                System.debug('coCodeSet :: '+coCodeSet);
+                
+                
+                Map<String, User> userMap = new Map<String, User>();
+                
+                if(!empCodeSet.isEmpty()){
+                    for(User usr : [Select Id,EmployeeNumber,Designation__c, Name,MobilePhone from User where EmployeeNumber =: empCodeSet]){
+                        userMap.put(usr.EmployeeNumber, usr);
+                    }
+                }
+                
+                Map<String, Attendance__c> attMap = new Map<String, Attendance__c>();
+                
+                if(!BRANCH_To_BCMCO_Map.isEmpty()){
+                    Datetime twoDaysAgo = DateTime.newInstance(Date.today().addDays(-2), Time.newInstance(0, 0, 0, 0));
+					String attQuery = 'Select Id, Name,Date__c, Account__c,CreatedDate,Account__r.Mobile__pc, Account__r.Name, Account__r.Empl_Code__pc, Account__r.Designation__pc, Active__c from Attendance__c where RecordTypeId =: attRecordType AND Account__c != NULL AND ( Account__r.Empl_Code__pc IN: coCodeSet OR Account__r.Empl_Code__pc IN :bcmCodeSet ) AND Account__r.RecordTypeId = :accRecordType';
+                    if(status != null){
+                     //   queryCO += ' AND Active__c =:status';
+                    }
+                    
+                    /*if (startDate != null && endDate != null) {
+                        queryCO += ' AND Date__c >= :startDate AND Date__c <= :endDate';
+                    } else if (startDate != null) {
+                        queryCO += ' AND Date__c >= :startDate';
+                    } else if (endDate != null) {
+                        queryCO += ' AND Date__c <= :endDate';
+                    }*/
+                    
+                    if (startDate != null && endDate != null) {
+                        attQuery += ' AND Date__c >= ' + startDate.formatGMT('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') +
+                            ' AND Date__c <= ' + endDate.formatGMT('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
+                    } else if (startDate != null) {
+                        attQuery += ' AND Date__c >= ' + startDate.formatGMT('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
+                    } else if (endDate != null) {
+                        attQuery += ' AND Date__c <= ' + endDate.formatGMT('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
+                    }
+                    
+                     if (selectedTimeFilter != null) {
+                        Datetime timeWindow = Datetime.now().addMinutes(-selectedTimeFilter);
+                        attQuery += ' AND Date__c >= :timeWindow';
+                    }
+                    
+                    
+                    attQuery +=' AND CreatedDate >=:twoDaysAgo Order by CreatedDate DESC';
+                    System.debug('attQuery :: '+attQuery);
+                    List<Attendance__c> attandanceList = Database.query(attQuery);
+                    
+                    
+                    for(Attendance__c att : attandanceList){
+                        String empCode = att.Account__r.Empl_Code__pc;
+                        if (!attMap.containsKey(empCode)) {
+                            attMap.put(att.Account__r.Empl_Code__pc, att);                            
+                        }
+                        
+                    }
+                }
+                
+                System.debug('attMap :: '+attMap);
+                System.debug('userMap :: '+userMap);
+                
+                
+                
+                if(!userMap.isEmpty()){                    
+                    if(!HO_To_NCM_Map.isEmpty()){
+                        HOWrapper hoWrap = new HOWrapper();
+                        for(String emp : HO_To_NCM_Map.keySet()){
+                            if(userMap.containskey(emp)){
+                                System.debug('Entered in user Map');
+                                hoWrap.name = userMap.get(emp).Name;
+                                hoWrap.employeeId = userMap.get(emp).EmployeeNumber; 
+                                hoWrap.designation = employeeDesignationMap.containsKey(emp) ? employeeDesignationMap.get(emp) : '';
+                                hoWrap.mobileNumber = userMap.get(emp).MobilePhone;
+                                hoWrap.allocatedCases = EmpIdByCasesMap.containsKey(emp) ? EmpIdByCasesMap.get(emp) :null;
+
+                                List<String> ncmEmpCodeList = new List<String>();
+                                for(String empCode : HO_To_NCM_Map.get(emp)){
+                                    ncmEmpCodeList.add(empCode);
+                                }
+                                hoWrap.children = getNCMDetails(userMap,ncmEmpCodeList);
+                                ncmWrapList.addAll(hoWrap.children);
+                            }
+                        }
+                        hoWrapList.add(hoWrap);
+                    }
+                    
+                    System.debug('hoWrapList :: '+hoWrapList);
+                    System.debug('ncmWrapList :: '+ncmWrapList);
+                    
+                    
+                    
+                    /* if(!NCM_To_ZCM_Map.isEmpty()){
+NCMWrapper ncmWrap = new NCMWrapper();
+for(String emp : NCM_To_ZCM_Map.keySet()){
+if(userMap.containskey(emp)){
+ncmWrap.name = userMap.get(emp).Name;
+ncmWrap.employeeId = userMap.get(emp).EmployeeNumber;
+ncmWrap.designation = userMap.get(emp).Designation__c;
+
+List<String> zcmEmpCodeList = new List<String>();
+for(String empCode : NCM_To_ZCM_Map.get(emp)){
+zcmEmpCodeList.add(empCode);
+}
+ncmWrap.children = getZCMDetails(userMap,zcmEmpCodeList);
+zcmWrapList.addAll(ncmWrap.children);
+System.debug('zcmWrapList :: '+zcmWrapList);
+}
+}
+ncmWrapList.add(ncmWrap);
+}
+System.debug('ncmWrapList :: '+ncmWrapList);*/
+                    
+                    
+                    if(!NCM_To_ZCM_Map.isEmpty()){
+                        if(!ncmWrapList.isEmpty()){
+                            for(NCMWrapper ncmWrap : ncmWrapList){
+                                List<String> zcmEmpCodeList = new List<String>();
+                                for(String empCode : NCM_To_ZCM_Map.get(ncmWrap.employeeId)){
+                                    zcmEmpCodeList.add(empCode);
+                                }
+                                ncmWrap.children = getZCMDetails(userMap, zcmEmpCodeList);
+                                zcmWrapList.addAll(ncmWrap.children);
+                            }
+                        }
+                        else{
+                            NCMWrapper ncmWrap = new NCMWrapper();
+                            for(String emp : NCM_To_ZCM_Map.keySet()){
+                                if(userMap.containskey(emp)){
+                                    ncmWrap.name = userMap.get(emp).Name;
+                                    ncmWrap.employeeId = userMap.get(emp).EmployeeNumber;
+                                    ncmWrap.designation = employeeDesignationMap.containsKey(emp) ? employeeDesignationMap.get(emp) : '';
+                                    ncmWrap.mobileNumber = userMap.get(emp).MobilePhone;
+                               		ncmWrap.allocatedCases = EmpIdByCasesMap.containsKey(emp) ? EmpIdByCasesMap.get(emp) :null;
+
+                                    List<String> zcmEmpCodeList = new List<String>();
+                                    for(String empCode : NCM_To_ZCM_Map.get(emp)){
+                                        zcmEmpCodeList.add(empCode);
+                                    }
+                                    ncmWrap.children = getZCMDetails(userMap, zcmEmpCodeList);
+                                    zcmWrapList.addAll(ncmWrap.children);
+                                }
+                            }
+                            ncmWrapList.add(ncmWrap);
+                        }
+                    }
+                    
+                    
+                    if(!ZCM_To_RCM_Map.isEmpty()){
+                        if(!zcmWrapList.isEmpty()){
+                            for(ZCMWrapper zcmWrap : zcmWrapList){
+                                List<String> rcmEmpCodeList = new List<String>();
+                                for(String empCode : ZCM_To_RCM_Map.get(zcmWrap.employeeId)){
+                                    rcmEmpCodeList.add(empCode);
+                                }
+                                zcmWrap.children = getRCMDetails(userMap, rcmEmpCodeList);
+                                rcmWrapList.addAll(zcmWrap.children);
+                            }
+                        }
+                        else{
+                            ZCMWrapper zcmWrap = new ZCMWrapper();
+                            for(String emp : ZCM_To_RCM_Map.keySet()){
+                                if(userMap.containskey(emp)){
+                                    zcmWrap.name = userMap.get(emp).Name;
+                                    zcmWrap.employeeId = userMap.get(emp).EmployeeNumber;
+                                    zcmWrap.designation = employeeDesignationMap.containsKey(emp) ? employeeDesignationMap.get(emp) : '';
+                                    zcmWrap.mobileNumber = userMap.get(emp).MobilePhone;
+                               		zcmWrap.allocatedCases = EmpIdByCasesMap.containsKey(emp) ? EmpIdByCasesMap.get(emp) :null;
+
+                                    List<String> rcmEmpCodeList = new List<String>();
+                                    for(String empCode : ZCM_To_RCM_Map.get(emp)){
+                                        rcmEmpCodeList.add(empCode);
+                                    }
+                                    zcmWrap.children = getRCMDetails(userMap, rcmEmpCodeList);
+                                    rcmWrapList.addAll(zcmWrap.children);
+                                }
+                            }
+                            zcmWrapList.add(zcmWrap);
+                        }
+                    }
+                    System.debug('rcmWrapList New :: '+rcmWrapList);
+                    
+                    if(!RCM_To_ACM_Map.isEmpty()){
+                        if(!rcmWrapList.isEmpty()){
+                            for(RCMWrapper rcmWrap : rcmWrapList){
+                                List<String> acmEmpCodeList = new List<String>();
+                                for(String empCode : RCM_To_ACM_Map.get(rcmWrap.employeeId)){
+                                    acmEmpCodeList.add(empCode);
+                                }
+                                System.debug('rcmWrap :: >> '+rcmWrap);
+                                System.debug('acmEmpCodeList :: >> '+acmEmpCodeList);
+                                rcmWrap.children = getACMDetails(userMap, acmEmpCodeList);
+                                acmWrapList.addAll(rcmWrap.children);
+                            }
+                        }
+                        else{
+                            RCMWrapper rcmWrap = new RCMWrapper();
+                            for(String empId : RCM_To_ACM_Map.keySet()){
+                                if(userMap.containskey(empId)){
+                                    rcmWrap.name = userMap.get(empId).Name;
+                                    rcmWrap.employeeId = userMap.get(empId).EmployeeNumber;
+                                    rcmWrap.designation = employeeDesignationMap.containsKey(empId) ? employeeDesignationMap.get(empId) : '';
+                                    rcmWrap.mobileNumber = userMap.get(empId).MobilePhone;
+                               		rcmWrap.allocatedCases = EmpIdByCasesMap.containsKey(empId) ? EmpIdByCasesMap.get(empId) :null;
+
+                                    List<String> acmEmpCodeList = new List<String>();
+                                    
+                                    for(String empCode : RCM_To_ACM_Map.get(empId)){
+                                        if(userMap.containsKey(empCode)){
+                                            acmEmpCodeList.add(empCode);
+                                        }
+                                    }
+                                    rcmWrap.children = getACMDetails(userMap, acmEmpCodeList);
+                                    acmWrapList.addAll(rcmWrap.children);
+                                }
+                            }
+                            rcmWrapList.add(rcmWrap);
+                        }
+                    }
+                 //   System.debug('acmWrapList :: '+acmWrapList);
+                    
+                    if(!ACM_To_Branch_Map.isEmpty()){
+                        if(!acmWrapList.isEmpty()){
+                            for(ACMWrapper acmWrap : acmWrapList){
+                                for(String branch : ACM_To_Branch_Map.get(acmWrap.employeeId)){
+                                    acmWrap.children = getBranchDetails(branch);
+                                }
+                                branchWrapList.add(acmWrap.children);
+                               // acmWrap.totalUsersCount = acmWrap.totalUsersCount + acmWrap.children.size();
+                                //branchWrapList.addAll(acmWrap.children);
+                            }
+                        }
+                        else{
+                            ACMWrapper acmWrap = new ACMWrapper();
+                            for(String empId : ACM_To_Branch_Map.keySet()){
+                                if(userMap.containskey(empId)){
+                                    acmWrap.name = userMap.get(empId).Name;
+                                    acmWrap.employeeId = userMap.get(empId).EmployeeNumber;
+                                    acmWrap.designation = employeeDesignationMap.containsKey(empId) ? employeeDesignationMap.get(empId) : '';
+                                    acmWrap.mobileNumber = userMap.get(empId).MobilePhone;
+                               		acmWrap.allocatedCases = EmpIdByCasesMap.containsKey(empId) ? EmpIdByCasesMap.get(empId) :null;
+
+                                    for(String branch : ACM_To_Branch_Map.get(empId)){
+                                        acmWrap.children = getBranchDetails(branch);
+                                    }
+                                   // acmWrap.totalUsersCount = acmWrap.totalUsersCount + acmWrap.children.size();
+                                    branchWrapList.add(acmWrap.children);
+                                }
+                                acmWrapList.add(acmWrap);
+                            }
+                        }
+                    }
+                    System.debug('acmWrapList :: '+acmWrapList);
+                    System.debug('branchWrapList :: '+branchWrapList);
+
+                   // System.debug('bcmWrapList :: '+bcmWrapList);
+                    //ISFC9044
+                    if(!BRANCH_To_BCMCO_Map.isEmpty()){
+                        for(BranchWrapper branchWrap : branchWrapList){
+                            List<Attendance__c> bcmcoEmpCodeList = new List<Attendance__c>();
+                            System.debug('===>>>>>>>>>'+BRANCH_To_BCMCO_Map.get(branchWrap.name));
+                            if(BRANCH_To_BCMCO_Map.containsKey(branchWrap.name)){
+                                for(String empCode : BRANCH_To_BCMCO_Map.get(branchWrap.name)){
+                                    System.debug('===>>>>>>>>>'+attMap.containsKey(empCode));
+                                    if(attMap.containsKey(empCode)){
+                                        bcmcoEmpCodeList.add(attMap.get(empCode));
+                                    }
+                                }
+                            }
+                            branchWrap.children = getBCMCODetails(attMap, bcmcoEmpCodeList,status);
+                            bcmAndCoWrapList.addAll(branchWrap.children);
+                        }
+                    }
+                    System.debug('bcmAndCoWrapList :: '+bcmAndCoWrapList);
+                    
+                    for(ACMWrapper acmWrap : acmWrapList){
+                        if(acmWrap.children != null && acmWrap.children.children != null){
+                            acmWrap.totalUsersCount = acmWrap.children.children.size();
+                        }
+                    }
+                }
+                System.debug('role :: '+role);
+                System.debug('ncmWrapList :: '+ncmWrapList);
+                System.debug('zcmWrapList :: '+zcmWrapList);
+                System.debug('rcmWrapList :: '+rcmWrapList);
+                System.debug('acmWrapList :: '+acmWrapList);
+                
+                if(role == 'NCM'){
+                    return JSON.serialize(ncmWrapList);
+                }
+                if(role == 'HO'){
+                    System.debug('hoWrapList :: '+JSON.serialize(hoWrapList));
+                    return JSON.serialize(hoWrapList);
+                }
+                else if(role == 'ZCM'){
+                    return JSON.serialize(zcmWrapList);
+                }
+                else if(role == 'RCM'){
+                    return JSON.serialize(rcmWrapList);
+                }
+                else if(role == 'ACM'){
+                    return JSON.serialize(acmWrapList);
+                }
+                else{
+                    return NULL;
+                }
+            }
+            catch(Exception ex){
+                System.debug(ex.getLineNumber() + '<<=====>>' + ex.getMessage());
+                throw new AuraHandledException(ex.getMessage());
             }
         }
+    
+    public static List<NCMWrapper> getNCMDetails(Map<String, User> userMap, List<String> ncmEmpCodeList){
+        List<NCMWrapper> ncmWrapList = new List<NCMWrapper>();
+        for(String empId : ncmEmpCodeList){
+            NCMWrapper ncmWrap = new NCMWrapper();
+            if(userMap.get(empId) != null){
+                ncmWrap.name = userMap.get(empId).Name;
+                ncmWrap.employeeId = userMap.get(empId).EmployeeNumber;
+                ncmWrap.designation = employeeDesignationMap.containsKey(empId) ? employeeDesignationMap.get(empId) : '';
+                ncmWrap.mobileNumber = userMap.get(empId).MobilePhone;
+                ncmWrap.allocatedCases = EmpIdByCasesMap.containsKey(empId) ? EmpIdByCasesMap.get(empId) :null;
 
-        if (!collectionsToInsert.isEmpty()) {
-            insert collectionsToInsert;
+                ncmWrapList.add(ncmWrap);
+            }
+            
         }
+        return ncmWrapList;
     }
+    
+    public static List<ZCMWrapper> getZCMDetails(Map<String, User> userMap, List<String> zcmEmpCodeList){
+        List<ZCMWrapper> zcmWrapList = new List<ZCMWrapper>();
+        for(String empId : zcmEmpCodeList){
+            ZCMWrapper zcmWrap = new ZCMWrapper();
+            if(userMap.get(empId) != null){
+                zcmWrap.name = userMap.get(empId).Name;
+                zcmWrap.employeeId = userMap.get(empId).EmployeeNumber;
+                zcmWrap.designation = employeeDesignationMap.containsKey(empId) ? employeeDesignationMap.get(empId) : '';
+                zcmWrap.mobileNumber = userMap.get(empId).MobilePhone;
+                zcmWrap.allocatedCases = EmpIdByCasesMap.containsKey(empId) ? EmpIdByCasesMap.get(empId) :null;
 
-    // =========================================================================
-    // Helpers
-    // =========================================================================
-    private static RestResponse invokeDoPost(String jsonBody) {
-        RestRequest req = new RestRequest();
-        req.requestURI = '/services/apexrest/CallBotCollection/';
-        req.httpMethod = 'POST';
-        req.requestBody = Blob.valueOf(jsonBody != null ? jsonBody : '');
-
-        RestResponse res = new RestResponse();
-        RestContext.request = req;
-        RestContext.response = res;
-
-        CallBotCollectionWebhookService.doPost();
-        return RestContext.response;
+                zcmWrapList.add(zcmWrap);
+            }
+        }
+        return zcmWrapList;
     }
+    
+    public static List<RCMWrapper> getRCMDetails(Map<String, User> userMap, List<String> rcmEmpCodeList){
+        List<RCMWrapper> rcmWrapList = new List<RCMWrapper>();
+        for(String empId : rcmEmpCodeList){
+            RCMWrapper rcmWrap = new RCMWrapper();
+            if(userMap.get(empId) != null){
+                rcmWrap.name = userMap.get(empId).Name;
+                rcmWrap.employeeId = userMap.get(empId).EmployeeNumber;
+                rcmWrap.designation = employeeDesignationMap.containsKey(empId) ? employeeDesignationMap.get(empId) : '';
+                rcmWrap.mobileNumber = userMap.get(empId).MobilePhone;
+                rcmWrap.allocatedCases = EmpIdByCasesMap.containsKey(empId) ? EmpIdByCasesMap.get(empId) :null;
 
-    private static RestResponse invokeDoPost(CallBotCollectionWebhookService.CallWebhookWrapper wrapper) {
-        return invokeDoPost(JSON.serialize(wrapper, true));
+                rcmWrapList.add(rcmWrap);
+            }
+        }
+        return rcmWrapList;
     }
-
-    private static String getLoanNumberByName(String oppName) {
-        return [SELECT Loan_Number__c FROM Opportunity WHERE Name = :oppName LIMIT 1].Loan_Number__c;
+    
+    public static List<ACMWrapper> getACMDetails(Map<String, User> userMap, List<String> acmEmpCodeList){
+        List<ACMWrapper> acmWrapList = new List<ACMWrapper>();
+        for(String empId : acmEmpCodeList){
+            ACMWrapper acmWrap = new ACMWrapper();
+            if(userMap.get(empId) != null){
+                acmWrap.name = userMap.get(empId).Name;
+                acmWrap.employeeId = userMap.get(empId).EmployeeNumber;
+                acmWrap.designation = employeeDesignationMap.containsKey(empId) ? employeeDesignationMap.get(empId) : '';
+                acmWrap.mobileNumber = userMap.get(empId).MobilePhone;
+                acmWrap.allocatedCases = EmpIdByCasesMap.containsKey(empId) ? EmpIdByCasesMap.get(empId) :null;
+                acmWrap.totalUsersCount = 0;
+                acmWrapList.add(acmWrap);
+            }
+        }
+        return acmWrapList;
     }
-
-    // =========================================================================
-    // Test Scenarios
-    // =========================================================================
-
-    @isTest
-    static void testEmptyRequestBody() {
-        Test.startTest();
-        RestResponse res = invokeDoPost('');
-        Test.stopTest();
-
-        System.assertEquals(400, res.statusCode, 'Empty body should return 400');
-        System.assertEquals(1, [SELECT COUNT() FROM Whatsapp_collect_send_request__c]);
+    
+    public static BranchWrapper getBranchDetails(String branch){
+        BranchWrapper branchWrap = new BranchWrapper();
+        branchWrap.name = branch;
+        return branchWrap;
     }
-
-    @isTest
-    static void testMissingRequiredParameters() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = '';
-        wrapper.phone_Number = '';
-        wrapper.customer_number = '';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        System.assertEquals(400, res.statusCode, 'Missing required params should return 400');
+    
+ /*   public static List<BCMWrapper> getBCMDetails(Map<String, Attendance__c> attMap, List<Attendance__c> bcmEmpCodeList,Boolean status){
+        List<BCMWrapper> bcmWrapList = new List<BCMWrapper>();
+        DateTime gmtNow = DateTime.now();
+        TimeZone istTimeZone = TimeZone.getTimeZone('Asia/Kolkata'); 
+        Integer offsetToIST = istTimeZone.getOffset(gmtNow); 
+        DateTime now = gmtNow.addSeconds(offsetToIST / 1000);
+        for(Attendance__c att : bcmEmpCodeList){
+            BCMWrapper bcmWrap = new BCMWrapper();
+            if(attMap.containskey(att.Account__r.Empl_Code__pc)){
+                bcmWrap.name = attMap.get(att.Account__r.Empl_Code__pc).Account__r.Name;
+                bcmWrap.employeeId = attMap.get(att.Account__r.Empl_Code__pc).Account__r.Empl_Code__pc;
+                Long diffMillis = now.getTime() - attMap.get(att.Account__r.Empl_Code__pc).Date__c.addSeconds(offsetToIST / 1000).getTime();
+                Decimal diffMinutes = diffMillis / 60000.0;
+                
+                if (diffMinutes >= 45) {
+                    bcmWrap.isActive = false;
+                } else {
+                    bcmWrap.isActive = attMap.get(att.Account__r.Empl_Code__pc).Active__c;
+                }
+                bcmWrap.designation = employeeDesignationMap.containsKey(att.Account__r.Empl_Code__pc) ? employeeDesignationMap.get(att.Account__r.Empl_Code__pc) : '';
+                bcmWrap.mobileNumber = attMap.get(att.Account__r.Empl_Code__pc).Account__r.Mobile__pc;
+                bcmWrap.lastLogin = (attMap.containsKey(att.Account__r.Empl_Code__pc) && attMap.get(att.Account__r.Empl_Code__pc).Date__c != null) 
+                    ? String.ValueOf(attMap.get(att.Account__r.Empl_Code__pc).Date__c.format('dd-MM-yyyy hh:mm a')) 
+                    : '';
+                bcmWrap.allocatedCases = EmpIdByCasesMap.containsKey(att.Account__r.Empl_Code__pc) ? EmpIdByCasesMap.get(att.Account__r.Empl_Code__pc) :null;
+                if(status != null){
+                    if(bcmWrap.isActive && status){
+                        bcmWrapList.add(bcmWrap); 
+                    }
+                    if(!bcmWrap.isActive && !status){
+                        bcmWrapList.add(bcmWrap); 
+                    }
+                }else{
+                    bcmWrapList.add(bcmWrap);    
+                }
+                
+                
+            }
+        }
+      //  System.debug('bcmWrapList :: '+bcmWrapList);
+        return bcmWrapList;
     }
-
-    @isTest
-    static void testOnlyDueForMonthIsZero() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = getLoanNumberByName('Loan Zero Due');
-        wrapper.phone_Number = '9876543210';
-        wrapper.source = 'CC-002';
-        wrapper.OnlyDueFortheMonth = 'Yes';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        System.assertEquals(403, res.statusCode, 'Zero due for month should return 403');
+    */
+    public static List<BCM_AND_CO_Wrapper> getBCMCODetails(Map<String, Attendance__c> attMap, List<Attendance__c> bcmcoEmpCodeList,Boolean status){
+        System.debug('attMap :: '+attMap);
+        System.debug('bcmcoEmpCodeList :: '+bcmcoEmpCodeList);
+        
+        List<BCM_AND_CO_Wrapper> bcmcoWrapList = new List<BCM_AND_CO_Wrapper>();
+        DateTime gmtNow = DateTime.now();
+        TimeZone istTimeZone = TimeZone.getTimeZone('Asia/Kolkata'); 
+        Integer offsetToIST = istTimeZone.getOffset(gmtNow); 
+        DateTime now = gmtNow.addSeconds(offsetToIST / 1000);
+        for(Attendance__c att : bcmcoEmpCodeList){
+            BCM_AND_CO_Wrapper bcmcoWrap = new BCM_AND_CO_Wrapper();
+            if(attMap.containskey(att.Account__r.Empl_Code__pc)){
+                bcmcoWrap.name = attMap.get(att.Account__r.Empl_Code__pc).Account__r.Name;
+                bcmcoWrap.employeeId = attMap.get(att.Account__r.Empl_Code__pc).Account__r.Empl_Code__pc;
+                Long diffMillis = now.getTime() - attMap.get(att.Account__r.Empl_Code__pc).Date__c.addSeconds(offsetToIST / 1000).getTime();
+                Decimal diffMinutes = diffMillis / 60000.0;
+                
+                if (diffMinutes >= 45) {
+                    bcmcoWrap.isActive = false;
+                } else {
+                    bcmcoWrap.isActive = attMap.get(att.Account__r.Empl_Code__pc).Active__c;
+                }
+                // coWrap.isActive = userMap.get(usr.Account__r.Empl_Code__pc).Active__c;
+                bcmcoWrap.designation = employeeDesignationMap.containsKey(att.Account__r.Empl_Code__pc) ? employeeDesignationMap.get(att.Account__r.Empl_Code__pc) : '';
+                bcmcoWrap.mobileNumber = attMap.get(att.Account__r.Empl_Code__pc).Account__r.Mobile__pc;                
+                bcmcoWrap.lastLogin = (attMap.containsKey(att.Account__r.Empl_Code__pc) && attMap.get(att.Account__r.Empl_Code__pc).Date__c != null) 
+                    ? String.ValueOf(attMap.get(att.Account__r.Empl_Code__pc).Date__c.format('dd-MM-yyyy hh:mm a')) 
+                    : '';
+                bcmcoWrap.allocatedCases = EmpIdByCasesMap.containsKey(att.Account__r.Empl_Code__pc) ? EmpIdByCasesMap.get(att.Account__r.Empl_Code__pc) :null;
+				if(status != null){
+                    if(bcmcoWrap.isActive && status){
+                        bcmcoWrapList.add(bcmcoWrap); 
+                    }
+                    if(!bcmcoWrap.isActive && !status){
+                        bcmcoWrapList.add(bcmcoWrap); 
+                    }
+                }else{
+                    bcmcoWrapList.add(bcmcoWrap);    
+                }
+            }
+        }
+        System.debug('coWrapList :: '+bcmcoWrapList);
+        return bcmcoWrapList;
     }
-
-    @isTest
-    static void testZeroBalanceCollectableAndNoBouncing() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = getLoanNumberByName('Loan Zero Balance No Bounce');
-        wrapper.phone_Number = '9876543210';
-        wrapper.source = 'CC-002';
-        wrapper.OnlyDueFortheMonth = 'No';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        System.assertEquals(403, res.statusCode, 'Zero balance with no bouncing should return 403');
-    }
-
-    @isTest
-    static void testSuccess_GreyLabs_CC003_FullBalanceWithBounce() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-        wrapper.customer_number = '9876543210';
-        wrapper.source = 'CC-003';
-        wrapper.collector_name = 'GreyLabs Bot';
-        wrapper.OnlyDueFortheMonth = 'No';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        List<Whatsapp_collect_send_request__c> logs = [
-            SELECT Id, Source__c, Amount__c, Response__c
-            FROM Whatsapp_collect_send_request__c
-            WHERE Source__c = 'CC-003'
-        ];
-        System.assertEquals(1, logs.size(), 'Should log GreyLabs request');
-        System.assertEquals(200, res.statusCode, 'Expected 200. Detail: ' + logs[0].Response__c);
-    }
-
-    @isTest
-    static void testSuccess_Gnani_CC002_OnlyDueForMonth() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-        wrapper.phone_Number = '9876543210';
-        wrapper.source = 'CC-002';
-        wrapper.collector_name = 'Gnani Bot';
-        wrapper.OnlyDueFortheMonth = 'Yes';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        List<Whatsapp_collect_send_request__c> logs = [
-            SELECT Id, Source__c, Amount__c, Response__c
-            FROM Whatsapp_collect_send_request__c
-            WHERE Source__c = 'CC-002'
-        ];
-        System.assertEquals(1, logs.size(), 'Should log Gnani request');
-        System.assertEquals(200, res.statusCode, 'Expected 200. Detail: ' + logs[0].Response__c);
-    }
-
-    @isTest
-    static void testSuccess_InternalBot_CC004_ZeroBalanceWithBounce() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = getLoanNumberByName('Loan Zero Balance With Bounce');
-        wrapper.phone_Number = '9876543210';
-        wrapper.source = 'CC-004';
-        wrapper.collector_name = 'Internal Bot';
-        wrapper.OnlyDueFortheMonth = 'No';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        List<Whatsapp_collect_send_request__c> logs = [
-            SELECT Id, Source__c, Amount__c, Response__c
-            FROM Whatsapp_collect_send_request__c
-            WHERE Source__c = 'CC-004'
-        ];
-        System.assertEquals(1, logs.size(), 'Should log Internal bot request');
-        System.assertEquals(200, res.statusCode, 'Expected 200. Detail: ' + logs[0].Response__c);
-    }
-
-    @isTest
-    static void testException_OpportunityNotFound() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = '999999999';
-        wrapper.phone_Number = '9876543210';
-        wrapper.source = 'CC-002';
-
-        Test.startTest();
-        RestResponse res = invokeDoPost(wrapper);
-        Test.stopTest();
-
-        System.assertEquals(500, res.statusCode, 'QueryException when Opp is missing should return 500');
-    }
-
-    @isTest
-    static void testException_AfterOpportunityLoaded() {
-        CallBotCollectionWebhookService.CallWebhookWrapper wrapper = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        wrapper.loan_id = getLoanNumberByName('Loan Active With Bounce');
-        wrapper.phone_Number = '9876543210';
-        wrapper.OnlyDueFortheMonth = 'Yes';
-
-        // Trigger a DML exception on try-block insert wc AFTER opp is loaded
-        Schema.DescribeFieldResult srcDesc = Whatsapp_collect_send_request__c.Source__c.getDescribe();
-        if (srcDesc.getType() == Schema.DisplayType.PICKLIST && srcDesc.isRestrictedPicklist()) {
-            wrapper.source = 'INVALID_SOURCE_FOR_EXCEPTION';
-        } else if (srcDesc.getLength() > 0 && srcDesc.getLength() <= 255) {
-            wrapper.source = 'X'.repeat(srcDesc.getLength() + 5);
+    
+    
+    
+    @AuraEnabled(cacheable=true)
+    public static UserWrapper getUserDetails() {
+        
+        String currentUserId = UserInfo.getUserId();
+        //  currentUserId = '0052K00000BQ15KQAT';
+        User currentUser = [SELECT Id, Name, Branch__c, EmployeeNumber,MobilePhone FROM User WHERE Id = :currentUserId LIMIT 1];
+        
+        UserWrapper result = new UserWrapper();
+        result.name = currentUser.Name;
+        result.employeeId = currentUser.EmployeeNumber;
+        result.mobileNumber = currentUser.MobilePhone;
+        
+        if (currentUser.Branch__c == 'Headoffice') {
+            result.designation = 'HO';
         } else {
-            Integer botReqLen = Whatsapp_collect_send_request__c.BOT_Request__c.getDescribe().getLength();
-            wrapper.source = 'CC-002';
-            wrapper.call_summary = 'X'.repeat((botReqLen > 0 ? botReqLen : 255) + 10);
+            List<Branch__c> branches = [
+                SELECT Collection_Manager__c, Branch_Area_Collection__c, Branch_Regional_Collection__c,
+                Zonal_Collection_Manager__c, National_Collection_Manager__c
+                FROM Branch__c
+                WHERE Branch_Area_Collection__c = :currentUserId
+                OR Branch_Regional_Collection__c = :currentUserId
+                OR Zonal_Collection_Manager__c = :currentUserId
+                OR National_Collection_Manager__c = :currentUserId
+                LIMIT 1
+            ];
+            
+            if (!branches.isEmpty()) {
+                Branch__c b = branches[0];
+                
+                if (b.National_Collection_Manager__c == currentUserId) {
+                    result.designation = 'NCM';
+                } else if (b.Zonal_Collection_Manager__c == currentUserId) {
+                    result.designation = 'ZCM';
+                } else if (b.Branch_Regional_Collection__c == currentUserId) {
+                    result.designation = 'RCM';
+                } else if (b.Branch_Area_Collection__c == currentUserId) {
+                    result.designation = 'ACM';
+                }
+            }
         }
-
-        Test.startTest();
-        try {
-            RestResponse res = invokeDoPost(wrapper);
-            System.assertEquals(500, res.statusCode, 'Exception after opp load should return 500');
-        } catch (DmlException e) {
-            // Catch-block insert may also hit length limit; all lines inside if(opp != null) are still covered
-            System.assert(true, 'Caught expected DML exception from catch-block insert');
-        }
-        Test.stopTest();
+        return result;
     }
-
-    @isTest
-    static void testWrappersCoverage() {
-        CallBotCollectionWebhookService.CallWebhookWrapper w = new CallBotCollectionWebhookService.CallWebhookWrapper();
-        w.loan_id = '100001';
-        w.phone_Number = '9876543210';
-        w.name = 'Test';
-        w.due_amount = 1000;
-        w.due_month = 'Nov';
-        w.language = 'EN';
-        w.disposition = 'PTP';
-        w.callstatus = 'Completed';
-        w.source_phone = '0123456789';
-        w.call_duration = 60;
-        w.calling_date = '2026-11-24';
-        w.campaign_name = 'Collection';
-        w.call_id = 'C1';
-        w.recording_id = 'R1';
-        w.call_date = '2026-11-24';
-        w.call_start_time = '10:00';
-        w.call_answer_time = '10:01';
-        w.call_end_time = '10:02';
-        w.total_call_duration_sec = 60;
-        w.call_direction = 'Outbound';
-        w.call_status = 'Answered';
-        w.hangup_source = 'Customer';
-        w.hangup_cause = 'Normal';
-        w.hangup_cause_code = 16;
-        w.hangup_cause_name = 'NORMAL_CLEARING';
-        w.agent_id = 'A1';
-        w.agent_number = '1111111111';
-        w.agent_sentiment = 'Positive';
-        w.customer_id = 'CU1';
-        w.customer_number = '9876543210';
-        w.customer_name = 'Test';
-        w.customer_sentiment = 'Neutral';
-        w.detected_language = 'EN';
-        w.final_disposition = 'PTP';
-        w.compliance_score = 95.5;
-        w.call_summary = 'Summary';
-        w.call_transcript = 'Transcript';
-        w.template_name = 'T1';
-        w.template_id = 'TID1';
-        w.recording_url = 'https://example.com/rec';
-        w.telephony_call_uuid = 'UUID-1';
-        w.product_type = 'HL';
-        w.product = 'Home Loan';
-        w.emi_amount = 2000;
-        w.emi_pending = 1;
-        w.days_overdue = 5;
-        w.balance_collectable = 5000;
-        w.loan_last_4 = '0001';
-        w.no_of_months_defaulted = 1;
-        w.monthly_bouncing_charges = 700;
-        w.monthly_penal_interest_rate = 2.0;
-        w.initiation_time = '10:00';
-        w.answer_time = '10:01';
-        w.end_time = '10:02';
-        w.current_datetime = '2026-11-24T10:00:00Z';
-        w.current_day = 'Tuesday';
-        w.current_month = 'November';
-        w.from_number = '1111111111';
-        w.to_number = '9876543210';
-        w.source = 'CC-003';
-        w.collector_name = 'Bot';
-        w.OnlyDueFortheMonth = 'No';
-
-        CallBotCollectionWebhookService.CallResponse resp = new CallBotCollectionWebhookService.CallResponse();
-        resp.success = true;
-        resp.message = 'OK';
-        resp.referenceId = 'REF-1';
-        resp.errors.add('None');
-
-        System.assertEquals(true, resp.success);
-        System.assertEquals('100001', w.loan_id);
+    
+    @AuraEnabled
+    public static List<Opportunity> getOpportunities (String personCode){
+        System.debug('personCode>>' + personCode);
+        
+        if(personCode == null || personCode == ''){
+            return null;
+        }
+        
+        List<Opportunity> listOfOpportunity = [SELECT Id, Name, Legal_Action_Person__c , Loan_Number__c
+                                               FROM Opportunity 
+                                               WHERE Legal_Action_Person__c=: personCode ];
+        if(!listOfOpportunity.isEmpty()){
+            return listOfOpportunity;          
+        }
+        return null;
+        
+    }
+    
+   /* @AuraEnabled
+    public static String filterDesignation(String selectedDesignation,String currentLoggedInProfile,String herieracyData){
+        
+        if(currentLoggedInProfile  == 'HO'){
+            HOWrapper hoWrap = (HOWrapper) JSON.deserialize(herieracyData, HOWrapper.class);
+        }
+        for(){
+            
+        }
+        return null;
+    }*/
+    
+    
+    
+    public class UserWrapper {
+        @AuraEnabled 
+        public String name;
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public String mobileNumber;
+    }
+    
+    
+    
+    
+    public class HOWrapper {
+        @AuraEnabled 
+        public String name;
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public Boolean isActive;
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String mobileNumber;
+        @AuraEnabled 
+        public Integer allocatedCases;
+        @AuraEnabled 
+        public List<NCMWrapper> children;
+    }
+    public class NCMWrapper {
+        @AuraEnabled 
+        public String name; 
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public Boolean isActive; 
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String mobileNumber;
+        @AuraEnabled 
+        public Integer allocatedCases;
+        @AuraEnabled 
+        public List<ZCMWrapper> children;
+    }
+    public class ZCMWrapper {
+        @AuraEnabled 
+        public String name; 
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public Boolean isActive; 
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String mobileNumber;
+        @AuraEnabled 
+        public Integer allocatedCases;
+        @AuraEnabled 
+        public List<RCMWrapper> children;
+    }
+    public class RCMWrapper {
+        @AuraEnabled 
+        public String name; 
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public Boolean isActive; 
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String mobileNumber;
+        @AuraEnabled 
+        public Integer allocatedCases;
+        @AuraEnabled 
+        public List<ACMWrapper> children;
+    }
+    public class ACMWrapper {
+        @AuraEnabled 
+        public String name; 
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public Boolean isActive; 
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String mobileNumber;
+        @AuraEnabled 
+        public Integer allocatedCases;
+        @AuraEnabled 
+        public Integer totalUsersCount;
+        @AuraEnabled 
+        public BranchWrapper children;
+    }
+    
+    public class BranchWrapper {
+        @AuraEnabled 
+        public String name;
+        @AuraEnabled 
+        public List<BCM_AND_CO_Wrapper> children;
+    }
+    
+    public class BCM_AND_CO_Wrapper {
+        @AuraEnabled 
+        public String name; 
+        @AuraEnabled 
+        public String employeeId;
+        @AuraEnabled 
+        public Boolean isActive; 
+        @AuraEnabled 
+        public String designation;
+        @AuraEnabled 
+        public String mobileNumber;
+        @AuraEnabled 
+        public Integer allocatedCases;
+        @AuraEnabled 
+        public String lastLogin;
     }
 }
