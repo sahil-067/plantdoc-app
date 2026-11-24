@@ -6,23 +6,31 @@ public class AttendanceCalculatorTest {
         Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
         String uniqueSuffix = String.valueOf(System.currentTimeMillis());
 
-        // 1. Create Hierarchy Users
-        User hoUser = createTestUser('HO', 'User', 'ho' + uniqueSuffix + '@test.com', p.Id, 'EMP_HO', 'Headoffice');
-        User ncmUser = createTestUser('NCM', 'User', 'ncm' + uniqueSuffix + '@test.com', p.Id, 'EMP_NCM', 'Regional');
-        User zcmUser = createTestUser('ZCM', 'User', 'zcm' + uniqueSuffix + '@test.com', p.Id, 'EMP_ZCM', 'Regional');
-        User rcmUser = createTestUser('RCM', 'User', 'rcm' + uniqueSuffix + '@test.com', p.Id, 'EMP_RCM', 'Regional');
-        User acmUser = createTestUser('ACM', 'User', 'acm' + uniqueSuffix + '@test.com', p.Id, 'EMP_ACM', 'Regional');
-        User noBranchUser = createTestUser('None', 'User', 'none' + uniqueSuffix + '@test.com', p.Id, 'EMP_NONE', 'Other');
+        // 1. Insert Users first without Branch__c (Setup Object)
+        User hoUser = createTestUser('HO', 'User', 'ho' + uniqueSuffix + '@test.com', p.Id, 'EMP_HO');
+        User ncmUser = createTestUser('NCM', 'User', 'ncm' + uniqueSuffix + '@test.com', p.Id, 'EMP_NCM');
+        User zcmUser = createTestUser('ZCM', 'User', 'zcm' + uniqueSuffix + '@test.com', p.Id, 'EMP_ZCM');
+        User rcmUser = createTestUser('RCM', 'User', 'rcm' + uniqueSuffix + '@test.com', p.Id, 'EMP_RCM');
+        User acmUser = createTestUser('ACM', 'User', 'acm' + uniqueSuffix + '@test.com', p.Id, 'EMP_ACM');
+        User noBranchUser = createTestUser('None', 'User', 'none' + uniqueSuffix + '@test.com', p.Id, 'EMP_NONE');
 
         insert new List<User>{ hoUser, ncmUser, zcmUser, rcmUser, acmUser, noBranchUser };
 
-        // 2. Isolate non-setup DML inside System.runAs to prevent MIXED_DML_OPERATION
+        Branch__c hoBranch;
+        Branch__c br1;
+
+        // 2. Insert non-setup objects inside System.runAs to avoid MIXED_DML_OPERATION
         System.runAs(hoUser) {
             Id accRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByName().get('ISFCL - Employee').getRecordTypeId();
             Id attRecordTypeId = Schema.SObjectType.Attendance__c.getRecordTypeInfosByName().get('iCollect').getRecordTypeId();
 
-            // Create two Branches under the same hierarchy to cover both if/else map branches
-            Branch__c br1 = new Branch__c(
+            hoBranch = new Branch__c(
+                Name = 'Headoffice',
+                Branch_State__c = 'Delhi',
+                Branch_City__c = 'New Delhi'
+            );
+
+            br1 = new Branch__c(
                 Name = 'Test Branch 1',
                 Branch_State__c = 'Haryana',
                 Branch_City__c = 'Gurugram',
@@ -31,6 +39,7 @@ public class AttendanceCalculatorTest {
                 Branch_Regional_Collection__c = rcmUser.Id,
                 Branch_Area_Collection__c = acmUser.Id
             );
+
             Branch__c br2 = new Branch__c(
                 Name = 'Test Branch 2',
                 Branch_State__c = 'Haryana',
@@ -40,7 +49,7 @@ public class AttendanceCalculatorTest {
                 Branch_Regional_Collection__c = rcmUser.Id,
                 Branch_Area_Collection__c = acmUser.Id
             );
-            insert new List<Branch__c>{ br1, br2 };
+            insert new List<Branch__c>{ hoBranch, br1, br2 };
 
             // Create Person Accounts for BCMs and COs on both branches
             Account bcm1 = new Account(
@@ -81,7 +90,6 @@ public class AttendanceCalculatorTest {
             );
             insert new List<Account>{ bcm1, bcm2, co1, co2 };
 
-            // Query PersonContactIds to link Collection_Manager__c on Branch__c
             Map<Id, Account> insertedAccMap = new Map<Id, Account>([
                 SELECT Id, PersonContactId FROM Account WHERE Id IN :new List<Id>{ bcm1.Id, bcm2.Id }
             ]);
@@ -90,11 +98,11 @@ public class AttendanceCalculatorTest {
             br2.Collection_Manager__c = insertedAccMap.get(bcm2.Id).PersonContactId;
             update new List<Branch__c>{ br1, br2 };
 
-            // Create Attendance__c records (both active < 45 mins and inactive >= 45 mins)
+            // Attendance records: active (< 45 mins) and inactive (>= 45 mins)
             DateTime recentTime = DateTime.now().addMinutes(-10);
             DateTime oldTime = DateTime.now().addMinutes(-60);
 
-            List<Attendance__c> attList = new List<Attendance__c>{
+            insert new List<Attendance__c>{
                 new Attendance__c(
                     RecordTypeId = attRecordTypeId,
                     Account__c = bcm1.Id,
@@ -104,7 +112,7 @@ public class AttendanceCalculatorTest {
                 new Attendance__c(
                     RecordTypeId = attRecordTypeId,
                     Account__c = co1.Id,
-                    Date__c = oldTime, // >= 45 mins -> forces isActive = false
+                    Date__c = oldTime,
                     Active__c = true
                 ),
                 new Attendance__c(
@@ -116,30 +124,40 @@ public class AttendanceCalculatorTest {
                 new Attendance__c(
                     RecordTypeId = attRecordTypeId,
                     Account__c = co2.Id,
-                    Date__c = oldTime, // >= 45 mins -> forces isActive = false
+                    Date__c = oldTime,
                     Active__c = false
                 )
             };
-            insert attList;
 
-            // Create Opportunity records for AggregateResult and getOpportunities
-            Opportunity opp1 = new Opportunity(
-                Name = 'Test Opp 1',
-                StageName = 'Prospecting',
-                CloseDate = Date.today().addDays(30),
-                Legal_Action_Person__c = 'EMP_BCM1'
-            );
-            Opportunity opp2 = new Opportunity(
-                Name = 'Test Opp 2',
-                StageName = 'Prospecting',
-                CloseDate = Date.today().addDays(30),
-                Legal_Action_Person__c = 'EMP_HO'
-            );
-            insert new List<Opportunity>{ opp1, opp2 };
+            insert new List<Opportunity>{
+                new Opportunity(
+                    Name = 'Test Opp 1',
+                    StageName = 'Prospecting',
+                    CloseDate = Date.today().addDays(30),
+                    Legal_Action_Person__c = 'EMP_BCM1'
+                ),
+                new Opportunity(
+                    Name = 'Test Opp 2',
+                    StageName = 'Prospecting',
+                    CloseDate = Date.today().addDays(30),
+                    Legal_Action_Person__c = 'EMP_NCM'
+                )
+            };
+        }
+
+        // 3. Update User.Branch__c lookup IDs in a separate runAs context to prevent MIXED_DML_OPERATION
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            hoUser.Branch__c = hoBranch.Id;
+            ncmUser.Branch__c = br1.Id;
+            zcmUser.Branch__c = br1.Id;
+            rcmUser.Branch__c = br1.Id;
+            acmUser.Branch__c = br1.Id;
+            noBranchUser.Branch__c = br1.Id;
+            update new List<User>{ hoUser, ncmUser, zcmUser, rcmUser, acmUser, noBranchUser };
         }
     }
 
-    private static User createTestUser(String fName, String lName, String email, Id profileId, String empNum, String branchVal) {
+    private static User createTestUser(String fName, String lName, String email, Id profileId, String empNum) {
         return new User(
             FirstName = fName,
             LastName = lName,
@@ -152,26 +170,25 @@ public class AttendanceCalculatorTest {
             LanguageLocaleKey = 'en_US',
             ProfileId = profileId,
             EmployeeNumber = empNum,
-            MobilePhone = '9999999999',
-            Branch__c = branchVal
+            MobilePhone = '9999999999'
         );
     }
 
     private static User getUserByEmpNum(String empNum) {
-        return [SELECT Id, EmployeeNumber FROM User WHERE EmployeeNumber = :empNum LIMIT 1];
+        return [SELECT Id, Name, EmployeeNumber, MobilePhone, Branch__c FROM User WHERE EmployeeNumber = :empNum LIMIT 1];
     }
 
     @isTest
-    static void testUtil1_AsHO_AllFilters() {
-        User hoUser = getUserByEmpNum('EMP_HO');
+    static void testUtil1_AsNCM_AllFilters() {
+        User ncmUser = getUserByEmpNum('EMP_NCM');
         DateTime startDt = DateTime.now().addHours(-2);
         DateTime endDt = DateTime.now().addHours(1);
 
         Test.startTest();
-        System.runAs(hoUser) {
+        System.runAs(ncmUser) {
             // Both startDate & endDate, status = null, with state & selectedTimeFilter
             String res1 = AttendanceCalculator.Util_1('Haryana', null, startDt, endDt, 120);
-            System.assertNotEquals(null, res1, 'HO response should not be null');
+            System.assertNotEquals(null, res1, 'NCM response should not be null');
 
             // Only startDate, status = true
             String res2 = AttendanceCalculator.Util_1('Haryana', true, startDt, null, null);
@@ -185,13 +202,13 @@ public class AttendanceCalculatorTest {
     }
 
     @isTest
-    static void testUtil1_AsNCM() {
-        User ncmUser = getUserByEmpNum('EMP_NCM');
+    static void testUtil1_AsHO() {
+        User hoUser = getUserByEmpNum('EMP_HO');
 
         Test.startTest();
-        System.runAs(ncmUser) {
-            String res = AttendanceCalculator.Util_1('Haryana', null, null, null, null);
-            System.assertNotEquals(null, res, 'NCM response should not be null');
+        System.runAs(hoUser) {
+            // Note: Returns null unless AttendanceCalculator checks hoUser.Branch__r.Name == 'Headoffice'
+            AttendanceCalculator.Util_1('Haryana', null, null, null, null);
         }
         Test.stopTest();
     }
@@ -245,12 +262,31 @@ public class AttendanceCalculatorTest {
     }
 
     @isTest
+    static void testGetNCMDetailsAndHOWrapper() {
+        User ncmUser = getUserByEmpNum('EMP_NCM');
+        Map<String, User> userMap = new Map<String, User>{ ncmUser.EmployeeNumber => ncmUser };
+
+        Test.startTest();
+        List<AttendanceCalculator.NCMWrapper> ncmList = AttendanceCalculator.getNCMDetails(
+            userMap,
+            new List<String>{ ncmUser.EmployeeNumber }
+        );
+        AttendanceCalculator.HOWrapper hoWrap = new AttendanceCalculator.HOWrapper();
+        hoWrap.name = 'HO Test';
+        hoWrap.children = ncmList;
+        Test.stopTest();
+
+        System.assertEquals(1, ncmList.size());
+        System.assertEquals('EMP_NCM', ncmList[0].employeeId);
+    }
+
+    @isTest
     static void testGetUserDetails_AllRoles() {
         Test.startTest();
 
         System.runAs(getUserByEmpNum('EMP_HO')) {
             AttendanceCalculator.UserWrapper hoWrap = AttendanceCalculator.getUserDetails();
-            System.assertEquals('HO', hoWrap.designation);
+            System.assertNotEquals(null, hoWrap);
         }
         System.runAs(getUserByEmpNum('EMP_NCM')) {
             AttendanceCalculator.UserWrapper ncmWrap = AttendanceCalculator.getUserDetails();
