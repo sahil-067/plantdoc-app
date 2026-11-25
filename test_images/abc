@@ -1,86 +1,2813 @@
-@isTest
-public class CreateApplicationDataQueueableTest {
-    
-    @isTest
-    public static void test1() {
-        
-        try {
-            Test.startTest();
-            CreateApplicationDataQueueable ctrl = new CreateApplicationDataQueueable('');
-            System.enqueueJob(ctrl);
-            Test.stopTest();
-        } catch (Exception e) {}
-            
-    }
-    
-    @isTest
-    public static void test2() {
-        
-        try {
-            Test.startTest();
-            CreateApplicationDataQueueable ctrl1 = new CreateApplicationDataQueueable('{"status":"success", "PWALO_OPP__c":"1234567890"}');
-            System.enqueueJob(ctrl1);
-            Test.stopTest();
-        } catch (Exception e) {}
-            
-    }
-    
-    public static testMethod void testException() {
+here is a long apex class read and save it in the next prompt i will give you the test class
 
-        String str = null; 
-        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable(str);
-        
-        Test.startTest();
-        try {
-            queueableJob.execute(null);
-        } catch (Exception ex) {}
-        Test.stopTest();
-    }
-    
-    public static testMethod void testException1() {
 
-        String str = null; 
-        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable(str);
-        
-        Test.startTest();
-        try {
-            queueableJob.execute(null);
-        } catch (Exception ex) {}
-        Test.stopTest();
-    }
-    
-    @isTest
-    static void testQueueable_CalloutExceptionPath() {
 
-        Test.setMock(HttpCalloutMock.class, new MockCallout());
-        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable('{"test":"data"}');
-            
-        try {
-            Test.startTest();
-            System.enqueueJob(queueableJob);
-            Test.stopTest();
-        } catch (Exception ex) {}
+public with sharing class RetentionConsoleController {
+    private static final Decimal FORECLOSURE_RATE_MOB_MORE_THAN_24 = 0.045;
+private static final Decimal FORECLOSURE_RATE_MOB_24_OR_LESS = 0.06;
+private static final Decimal GST_RATE = 0.18;
+
+    public class ConsoleData {
+        @AuraEnabled public CustomerData customer;
+        @AuraEnabled public LoanData loan;
+        @AuraEnabled public OverviewData overview;
+        @AuraEnabled public ChargesData charges;
+        @AuraEnabled public List<ApplicantData> applicants;
+        @AuraEnabled public List<CamData> cams;
+        @AuraEnabled public List<InsuranceData> insurances;
+        @AuraEnabled public String warning;
+        @AuraEnabled public Id applicationId;
+@AuraEnabled public LeadDetails leadDetails;
+@AuraEnabled public CaseDetails caseDetails;
+@AuraEnabled public Boolean hasItrGstData;
+@AuraEnabled public String itrGstMessage;
+
+        /*
+         * Latest saved Bureau response for the main applicant.
+         * This is read only; it does not call the Highmark API.
+         */
+        @AuraEnabled public String savedBureauResponse;
     }
 
-    @isTest
-    static void testInvalidJsonException() {
 
-        Test.setMock(HttpCalloutMock.class, new MockCallout());
-        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable('{{{invalid_json');
-            
-        try {
-            Test.startTest();
-            queueableJob.execute(null);
-            Test.stopTest();
-        } catch (Exception ex) {}
+public class CaseDetails {
+    @AuraEnabled public Id id;
+    @AuraEnabled public String caseNumber;
+    @AuraEnabled public String subject;
+    @AuraEnabled public String status;
+    @AuraEnabled public Decimal ageing;
+    @AuraEnabled public Datetime createdDate;
+    @AuraEnabled public String rbm;
+    @AuraEnabled public Date receiptOfComplaint;
+    @AuraEnabled public String phoneNumber1;
+    @AuraEnabled public String requestType;
+}
+    public class CustomerData {
+        @AuraEnabled public String name;
+        @AuraEnabled public String initials;
+        @AuraEnabled public String role;
+        @AuraEnabled public String mobile;
+        @AuraEnabled public String clientId;
+        @AuraEnabled public String lang;
+        @AuraEnabled public Id bureauAccountId;
+        @AuraEnabled public String branchApproverMobile;
+        @AuraEnabled public String branchUserMobile;
     }
 
-    public class MockCallout implements HttpCalloutMock {
-        public HTTPResponse respond(HTTPRequest req) {
-            CalloutException e = new CalloutException();
-            e.setMessage('Callout failure');
-            throw e;
+    public class LoanData {
+        @AuraEnabled public String account;
+        @AuraEnabled public String product;
+        @AuraEnabled public String emi;
+        @AuraEnabled public String branch;
+        @AuraEnabled public Decimal mob;
+        @AuraEnabled public Decimal dpd;
+        @AuraEnabled public Decimal outstanding;
+        @AuraEnabled public Decimal sanctionedAmount;
+        @AuraEnabled public Decimal lifeInsuranceTotal;
+        @AuraEnabled public Decimal paInsuranceTotal;
+        @AuraEnabled public Decimal propertyInsuranceTotal;
+    }
+
+    public class OverviewData {
+        @AuraEnabled public Decimal principalOutstanding;
+        @AuraEnabled public Decimal currentEmi;
+        @AuraEnabled public Decimal dpd;
+        @AuraEnabled public String maxDpd;
+        @AuraEnabled public String numberOfLoansWithIsfc;
+        @AuraEnabled public Decimal totalBounce;
+        @AuraEnabled public String finOneUpdatedRoi;
+        @AuraEnabled public  String dpdPreviousMonthClosing;
+        @AuraEnabled public String minDpd;
+        @AuraEnabled public String currentRoi;
+        @AuraEnabled public String riskLevel;
+        @AuraEnabled public String riskReason;
+            // New Application fields
+        @AuraEnabled public String finnoneClientId;
+        @AuraEnabled public String finnoneLoanId;
+        @AuraEnabled public String loanNumber;
+    }
+
+    public class ChargesData {
+        @AuraEnabled public Decimal principalOutstanding;
+        @AuraEnabled public Decimal foreclosureRate;
+        @AuraEnabled public Decimal foreclosureBaseCharge;
+        @AuraEnabled public Decimal foreclosureGst;
+        @AuraEnabled public Decimal foreclosureCharges;
+        @AuraEnabled public Decimal insuranceFinancedPremium;
+        @AuraEnabled public Decimal emiPaidToDate;
+        @AuraEnabled public Decimal bounceCount;
+        @AuraEnabled public Decimal bounceCharges;
+        @AuraEnabled public Decimal latePaymentCharges;
+        @AuraEnabled public Decimal cashHandlingCharges;
+        @AuraEnabled public Decimal visitCharges;
+        @AuraEnabled public Decimal legalCharges;
+        @AuraEnabled public Decimal otherChargesTotal;
+        @AuraEnabled public Decimal foreclosurePayableToday;
+        @AuraEnabled public String insuranceNote;
+    }
+
+    public class ApplicantData {
+        @AuraEnabled public String id;
+        @AuraEnabled public String name;
+        @AuraEnabled public String role;
+        @AuraEnabled public String color;
+        @AuraEnabled public String clientId;
+        @AuraEnabled public String dob;
+        @AuraEnabled public String gender;
+        @AuraEnabled public String marital;
+        @AuraEnabled public String qual;
+        @AuraEnabled public String mobile;
+        @AuraEnabled public String email;
+        @AuraEnabled public String addr;
+        @AuraEnabled public String kyc;
+        @AuraEnabled public String photoUrl;
+    }
+
+    public class CamData {
+    @AuraEnabled public Id id;
+    @AuraEnabled public String name;
+    @AuraEnabled public String status;
+
+    @AuraEnabled public Decimal sanctionedAmount;
+    @AuraEnabled public Decimal sanctionedEmi;
+    @AuraEnabled public Decimal sanctionedRoi;
+    @AuraEnabled public Decimal sanctionedTenure;
+
+    // Loan Approval Details fields from CAM
+    @AuraEnabled public Decimal existingLoanAmount;
+    @AuraEnabled public Decimal existingEmi;
+    @AuraEnabled public Decimal hlLoanAmount;
+    @AuraEnabled public Decimal hlRoi;
+    @AuraEnabled public Decimal roiWaiver;
+    @AuraEnabled public Decimal hlTenor;
+    @AuraEnabled public Decimal isfcEmi;
+    @AuraEnabled public Decimal ltv;
+    @AuraEnabled public Decimal landLtv;
+    @AuraEnabled public Decimal combinedExposure;
+
+    @AuraEnabled public Decimal currentEffectiveRoi;
+    @AuraEnabled public Decimal foir;
+    @AuraEnabled public Decimal lcr;
+    @AuraEnabled public Decimal combinedFoir;
+    @AuraEnabled public Decimal combinedLtv;
+}
+
+    public class InsuranceData {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String name;
+        @AuraEnabled public String status;
+        @AuraEnabled public Decimal premium;
+        @AuraEnabled public String type;
+    }
+
+    public class ApplicationSearchResult {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String applicationName;
+        @AuraEnabled public String loanNumber;
+        @AuraEnabled public String applicantName;
+        @AuraEnabled public String mobile;
+        @AuraEnabled public String clientId;
+    }
+
+    public class CloneApplicationData {
+    @AuraEnabled public Id id;
+    @AuraEnabled public String applicationName;
+    @AuraEnabled public String loanNumber;
+    @AuraEnabled public String applicantName;
+    @AuraEnabled public String product;
+}
+
+    public class RateChangeHistoryData {
+        @AuraEnabled public String firstSanctionDate;
+        @AuraEnabled public Decimal sanctionedRoi;
+        @AuraEnabled public Decimal finnoneRoi;
+        @AuraEnabled public Decimal change;
+    }
+
+    public class RepaymentDisciplineData {
+        @AuraEnabled public String finnoneRunningDpd;
+        @AuraEnabled public String totalBounce;
+        @AuraEnabled public String bounceDates;
+        @AuraEnabled public String mob;
+    }
+
+    public class ScorecardFieldsData {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String scoreValue;
+        @AuraEnabled public String scoreCardDelegation;
+        @AuraEnabled public String roiDecision;
+        @AuraEnabled public String branchRiskCategory;
+    }
+
+    public class CreditTrajectoryData {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String role;
+        @AuraEnabled public String applicantName;
+        @AuraEnabled public String cibilScore;
+    }
+
+    public class CollateralAddressData {
+        @AuraEnabled public String role;
+        @AuraEnabled public String contactName;
+        @AuraEnabled public String communicationAddress;
+        @AuraEnabled public String residentialAddress;
+        @AuraEnabled public String businessAddress;
+    }
+
+    public class CollateralData {
+        @AuraEnabled public String propertySiteAddress;
+        @AuraEnabled public String propertyLegalAddress;
+        @AuraEnabled public List<CollateralAddressData> addresses;
+    }
+
+    public class PddData {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String pddName;
+        @AuraEnabled public String documentName;
+        @AuraEnabled public String documentReceived;
+        @AuraEnabled public String documentType;
+        @AuraEnabled public String documentCategory;
+        @AuraEnabled public String dateOfDisbursement;
+    }
+
+    public class LinkedApplicationData {
+    @AuraEnabled public Id id;
+    @AuraEnabled public String applicationName;
+    @AuraEnabled public String loanNumber;
+    @AuraEnabled public String applicantName;
+    @AuraEnabled public String product;
+    @AuraEnabled public String finnoneClientId;
+    @AuraEnabled public String finnoneLoanId;
+
+    // Repayment Risk section (mirrors Overview tab, per linked Application)
+    @AuraEnabled public Decimal principalOutstanding;
+    @AuraEnabled public Decimal emi;
+    @AuraEnabled public String maxDpd;
+    @AuraEnabled public String minDpd;
+    @AuraEnabled public String roi;
+    @AuraEnabled public String riskLevel;
+}
+
+    public class OtpResult {
+        @AuraEnabled public Boolean success;
+        @AuraEnabled public String message;
+    }
+
+    public class ForeclosureSubmitResult {
+        @AuraEnabled public Id caseId;
+        @AuraEnabled public String caseNumber;
+        @AuraEnabled public Id foreclosureRequestId;
+        @AuraEnabled public Id leadId;
+        @AuraEnabled public String leadName;
+        @AuraEnabled public String message;
+    }
+
+    public class LeadDetails {
+    @AuraEnabled public Id id;
+    @AuraEnabled public String howDidYouKnow;
+    @AuraEnabled public String leadSource;
+    @AuraEnabled public String status;
+    @AuraEnabled public String residenceState;
+}
+    private class OtpContext {
+        private Account account;
+        private String recipient;
+        private String phoneNumber;
+    }
+
+    private class LeadApplicantDetails {
+        private String fullName;
+        private String mobile;
+        private String email;
+    }
+
+    private class NameParts {
+        private String firstName;
+        private String lastName;
+    }
+
+    /*
+     * CUSTOMER          -> Main Applicant Account Mobile__pc
+     * BRANCH_APPROVER   -> Opportunity.Branch__r.Branch_Approver__r.MobilePhone
+     * EBS_BRANCH_USER   -> Opportunity.Branch__r.Branch_User__r.MobilePhone
+     */
+    @AuraEnabled
+    public static Map<String, Object> sendForeclosureOtp(
+        Id applicationId,
+        String otpRecipient
+    ) {
+        System.debug(
+            LoggingLevel.INFO,
+            'RetentionConsoleController.sendForeclosureOtp START'
+            + ' | ApplicationId=' + applicationId
+            + ' | Recipient=' + otpRecipient
+        );
+
+        try {
+            OtpContext context = getOtpContext(applicationId, otpRecipient);
+            String otp = generateSixDigitOtp();
+
+            System.debug(
+                LoggingLevel.INFO,
+                'OTP recipient resolved'
+                + ' | AccountId=' + context.account.Id
+                + ' | Recipient=' + context.recipient
+                + ' | Mobile=' + maskPhone(context.phoneNumber)
+                + ' | OTP=' + maskOtp(otp)
+            );
+
+            /*
+             * IMPORTANT:
+             * HTTP callout must happen BEFORE any DML update.
+             */
+            Map<String, Object> response =
+                RetentionConsoleHelper.sendOtpToPhone(
+                    context.phoneNumber,
+                    otp
+                );
+
+            System.debug(
+                LoggingLevel.INFO,
+                'OTP SMS response'
+                + ' | ApplicationId=' + applicationId
+                + ' | Recipient=' + context.recipient
+                + ' | Response=' + JSON.serialize(response)
+            );
+
+            Boolean smsSent = response != null
+                && Boolean.valueOf(String.valueOf(response.get('success')));
+
+            if (!smsSent) {
+                System.debug(
+                    LoggingLevel.ERROR,
+                    'OTP SMS failed'
+                    + ' | ApplicationId=' + applicationId
+                    + ' | Recipient=' + context.recipient
+                    + ' | Response=' + JSON.serialize(response)
+                );
+
+                return response == null
+                    ? new Map<String, Object>{
+                        'success' => false,
+                        'message' => 'OTP could not be sent.'
+                    }
+                    : response;
+            }
+
+            /*
+             * Save OTP only after successful SMS API callout.
+             */
+            Account otpAccountToUpdate = new Account(
+                Id = context.account.Id
+            );
+
+            if (context.recipient == 'CUSTOMER') {
+                otpAccountToUpdate.CustomerOtp__c = otp;
+            } else if (context.recipient == 'BRANCH_APPROVER') {
+                otpAccountToUpdate.Underwriter_Otp__c = otp;
+            } else {
+                otpAccountToUpdate.EBSOtp__c = otp;
+            }
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Saving OTP in Account'
+                + ' | AccountId=' + otpAccountToUpdate.Id
+                + ' | Recipient=' + context.recipient
+            );
+
+            update otpAccountToUpdate;
+
+            System.debug(
+                LoggingLevel.INFO,
+                'RetentionConsoleController.sendForeclosureOtp SUCCESS'
+                + ' | AccountId=' + otpAccountToUpdate.Id
+                + ' | Recipient=' + context.recipient
+            );
+
+            return response;
+
+        } catch (Exception ex) {
+            System.debug(
+                LoggingLevel.ERROR,
+                'RetentionConsoleController.sendForeclosureOtp FAILED'
+                + ' | ApplicationId=' + applicationId
+                + ' | Recipient=' + otpRecipient
+                + ' | Message=' + ex.getMessage()
+                + ' | Line=' + ex.getLineNumber()
+                + ' | Stack=' + ex.getStackTraceString()
+            );
+
+            throw new AuraHandledException(
+                'Unable to send OTP. ' + ex.getMessage()
+            );
         }
     }
 
+    @AuraEnabled(cacheable=true)
+public static List<CloneApplicationData> getHouseholdApplications(
+    Id mainApplicationId
+) {
+    if (
+        mainApplicationId == null ||
+        mainApplicationId.getSObjectType() != Opportunity.SObjectType
+    ) {
+        throw new AuraHandledException(
+            'A valid Main Application Id is required.'
+        );
+    }
+
+    Opportunity mainApplication = [
+        SELECT Id,
+               Household__c
+        FROM Opportunity
+        WHERE Id = :mainApplicationId
+        LIMIT 1
+    ];
+
+    List<CloneApplicationData> output =
+        new List<CloneApplicationData>();
+
+    if (mainApplication.Household__c == null) {
+        return output;
+    }
+
+    /*
+     * Main Application
+     *      ↓
+     * Household__c
+     *      ↓
+     * Other Opportunities under the same Household
+     */
+    List<Opportunity> householdApplications = [
+        SELECT Id,
+               Name,
+               Loan_Number__c,
+               AccountId,
+               Account.Name,
+               Loan_Product__r.Name,
+               CreatedDate
+        FROM Opportunity
+        WHERE Household__c = :mainApplication.Household__c
+          AND Id != :mainApplicationId
+        ORDER BY CreatedDate DESC
+        LIMIT 100
+    ];
+
+    for (Opportunity applicationRecord : householdApplications) {
+        CloneApplicationData row = new CloneApplicationData();
+
+        row.id = applicationRecord.Id;
+        row.applicationName = applicationRecord.Name;
+
+        row.loanNumber =
+            String.isBlank(applicationRecord.Loan_Number__c)
+                ? '—'
+                : applicationRecord.Loan_Number__c;
+
+        row.applicantName =
+            applicationRecord.AccountId == null
+                ? 'Applicant not linked'
+                : applicationRecord.Account.Name;
+
+        row.product =
+            applicationRecord.Loan_Product__r == null
+                ? 'Not available'
+                : applicationRecord.Loan_Product__r.Name;
+
+        output.add(row);
+    }
+
+    return output;
 }
+
+    /*
+     * Linked Application tab:
+     * 1. Application → Household__c → Applicant Accounts on this
+     *    Household → their Finnone_Client_Id__c values.
+     * 2. Every Account in the ORG (any Household) sharing any of
+     *    those Finnone_Client_Id__c values.
+     * 3. All Households those Accounts belong to → all Opportunities
+     *    on those Households (same Account/Opportunity grouping the
+     *    Applicants tab uses), deduplicated by Opportunity Id and
+     *    excluding the Application currently being processed.
+     *
+     * Read-only lookup. Does not mutate anything and does not
+     * affect any other tab or method.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<LinkedApplicationData> getLinkedApplications(
+        Id applicationId
+    ) {
+        if (
+            applicationId == null ||
+            applicationId.getSObjectType() != Opportunity.SObjectType
+        ) {
+            throw new AuraHandledException(
+                'A valid Application Id is required.'
+            );
+        }
+
+        Opportunity currentApplication = [
+            SELECT Id,
+                   Household__c
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ];
+
+        List<LinkedApplicationData> output =
+            new List<LinkedApplicationData>();
+
+        if (currentApplication.Household__c == null) {
+            return output;
+        }
+
+        /*
+         * Step 1: Finnone_Client_Id__c values of the Accounts
+         * on the current Application's Household.
+         */
+        List<Account> currentHouseholdAccounts = [
+            SELECT Id,
+                   Finnone_Client_Id__c
+            FROM Account
+            WHERE Household__c = :currentApplication.Household__c
+              AND Finnone_Client_Id__c != null
+        ];
+
+        Set<String> finnoneClientIds = new Set<String>();
+
+        for (Account accountRow : currentHouseholdAccounts) {
+            finnoneClientIds.add(accountRow.Finnone_Client_Id__c);
+        }
+
+        if (finnoneClientIds.isEmpty()) {
+            return output;
+        }
+
+        /*
+         * Step 2: every Account in the org (any Household) sharing
+         * any of those Finnone_Client_Id__c values.
+         */
+        List<Account> matchingAccounts = [
+            SELECT Id,
+                   Household__c
+            FROM Account
+            WHERE Finnone_Client_Id__c IN :finnoneClientIds
+              AND Household__c != null
+        ];
+
+        Set<Id> matchedHouseholdIds = new Set<Id>();
+
+        for (Account accountRow : matchingAccounts) {
+            matchedHouseholdIds.add(accountRow.Household__c);
+        }
+
+        if (matchedHouseholdIds.isEmpty()) {
+            return output;
+        }
+
+        /*
+         * Step 3: all Opportunities on those Households, excluding
+         * the Application currently being processed/viewed.
+         * Naturally unique - each row keyed by Opportunity Id.
+         */
+        List<Opportunity> linkedApplications = [
+            SELECT Id,
+                   Name,
+                   Loan_Number__c,
+                   AccountId,
+                   Account.Name,
+                   Loan_Product__r.Name,
+                   FinnoneClient_Id__c,
+                   Finnone_Loan_Id__c,
+                   Interest_Overdue__c,
+                   Loan_Outstanding__c,
+                   Sanc_EMI__c,
+                   DPD_Previous_month_closing__c,
+                   DPD_Sub_Reason__c,
+                   Whatsapp_Name3__c,
+                   DPD_1__c,
+                   Ttl_bou__c
+            FROM Opportunity
+            WHERE Household__c IN :matchedHouseholdIds
+              AND Id != :applicationId
+            ORDER BY CreatedDate DESC
+            LIMIT 200
+        ];
+
+        for (Opportunity applicationRecord : linkedApplications) {
+            LinkedApplicationData row = new LinkedApplicationData();
+
+            row.id = applicationRecord.Id;
+            row.applicationName = applicationRecord.Name;
+
+            row.loanNumber =
+                String.isBlank(applicationRecord.Loan_Number__c)
+                    ? '—'
+                    : applicationRecord.Loan_Number__c;
+
+            row.applicantName =
+                applicationRecord.AccountId == null
+                    ? 'Applicant not linked'
+                    : applicationRecord.Account.Name;
+
+            row.product =
+                applicationRecord.Loan_Product__r == null
+                    ? 'Not available'
+                    : applicationRecord.Loan_Product__r.Name;
+
+            row.finnoneClientId =
+                String.isBlank(applicationRecord.FinnoneClient_Id__c)
+                    ? 'Not available'
+                    : applicationRecord.FinnoneClient_Id__c;
+
+            row.finnoneLoanId =
+                String.isBlank(applicationRecord.Finnone_Loan_Id__c)
+                    ? 'Not available'
+                    : applicationRecord.Finnone_Loan_Id__c;
+
+            row.principalOutstanding = firstNonNull(
+                applicationRecord.Interest_Overdue__c,
+                applicationRecord.Loan_Outstanding__c
+            );
+
+            row.emi = applicationRecord.Sanc_EMI__c;
+
+            row.maxDpd = applicationRecord.DPD_Previous_month_closing__c;
+
+            row.minDpd = applicationRecord.DPD_Sub_Reason__c;
+
+            row.roi = applicationRecord.Whatsapp_Name3__c;
+
+            row.riskLevel = riskLevel(
+                applicationRecord.DPD_1__c,
+                applicationRecord.Ttl_bou__c
+            );
+
+            output.add(row);
+        }
+
+        return output;
+    }
+
+    @AuraEnabled
+    public static OtpResult verifyForeclosureOtp(
+        Id applicationId,
+        String otpRecipient,
+        String enteredOtp
+    ) {
+        System.debug(
+            LoggingLevel.INFO,
+            'RetentionConsoleController.verifyForeclosureOtp START'
+            + ' | ApplicationId=' + applicationId
+            + ' | Recipient=' + otpRecipient
+            + ' | EnteredOtp=' + maskOtp(enteredOtp)
+        );
+
+        try {
+            OtpContext context = getOtpContext(applicationId, otpRecipient);
+            String expectedOtp = storedOtp(
+                context.account,
+                context.recipient
+            );
+
+            OtpResult response = new OtpResult();
+
+            response.success =
+                !String.isBlank(expectedOtp)
+                && !String.isBlank(enteredOtp)
+                && expectedOtp == enteredOtp.trim();
+
+            response.message = response.success
+                ? 'OTP verified.'
+                : 'Enter the correct OTP.';
+
+            System.debug(
+                LoggingLevel.INFO,
+                'RetentionConsoleController.verifyForeclosureOtp RESULT'
+                + ' | AccountId=' + context.account.Id
+                + ' | Recipient=' + context.recipient
+                + ' | ExpectedOtpPresent=' + !String.isBlank(expectedOtp)
+                + ' | Verified=' + response.success
+            );
+
+            return response;
+
+        } catch (Exception ex) {
+            System.debug(
+                LoggingLevel.ERROR,
+                'RetentionConsoleController.verifyForeclosureOtp FAILED'
+                + ' | ApplicationId=' + applicationId
+                + ' | Recipient=' + otpRecipient
+                + ' | Message=' + ex.getMessage()
+                + ' | Line=' + ex.getLineNumber()
+                + ' | Stack=' + ex.getStackTraceString()
+            );
+
+            throw new AuraHandledException(
+                'Unable to verify OTP. ' + ex.getMessage()
+            );
+        }
+    }
+
+    @AuraEnabled
+    public static ForeclosureSubmitResult submitForeclosureRequest(
+        Id applicationId,
+        String approvalRecipient,
+        String customerOtp,
+        String approvalOtp,
+        Decimal additionalLegalCharges
+    ) {
+        System.debug(
+            LoggingLevel.INFO,
+            'RetentionConsoleController.submitForeclosureRequest START'
+            + ' | ApplicationId=' + applicationId
+            + ' | ApprovalRecipient=' + approvalRecipient
+            + ' | AdditionalLegalCharges=' + additionalLegalCharges
+        );
+
+        try {
+            String approvalType = normalizeRecipient(approvalRecipient);
+
+            OtpContext customerContext =
+                getOtpContext(applicationId, 'CUSTOMER');
+
+            OtpContext approvalContext =
+                getOtpContext(applicationId, approvalType);
+
+            validateOtp(
+                customerContext.account,
+                'CUSTOMER',
+                customerOtp,
+                'Customer'
+            );
+
+            validateOtp(
+                approvalContext.account,
+                approvalType,
+                approvalOtp,
+                approvalType == 'BRANCH_APPROVER'
+                    ? 'Branch Approver'
+                    : 'EBS / Branch User'
+            );
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Both OTPs validated successfully'
+                + ' | CustomerAccountId=' + customerContext.account.Id
+                + ' | ApprovalType=' + approvalType
+            );
+
+            Opportunity app = [
+                SELECT Id,
+                       Name,
+                       Loan_Number__c,
+                       Branch__c,
+                       Branch__r.Name,
+                       Branch_Name__c,
+                       AccountId,
+                       ContactId
+                FROM Opportunity
+                WHERE Id = :applicationId
+                LIMIT 1
+            ];
+
+            LeadApplicantDetails applicant = getMainApplicant(app);
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Applicant details found'
+                + ' | ApplicantName=' + applicant.fullName
+                + ' | ApplicantMobile=' + maskPhone(applicant.mobile)
+                + ' | EmailPresent=' + !String.isBlank(applicant.email)
+            );
+
+            if (String.isBlank(applicant.fullName)) {
+                throw new AuraHandledException(
+                    'Main Applicant details are not available for Case and Lead creation.'
+                );
+            }
+
+            NameParts nameParts = splitName(applicant.fullName);
+
+            /*
+             * Step 1: Case creation according to old Retention Screen.
+             */
+            Case foreclosureCase = new Case();
+            foreclosureCase.WebToCaseLoanNumber__c = app.Loan_Number__c;
+            foreclosureCase.Request__c = 'Foreclosure';
+            foreclosureCase.First_Name__c = nameParts.firstName;
+            foreclosureCase.Last_Name__c = nameParts.lastName;
+            foreclosureCase.Phone_Number_1__c = applicant.mobile;
+            foreclosureCase.SuppliedPhone = applicant.mobile;
+            foreclosureCase.Application_Name__c = app.Id;
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Creating Foreclosure Case'
+                + ' | ApplicationId=' + app.Id
+                + ' | LoanNumber=' + app.Loan_Number__c
+            );
+
+            insert foreclosureCase;
+
+            foreclosureCase = [
+                SELECT Id, CaseNumber
+                FROM Case
+                WHERE Id = :foreclosureCase.Id
+                LIMIT 1
+            ];
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Foreclosure Case created'
+                + ' | CaseId=' + foreclosureCase.Id
+                + ' | CaseNumber=' + foreclosureCase.CaseNumber
+            );
+
+            /*
+             * Step 2: Create Foreclosure Request.
+             */
+            Foreclosure_Request__c foreclosureRequest =
+                new Foreclosure_Request__c();
+
+            foreclosureRequest.Application__c = app.Id;
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Creating Foreclosure Request'
+                + ' | ApplicationId=' + app.Id
+            );
+
+            insert foreclosureRequest;
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Foreclosure Request created'
+                + ' | ForeclosureRequestId=' + foreclosureRequest.Id
+            );
+
+            /*
+             * Step 3: Create Retention Lead.
+             *
+             * Do NOT use Lead.MobilePhone or Lead.Phone.
+             * Use custom field Lead_Phone_Number_1__c.
+             */
+             Id recordTypeId = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Retention').getRecordTypeId();
+
+            Lead retentionLead = new Lead(
+    FirstName = nameParts.firstName,
+    LastName = nameParts.lastName,
+    Company = 'India Shelter',
+    Lead_Phone_Number_1__c = applicant.mobile,
+    Email = applicant.email,
+    Branch__c = app.Branch__c,
+
+    /*
+     * This makes Lead → Case → Application mapping possible.
+     * Case already has Application_Name__c = app.Id.
+     */
+    Case__c = foreclosureCase.Id,
+
+    How_did_you_come_to_know_about_us__c = 'Retention',
+    Main_Applicant__c = applicant.fullName,
+  	RecordTypeId = recordTypeId,
+
+
+    LeadSource = 'Retention',
+
+    Description = buildLeadDescription(
+        app,
+        approvalType,
+        additionalLegalCharges,
+        foreclosureCase.CaseNumber
+    )
+);
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Creating Retention Lead'
+                + ' | FirstName=' + retentionLead.FirstName
+                + ' | LastName=' + retentionLead.LastName
+                + ' | LeadPhone=' + maskPhone(applicant.mobile)
+                + ' | BranchId=' + app.Branch__c
+                + ' | CaseNumber=' + foreclosureCase.CaseNumber
+            );
+
+            insertRetentionLead(retentionLead);
+
+            System.debug(
+                LoggingLevel.INFO,
+                'Retention Lead created'
+                + ' | LeadId=' + retentionLead.Id
+                + ' | LeadName=' + retentionLead.Name
+            );
+
+            /*
+             * Step 4: Clear OTP fields after all records are created.
+             */
+            Account otpAccountToClear = new Account(
+                Id = customerContext.account.Id
+            );
+
+            otpAccountToClear.CustomerOtp__c = null;
+
+            if (approvalType == 'BRANCH_APPROVER') {
+                otpAccountToClear.Underwriter_Otp__c = null;
+            } else {
+                otpAccountToClear.EBSOtp__c = null;
+            }
+
+            update otpAccountToClear;
+
+            System.debug(
+                LoggingLevel.INFO,
+                'OTP values cleared'
+                + ' | AccountId=' + otpAccountToClear.Id
+                + ' | ApprovalType=' + approvalType
+            );
+
+            ForeclosureSubmitResult response =
+                new ForeclosureSubmitResult();
+
+            response.caseId = foreclosureCase.Id;
+            response.caseNumber = foreclosureCase.CaseNumber;
+            response.foreclosureRequestId = foreclosureRequest.Id;
+            response.leadId = retentionLead.Id;
+            response.leadName = retentionLead.Name;
+            response.message =
+                'Foreclosure Case ' + foreclosureCase.CaseNumber
+                + ' and Retention Lead ' + retentionLead.Name
+                + ' created successfully.';
+
+            System.debug(
+                LoggingLevel.INFO,
+                'RetentionConsoleController.submitForeclosureRequest SUCCESS'
+                + ' | CaseNumber=' + response.caseNumber
+                + ' | LeadId=' + response.leadId
+            );
+
+            return response;
+
+        } catch (Exception ex) {
+            System.debug(
+                LoggingLevel.ERROR,
+                'RetentionConsoleController.submitForeclosureRequest FAILED'
+                + ' | ApplicationId=' + applicationId
+                + ' | ApprovalRecipient=' + approvalRecipient
+                + ' | Message=' + ex.getMessage()
+                + ' | Line=' + ex.getLineNumber()
+                + ' | Stack=' + ex.getStackTraceString()
+            );
+
+            throw new AuraHandledException(
+                'Unable to create Foreclosure Case and Retention Lead. '
+                + ex.getMessage()
+            );
+        }
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<ApplicationSearchResult> searchApplications(
+        String searchText
+    ) {
+        String term = String.isBlank(searchText)
+            ? null
+            : searchText.trim();
+
+        if (term == null || term.length() < 2) {
+            return new List<ApplicationSearchResult>();
+        }
+
+        String likeTerm = '%' + term + '%';
+
+        List<Opportunity> apps = [
+            SELECT Id,
+                   Name,
+                   Loan_Number__c,
+                   AccountId,
+                   ContactId,
+                   Account.Name,
+                   Account.Mobile__pc,
+                   Account.Client_ID__pc,
+                   Account.ClientNum__pc
+            FROM Opportunity
+            WHERE Name LIKE :likeTerm
+               OR Loan_Number__c LIKE :likeTerm
+               OR Account.Name LIKE :likeTerm
+               OR Account.Mobile__pc LIKE :likeTerm
+               OR Account.Client_ID__pc LIKE :likeTerm
+               OR Account.ClientNum__pc LIKE :likeTerm
+            ORDER BY LastModifiedDate DESC
+            LIMIT 25
+        ];
+
+        List<ApplicationSearchResult> output =
+            new List<ApplicationSearchResult>();
+
+        for (Opportunity app : apps) {
+            ApplicationSearchResult row =
+                new ApplicationSearchResult();
+
+            row.id = app.Id;
+            row.applicationName = app.Name;
+            row.loanNumber = firstNonBlank(
+                new List<String>{ app.Loan_Number__c, '—' }
+            );
+
+            row.applicantName = app.AccountId == null
+                ? 'Applicant not linked'
+                : app.Account.Name;
+
+            row.mobile = app.AccountId == null
+                ? '—'
+                : firstNonBlank(
+                    new List<String>{
+                        app.Account.Mobile__pc,
+                        '—'
+                    }
+                );
+
+            row.clientId = app.AccountId == null
+                ? '—'
+                : firstNonBlank(
+                    new List<String>{
+                        app.Account.Client_ID__pc,
+                        app.Account.ClientNum__pc,
+                        '—'
+                    }
+                );
+
+            output.add(row);
+        }
+
+        return output;
+    }
+
+  
+    @AuraEnabled(cacheable=true)
+public static ConsoleData getRetentionConsoleData(Id recordId) {
+    if (recordId == null) {
+        throw new AuraHandledException(
+            'Select a valid Lead or Application before loading the Retention Console.'
+        );
+    }
+
+    if (recordId.getSObjectType() == Opportunity.SObjectType) {
+        /*
+         * Opened from Application:
+         * recordId itself is the Application Id.
+         */
+        return getConsoleDataFromApplication(recordId, null);
+    }
+
+    if (recordId.getSObjectType() == Lead.SObjectType) {
+        /*
+         * Opened from Lead:
+         * First identify its Case and Application.
+         */
+        return getConsoleDataFromLead(recordId);
+    }
+
+    throw new AuraHandledException(
+        'Retention Console can be opened only from a Lead or Application record.'
+    );
+}
+
+@AuraEnabled
+public static void updateDispositionandNotes(
+    String disposition,
+    String notes,
+    Id leadId
+) {
+    if (leadId == null) {
+        throw new AuraHandledException(
+            'Retention Lead is not available to save disposition.'
+        );
+    }
+
+    update new Lead(
+        Id = leadId,
+        Other_Lender_Disposition__c = disposition,
+        Agent_Notes__c = notes
+    );
+}
+
+@AuraEnabled
+public static void updateDispositionNotesAndStatus(
+    String disposition,
+    String notes,
+    String leadStatus,
+    Id leadId
+) {
+    if (leadId == null) {
+        throw new AuraHandledException(
+            'Retention Lead is not available to save disposition.'
+        );
+    }
+
+    if (String.isBlank(leadStatus)) {
+        throw new AuraHandledException(
+            'Select a Lead Status before saving.'
+        );
+    }
+
+    Set<String> activeLeadStatuses = new Set<String>();
+
+    Schema.DescribeFieldResult statusFieldDescribe =
+        Lead.Status.getDescribe();
+
+    for (
+        Schema.PicklistEntry statusEntry :
+        statusFieldDescribe.getPicklistValues()
+    ) {
+        if (statusEntry.isActive()) {
+            activeLeadStatuses.add(statusEntry.getValue());
+        }
+    }
+
+    if (!activeLeadStatuses.contains(leadStatus)) {
+        throw new AuraHandledException(
+            'The selected Lead Status is not active or valid.'
+        );
+    }
+
+    Lead leadToUpdate = new Lead(
+        Id = leadId,
+        Other_Lender_Disposition__c = disposition,
+        Agent_Notes__c = notes,
+        Status = leadStatus
+    );
+
+    update leadToUpdate;
+}
+
+private static ConsoleData getConsoleDataFromApplication(
+    Id applicationId,
+    Id openedLeadId
+) {
+    Opportunity app = [
+            SELECT Id,
+                   Name,
+                   AccountId,
+                   ContactId,
+                   Loan_Number__c,
+                   Household__c,
+                   FinnoneClient_Id__c,
+                    Finnone_Loan_Id__c,
+                   Loan_Product__r.Name,
+        		   Branch__r.Name,
+                   
+                   Branch__c,
+                   Sanc_EMI__c,
+                   Whatsapp_Name3__c,
+                   MOB__c,
+                   DPD_Previous_month_closing__c,
+                    DPD_Sub_Reason__c,
+                   DPD_1__c,
+                   Loan_Outstanding__c,
+                   Interest_Overdue__c,
+                   Sanctioned_Amont__c,
+                   Life_HL_Insurance_Total__c,
+                   Life_LAP_Insurance_Total__c,
+                   PA_Insurance_Total__c,
+                   Property_insurance_Total__c,
+                   Active_Cash_Receipts__c,
+                   Ttl_bou__c,
+                   Co_Applicant_1__c,
+                   Co_Applicant_2__c,
+                   Branch__r.Branch_Approver__r.MobilePhone,
+                   Branch__r.Branch_User__r.MobilePhone
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ];
+
+        ConsoleData result = new ConsoleData();
+    result.applicationId = applicationId;
+
+        result.loan = new LoanData();
+        result.loan.account = firstNonBlank(
+            new List<String>{ app.Loan_Number__c, app.Name }
+        );
+        result.loan.product = app.Loan_Product__r == null
+    ? '—'
+    : app.Loan_Product__r.Name;
+        result.loan.branch = app.Branch__r == null
+    ? '—'
+    : app.Branch__r.Name;
+        result.loan.emi = app.Sanc_EMI__c == null
+            ? '—'
+            : formatMoney(app.Sanc_EMI__c);
+        result.loan.mob = app.MOB__c;
+        result.loan.dpd = app.DPD_1__c;
+
+
+        result.loan.outstanding = firstNonNull(
+            app.Interest_Overdue__c,
+            app.Loan_Outstanding__c
+        );
+        result.loan.sanctionedAmount = app.Sanctioned_Amont__c;
+        result.loan.lifeInsuranceTotal =
+            nz(app.Life_HL_Insurance_Total__c)
+            + nz(app.Life_LAP_Insurance_Total__c);
+        result.loan.paInsuranceTotal = app.PA_Insurance_Total__c;
+        result.loan.propertyInsuranceTotal =
+            app.Property_insurance_Total__c;
+
+        CAM__c latestCam = loadLatestCam(app.Id);
+
+        result.overview = new OverviewData();
+        result.overview.principalOutstanding =
+            result.loan.outstanding;
+        result.overview.currentEmi = app.Sanc_EMI__c;
+        result.overview.dpd = app.DPD_1__c;
+        result.overview.maxDpd =
+    app.DPD_Previous_month_closing__c;
+
+    result.overview.dpdPreviousMonthClosing =
+    app.DPD_Previous_month_closing__c;
+
+/* Min DPD mapping */
+result.overview.minDpd =
+    app.DPD_Sub_Reason__c;
+        /* ROI mapping: Opportunity.Sanc_EMI__c */
+/* ROI mapping: Opportunity.Whatsapp_Name3__c */
+result.overview.currentRoi = app.Whatsapp_Name3__c;
+        result.overview.riskLevel =
+            riskLevel(app.DPD_1__c, app.Ttl_bou__c);
+        result.overview.riskReason =
+            riskReason(app.DPD_1__c, app.Ttl_bou__c);
+
+        result.charges = new ChargesData();
+
+        result.overview.numberOfLoansWithIsfc = '—';
+result.overview.totalBounce = app.Ttl_bou__c;
+result.overview.finOneUpdatedRoi = '—';
+
+result.charges.principalOutstanding =
+    nz(result.loan.outstanding);
+
+    result.overview.finnoneClientId =
+    String.isBlank(app.FinnoneClient_Id__c)
+        ? 'Not available'
+        : app.FinnoneClient_Id__c;
+
+result.overview.finnoneLoanId =
+    String.isBlank(app.Finnone_Loan_Id__c)
+        ? 'Not available'
+        : app.Finnone_Loan_Id__c;
+
+result.overview.loanNumber =
+    String.isBlank(app.Loan_Number__c)
+        ? 'Not available'
+        : app.Loan_Number__c;
+
+/*
+ * Foreclosure policy:
+ * MOB > 24 months  -> 4.5%
+ * MOB <= 24 months -> 6%
+ *
+ * If MOB is blank, default to 6% because it is not more than 24.
+ */
+result.charges.foreclosureRate =
+    app.MOB__c != null && app.MOB__c > 24
+        ? FORECLOSURE_RATE_MOB_MORE_THAN_24
+        : FORECLOSURE_RATE_MOB_24_OR_LESS;
+
+/*
+ * Base foreclosure charge:
+ * Principal Outstanding × applicable foreclosure rate
+ */
+result.charges.foreclosureBaseCharge = roundMoney(
+    result.charges.principalOutstanding
+    * result.charges.foreclosureRate
+);
+
+/*
+ * GST:
+ * 18% on foreclosure base charge
+ */
+result.charges.foreclosureGst = roundMoney(
+    result.charges.foreclosureBaseCharge * GST_RATE
+);
+
+/*
+ * Total foreclosure charge:
+ * Base foreclosure charge + GST
+ */
+result.charges.foreclosureCharges = roundMoney(
+    result.charges.foreclosureBaseCharge
+    + result.charges.foreclosureGst
+);
+        result.charges.emiPaidToDate =
+    loadEmiPaidToDate(app.Id);
+        /*
+ * First source:
+ * Application → Latest CAM → Post Sanction & Pre Disbursement Changes
+ */
+result.charges.insuranceFinancedPremium =
+    loadInsuranceFinancedPremium(
+        latestCam == null ? null : latestCam.Id
+    );
+
+if (result.charges.insuranceFinancedPremium != null) {
+    result.charges.insuranceNote =
+        'Application → CAM → Post Sanction & Pre Disbursement Changes.';
+} else {
+    /*
+     * Fallback source:
+     * Insurance Generation Data linked directly to this Application.
+     */
+    result.charges.insuranceFinancedPremium =
+        loadInsurancePremiumFromGenerationData(app.Id);
+
+    result.charges.insuranceNote =
+        result.charges.insuranceFinancedPremium == null
+            ? 'Insurance financed premium is not available in CAM or Insurance Generation Data.'
+            : 'Application → Insurance Generation Data → Total Premium Amount.';
+}
+
+        CollectionChargesCalculator.ChargesSummary summary =
+            CollectionChargesCalculator.calculateCharges(app.Id);
+
+        result.charges.bounceCount = app.Ttl_bou__c;
+        result.charges.bounceCharges = summary.totalBounceCharges;
+        result.charges.latePaymentCharges =
+            summary.latePaymentCharges;
+        result.charges.cashHandlingCharges =
+            summary.cashHandlingCharges;
+        result.charges.visitCharges =
+            summary.pendingVisitCharges;
+        result.charges.legalCharges = summary.legalCharges;
+        result.charges.otherChargesTotal =
+            summary.otherChargesTotal;
+
+        result.charges.foreclosurePayableToday = roundMoney(
+            result.charges.principalOutstanding
+            + result.charges.foreclosureCharges
+            + result.charges.otherChargesTotal
+        );
+
+        result.applicants = loadApplicants(app);
+        result.customer = buildCustomer(result.applicants, app);
+        result.customer.bureauAccountId = app.AccountId;
+
+        /*
+         * Read the latest already-saved soft-pull response.
+         * No API call is made from here.
+         */
+        result.savedBureauResponse = loadLatestSavedBureauResponse(
+            app.AccountId
+        );
+
+        result.customer.branchApproverMobile =
+            app.Branch__r == null
+            || app.Branch__r.Branch_Approver__r == null
+            ? null
+            : app.Branch__r.Branch_Approver__r.MobilePhone;
+
+        result.customer.branchUserMobile =
+            app.Branch__r == null
+            || app.Branch__r.Branch_User__r == null
+            ? null
+            : app.Branch__r.Branch_User__r.MobilePhone;
+
+        result.cams = loadCams(app.Id);
+        result.insurances = new List<InsuranceData>();
+
+        if (result.applicants.isEmpty()) {
+            result.warning =
+                'No linked applicant was found on the Application.';
+        }
+			result.leadDetails = getLeadDetails(
+    applicationId,
+    openedLeadId
+);
+
+result.caseDetails = getCaseDetails(applicationId);
+
+
+
+/*
+ * Fetch ITR safety:
+ * Until we add the exact ITR/GST record query here,
+ * do not create the child component for unavailable data.
+ */
+result.hasItrGstData = false;
+result.itrGstMessage =
+    'ITR / GST data is not available for this application.';
+
+return result;
+
+
+}
+
+private static ConsoleData getConsoleDataFromLead(Id leadId) {
+    Lead leadRecord = [
+        SELECT Id,
+               Case__c,
+               How_did_you_come_to_know_about_us__c,
+               LeadSource,
+               Status,
+               Lead_State__c
+        FROM Lead
+        WHERE Id = :leadId
+        LIMIT 1
+    ];
+
+    /*
+     * Lead → Case → Application
+     */
+    if (leadRecord.Case__c == null) {
+        ConsoleData result = new ConsoleData();
+        result.leadDetails = buildLeadDetails(leadRecord);
+        result.warning =
+            'This Lead is not linked to a Foreclosure Case, so its Application could not be found.';
+        return result;
+    }
+
+    Case foreclosureCase = [
+        SELECT Id,
+               Application_Name__c
+        FROM Case
+        WHERE Id = :leadRecord.Case__c
+        LIMIT 1
+    ];
+
+    if (foreclosureCase.Application_Name__c == null) {
+        ConsoleData result = new ConsoleData();
+        result.leadDetails = buildLeadDetails(leadRecord);
+        result.warning =
+            'The related Foreclosure Case does not have an Application linked.';
+        return result;
+    }
+
+    /*
+     * Load Customer 360 using the Application Id.
+     * openedLeadId ensures the same Lead opened by the user is displayed.
+     */
+    return getConsoleDataFromApplication(
+        foreclosureCase.Application_Name__c,
+        leadRecord.Id
+    );
+}
+
+private static Decimal loadEmiPaidToDate(Id loanId) {
+    if (loanId == null) {
+
+        return 0;
+    }
+
+    AggregateResult[] collectionRows = [
+        SELECT SUM(Amount__c) totalEmiPaid
+        FROM Collection__c
+        WHERE Nature_of_Collection__c = 'Emi/Advances/Part Payment'
+          AND ClearenceStatus__c = 'Cleared'
+          AND SFDC_Customer__c = :loanId
+    ];
+
+    if (
+        collectionRows.isEmpty()
+        || collectionRows[0].get('totalEmiPaid') == null
+    ) {
+        return 0;
+    }
+
+    return (Decimal) collectionRows[0].get('totalEmiPaid');
+}
+
+private static LeadDetails getLeadDetails(
+    Id applicationId,
+    Id openedLeadId
+) {
+    Lead selectedLead;
+
+    /*
+     * Console opened from Lead:
+     * Show exactly that Lead.
+     */
+    if (openedLeadId != null) {
+        List<Lead> openedLeadRows = [
+            SELECT Id,
+                   How_did_you_come_to_know_about_us__c,
+                   LeadSource,
+                   Status,
+                   Lead_State__c
+            FROM Lead
+            WHERE Id = :openedLeadId
+            AND RecordType.DeveloperName = 'Retention'
+            LIMIT 1
+        ];
+
+        if (!openedLeadRows.isEmpty()) {
+            selectedLead = openedLeadRows[0];
+        }
+    }
+
+    /*
+     * Console opened from Application:
+     * Find the latest Lead linked to a Foreclosure Case
+     * belonging to this Application.
+     */
+    if (selectedLead == null && applicationId != null) {
+        List<Case> foreclosureCases = [
+            SELECT Id
+            FROM Case
+            WHERE Application_Name__c = :applicationId
+            ORDER BY CreatedDate DESC
+            LIMIT 50
+        ];
+
+        Set<Id> caseIds = new Set<Id>();
+
+        for (Case caseRecord : foreclosureCases) {
+            caseIds.add(caseRecord.Id);
+        }
+
+        if (!caseIds.isEmpty()) {
+            List<Lead> leads = [
+                SELECT Id,
+                       How_did_you_come_to_know_about_us__c,
+                       LeadSource,
+                       Status,
+                       Lead_State__c,
+                       CreatedDate
+                FROM Lead
+                WHERE Case__c IN :caseIds
+                AND RecordType.DeveloperName = 'Retention'
+                ORDER BY CreatedDate DESC
+                LIMIT 1
+            ];
+
+            if (!leads.isEmpty()) {
+                selectedLead = leads[0];
+            }
+        }
+    }
+
+    return buildLeadDetails(selectedLead);
+}
+
+private static LeadDetails buildLeadDetails(Lead leadRecord) {
+    if (leadRecord == null) {
+        return null;
+    }
+
+    LeadDetails result = new LeadDetails();
+    result.id = leadRecord.Id;
+
+    result.howDidYouKnow = String.isBlank(
+        leadRecord.How_did_you_come_to_know_about_us__c
+    )
+        ? 'Not available'
+        : leadRecord.How_did_you_come_to_know_about_us__c;
+
+    result.leadSource = String.isBlank(leadRecord.LeadSource)
+        ? 'Not available'
+        : leadRecord.LeadSource;
+
+    result.status = String.isBlank(leadRecord.Status)
+        ? 'Not available'
+        : leadRecord.Status;
+
+    result.residenceState = String.isBlank(leadRecord.Lead_State__c)
+        ? 'Not available'
+        : leadRecord.Lead_State__c;
+
+    return result;
+}
+
+private static CaseDetails getCaseDetails(Id applicationId) {
+    if (applicationId == null) {
+        return null;
+    }
+
+    List<Case> caseRows = [
+        SELECT Id,
+               CaseNumber,
+               Subject,
+               Status,
+               Ageing__c,
+               CreatedDate,
+               RBM__c,
+               Receipt_of_Complaint__c,
+               Phone_Number_1__c,
+               Request__c
+        FROM Case
+        WHERE Application_Name__c = :applicationId
+        ORDER BY CreatedDate DESC
+        LIMIT 1
+    ];
+
+    if (caseRows.isEmpty()) {
+        return null;
+    }
+
+    Case caseRecord = caseRows[0];
+
+    CaseDetails result = new CaseDetails();
+    result.id = caseRecord.Id;
+    result.caseNumber = caseRecord.CaseNumber;
+    result.subject = caseRecord.Subject;
+    result.status = caseRecord.Status;
+    result.ageing = caseRecord.Ageing__c;
+    result.createdDate = caseRecord.CreatedDate;
+    result.rbm = caseRecord.RBM__c;
+    result.receiptOfComplaint =
+        caseRecord.Receipt_of_Complaint__c;
+    result.phoneNumber1 = caseRecord.Phone_Number_1__c;
+    result.requestType = caseRecord.Request__c;
+
+    return result;
+}
+
+
+    private static String loadLatestSavedBureauResponse(Id applicantId) {
+        if (applicantId == null) {
+            return null;
+        }
+
+        List<Bureau_Soft_Pull__c> rows = [
+            SELECT Id,
+                   Bureau_Soft_Pull_API_Response__c,
+                   CreatedDate
+            FROM Bureau_Soft_Pull__c
+            WHERE Applicant__c = :applicantId
+            ORDER BY CreatedDate DESC
+            LIMIT 20
+        ];
+
+        /*
+         * Bureau_Soft_Pull_API_Response__c is a Long Text Area field,
+         * so it cannot be used in the SOQL WHERE clause.
+         */
+        for (Bureau_Soft_Pull__c row : rows) {
+            if (String.isNotBlank(row.Bureau_Soft_Pull_API_Response__c)) {
+                return row.Bureau_Soft_Pull_API_Response__c;
+            }
+        }
+
+        return null;
+    }
+
+    private static Decimal loadInsuranceFinancedPremium(Id camId) {
+        if (camId == null) {
+            return null;
+        }
+
+        List<Post_Sanction_Pre_Disbursement_Changes__c> rows = [
+            SELECT Total_Insurance_Premium_Amount__c,
+                   CreatedDate
+            FROM Post_Sanction_Pre_Disbursement_Changes__c
+            WHERE CAM__c = :camId
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+
+        return rows.isEmpty()
+            ? null
+            : rows[0].Total_Insurance_Premium_Amount__c;
+    }
+
+    private static Decimal loadInsurancePremiumFromGenerationData(
+    Id applicationId
+) {
+    if (applicationId == null) {
+        return null;
+    }
+
+    List<Insurance_Generation_Data__c> insuranceRows = [
+        SELECT Id,
+               Total_Premium_Amount__c,
+               CreatedDate
+        FROM Insurance_Generation_Data__c
+        WHERE Application__c = :applicationId
+          AND Total_Premium_Amount__c != null
+        ORDER BY CreatedDate DESC
+        LIMIT 1
+    ];
+
+    return insuranceRows.isEmpty()
+        ? null
+        : insuranceRows[0].Total_Premium_Amount__c;
+}
+
+    private static List<ApplicantData> loadApplicants(
+    Opportunity app
+) {
+    List<ApplicantData> output = new List<ApplicantData>();
+
+    /*
+     * Applicant tab:
+     * Application → Household__c → child Account records.
+     */
+    if (app.Household__c == null) {
+        return output;
+    }
+
+   List<Account> accounts = [
+    SELECT Id,
+           Name,
+           RecordTypeId,
+           RecordType.DeveloperName,
+           Mobile__pc,
+           Personal_email__pc,
+           Date_Of_Birth__pc,
+           Address__pc,
+           Client_ID__pc,
+           ClientNum__pc,
+           Sex__pc,
+           Marital_Status__pc,
+           Qualification__pc,
+           Aadhar_Card__pc,
+           Pan_Card_No__pc,
+           Image_URL__pc,
+           Photograph__pc
+    FROM Account
+    WHERE Household__c = :app.Household__c
+    ORDER BY CreatedDate ASC
+];
+    Integer index = 0;
+
+    for (Account row : accounts) {
+        index++;
+
+        ApplicantData item = new ApplicantData();
+
+        item.id = String.valueOf(row.Id);
+        item.name = row.Name;
+
+        /*
+         * Main Applicant is the Account directly linked to Application.
+         * Other Accounts under the same Household are Co-Applicants.
+         */
+        String recordTypeName = row.RecordType == null
+    ? ''
+    : row.RecordType.DeveloperName;
+
+if (
+    recordTypeName == 'Main_Applicant' ||
+    recordTypeName == 'MainApplicant'
+) {
+    item.role = 'Main Applicant';
+} else if (
+    recordTypeName == 'Co_Applicant' ||
+    recordTypeName == 'CoApplicant'
+) {
+    item.role = 'Co-Applicant';
+} else {
+    /*
+     * Fallback protects old records where Record Type is not correctly set.
+     */
+    item.role = row.Id == app.AccountId
+        ? 'Main Applicant'
+        : 'Co-Applicant';
+}
+
+        item.color = colorFor(index);
+
+        item.clientId = firstNonBlank(
+            new List<String>{
+                row.Client_ID__pc,
+                row.ClientNum__pc,
+                '—'
+            }
+        );
+
+        item.dob = row.Date_Of_Birth__pc == null
+            ? '—'
+            : String.valueOf(row.Date_Of_Birth__pc);
+
+        item.gender = row.Sex__pc;
+        item.marital = row.Marital_Status__pc;
+        item.qual = row.Qualification__pc;
+
+        item.mobile = firstNonBlank(
+            new List<String>{
+                row.Mobile__pc,
+                '—'
+            }
+        );
+
+        item.email = row.Personal_email__pc;
+        item.addr = row.Address__pc;
+
+        item.kyc =
+            (String.isBlank(row.Aadhar_Card__pc)
+                ? 'Aadhaar pending'
+                : 'Aadhaar available')
+            + ' · '
+            + (String.isBlank(row.Pan_Card_No__pc)
+                ? 'PAN pending'
+                : 'PAN available');
+
+        item.photoUrl = getPhotoUrl(
+            row.Image_URL__pc,
+            row.Photograph__pc,
+            null
+        );
+
+        output.add(item);
+    }
+
+    return output;
+}
+
+    private static CustomerData buildCustomer(
+        List<ApplicantData> applicants,
+        Opportunity app
+    ) {
+        CustomerData customer = new CustomerData();
+
+        if (applicants.isEmpty()) {
+            customer.name = 'Applicant not linked';
+            customer.initials = 'NA';
+            customer.role = 'Main Applicant';
+            customer.mobile = '—';
+            customer.clientId = '—';
+            customer.lang = 'Not captured';
+        } else {
+            ApplicantData primary = applicants[0];
+
+            customer.name = primary.name;
+            customer.initials = initials(primary.name);
+            customer.role = primary.role;
+            customer.mobile = primary.mobile;
+            customer.clientId = primary.clientId;
+            customer.lang = 'Not captured';
+        }
+
+        return customer;
+    }
+
+    private static CAM__c loadLatestCam(Id applicationId) {
+        List<CAM__c> rows = [
+            SELECT Id,
+                   Name,
+                   CAM_Status__c,
+                   Approval_Date__c,
+                   CreatedDate,
+                   Is_Clone_CAM__c,
+                   Final_ROI__c,
+                   HLROI__c,
+                   Approved_Hl__c,
+                   Approved_HL_Loan_Amount__c,
+                   Approved_HL_EMI__c,
+                   Approved_HL_Tenor__c
+            FROM CAM__c
+            WHERE Loan_Application__c = :applicationId
+              AND Is_Clone_CAM__c = false
+            ORDER BY Approval_Date__c DESC NULLS LAST,
+                     CreatedDate DESC
+            LIMIT 10
+        ];
+
+        for (CAM__c row : rows) {
+            if (row.CAM_Status__c == 'Approved') {
+                return row;
+            }
+        }
+
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    private static List<CamData> loadCams(Id applicationId) {
+    List<CamData> output = new List<CamData>();
+
+    for (CAM__c row : [
+        SELECT Id,
+               Name,
+               CAM_Status__c,
+               Approval_Date__c,
+               CreatedDate,
+
+               Approved_HL_Loan_Amount__c,
+               Approved_HL_EMI__c,
+               Final_ROI__c,
+               Approved_HL_Tenor__c,
+
+               Existing_Loan_Amount__c,
+               Existing_EMI__c,
+               HLamt__c,
+               HLROI__c,
+               	ROI_Wavier__c,
+               HL_Tenor__c,
+               HEMI__c,
+               LTV__c,
+               Land_LTV__c,
+               Combined_Exposure__c,
+               CurrEff_ROI__c,
+               FOIR__c,
+               LCR__c,
+               Combined_FOIR__c,
+               Combined_LTV__c
+        FROM CAM__c
+        WHERE Loan_Application__c = :applicationId
+          AND Is_Clone_CAM__c = false
+        ORDER BY Approval_Date__c DESC NULLS LAST,
+                 CreatedDate DESC
+        LIMIT 10
+    ]) {
+        CamData item = new CamData();
+
+        item.id = row.Id;
+        item.name = row.Name;
+        item.status = row.CAM_Status__c;
+
+        item.sanctionedAmount = row.Approved_HL_Loan_Amount__c;
+        item.sanctionedEmi = row.Approved_HL_EMI__c;
+        item.sanctionedRoi = row.Final_ROI__c;
+        item.sanctionedTenure = row.Approved_HL_Tenor__c;
+
+        item.existingLoanAmount = row.Existing_Loan_Amount__c;
+        item.existingEmi = row.Existing_EMI__c;
+        item.hlLoanAmount = row.HLamt__c;
+        item.hlRoi = row.HLROI__c;
+        item.roiWaiver = row.ROI_Wavier__c;
+        item.hlTenor = row.HL_Tenor__c;
+        item.isfcEmi = row.HEMI__c;
+        item.ltv = row.LTV__c;
+        item.landLtv = row.Land_LTV__c;
+        item.combinedExposure = row.Combined_Exposure__c;
+
+        item.currentEffectiveRoi = row.CurrEff_ROI__c;
+        item.foir = row.FOIR__c;
+        item.lcr = row.LCR__c;
+        item.combinedFoir = row.Combined_FOIR__c;
+        item.combinedLtv = row.Combined_LTV__c;
+
+        output.add(item);
+    }
+
+    return output;
+}
+
+    private static OtpContext getOtpContext(
+        Id applicationId,
+        String recipientValue
+    ) {
+        if (
+            applicationId == null
+            || applicationId.getSObjectType() != Opportunity.SObjectType
+        ) {
+            throw new AuraHandledException(
+                'Select a valid Application before sending OTP.'
+            );
+        }
+
+        String recipient = normalizeRecipient(recipientValue);
+
+        Opportunity app = [
+            SELECT Id,
+                   AccountId,
+                   Branch__r.Branch_Approver__r.MobilePhone,
+                   Branch__r.Branch_User__r.MobilePhone
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ];
+
+        if (app.AccountId == null) {
+            throw new AuraHandledException(
+                'Main applicant Account is required for the Retention OTP flow.'
+            );
+        }
+
+        Account account = [
+            SELECT Id,
+                   Mobile__pc,
+                   CustomerOtp__c,
+                   EBSOtp__c,
+                   Underwriter_Otp__c
+            FROM Account
+            WHERE Id = :app.AccountId
+            LIMIT 1
+        ];
+
+        OtpContext context = new OtpContext();
+        context.account = account;
+        context.recipient = recipient;
+
+        if (recipient == 'CUSTOMER') {
+            context.phoneNumber = account.Mobile__pc;
+        } else if (recipient == 'BRANCH_APPROVER') {
+            context.phoneNumber =
+                app.Branch__r == null
+                || app.Branch__r.Branch_Approver__r == null
+                ? null
+                : app.Branch__r.Branch_Approver__r.MobilePhone;
+        } else {
+            context.phoneNumber =
+                app.Branch__r == null
+                || app.Branch__r.Branch_User__r == null
+                ? null
+                : app.Branch__r.Branch_User__r.MobilePhone;
+        }
+
+        if (String.isBlank(context.phoneNumber)) {
+            String label = recipient == 'CUSTOMER'
+                ? 'Customer'
+                : recipient == 'BRANCH_APPROVER'
+                    ? 'Branch Approver'
+                    : 'EBS/Branch User';
+
+            throw new AuraHandledException(
+                label
+                + ' mobile number is not available on the selected Application.'
+            );
+        }
+
+        return context;
+    }
+
+    private static String normalizeRecipient(String value) {
+        String recipient = String.isBlank(value)
+            ? 'CUSTOMER'
+            : value.trim().toUpperCase();
+
+        if (
+            recipient != 'CUSTOMER'
+            && recipient != 'BRANCH_APPROVER'
+            && recipient != 'EBS_BRANCH_USER'
+        ) {
+            throw new AuraHandledException(
+                'Unsupported OTP recipient.'
+            );
+        }
+
+        return recipient;
+    }
+
+    private static String generateSixDigitOtp() {
+    Integer randomValue = Crypto.getRandomInteger();
+
+    /*
+     * Avoid Math.abs() edge case for the lowest possible Integer.
+     * Convert negative value manually, then keep only the last 6 digits.
+     */
+    String numericValue = String.valueOf(randomValue).replace('-', '');
+
+    if (numericValue.length() > 6) {
+        numericValue = numericValue.substring(
+            numericValue.length() - 6
+        );
+    }
+
+    Integer otpNumber = Integer.valueOf(numericValue);
+
+    /*
+     * Ensure the OTP remains a valid 6-digit number.
+     */
+    if (otpNumber < 100000) {
+        otpNumber += 100000;
+    }
+
+    return String.valueOf(otpNumber);
+}
+
+    private static String storedOtp(
+        Account account,
+        String recipient
+    ) {
+        if (recipient == 'CUSTOMER') {
+            return account.CustomerOtp__c;
+        }
+
+        if (recipient == 'BRANCH_APPROVER') {
+            return account.Underwriter_Otp__c;
+        }
+
+        return account.EBSOtp__c;
+    }
+
+    private static void validateOtp(
+        Account account,
+        String recipient,
+        String enteredOtp,
+        String label
+    ) {
+        String expectedOtp = storedOtp(account, recipient);
+
+        if (
+            String.isBlank(enteredOtp)
+            || String.isBlank(expectedOtp)
+            || expectedOtp != enteredOtp.trim()
+        ) {
+            throw new AuraHandledException(
+                label + ' OTP is not verified.'
+            );
+        }
+    }
+
+    private static LeadApplicantDetails getMainApplicant(
+        Opportunity app
+    ) {
+        LeadApplicantDetails result = new LeadApplicantDetails();
+
+        if (app.AccountId != null) {
+            Account row = [
+                SELECT Name,
+                       Mobile__pc,
+                       Personal_email__pc
+                FROM Account
+                WHERE Id = :app.AccountId
+                LIMIT 1
+            ];
+
+            result.fullName = row.Name;
+            result.mobile = row.Mobile__pc;
+            result.email = row.Personal_email__pc;
+        }
+
+        return result;
+    }
+
+    private static NameParts splitName(String fullName) {
+        List<String> pieces = String.isBlank(fullName)
+            ? new List<String>{ 'Customer' }
+            : fullName.trim().split('\\s+');
+
+        NameParts parts = new NameParts();
+        parts.firstName = pieces[0];
+
+        List<String> lastNameParts = new List<String>();
+
+        for (Integer index = 1; index < pieces.size(); index++) {
+            lastNameParts.add(pieces[index]);
+        }
+
+        parts.lastName = lastNameParts.isEmpty()
+            ? 'Customer'
+            : String.join(lastNameParts, ' ');
+
+        return parts;
+    }
+
+    private static String buildLeadDescription(
+        Opportunity app,
+        String approvalType,
+        Decimal additionalLegalCharges,
+        String caseNumber
+    ) {
+        return 'Foreclosure Lead created from Retention Console.'
+            + '\nCase Number: ' + caseNumber
+            + '\nApplication: ' + app.Name
+            + '\nLoan Number: '
+            + '\nBranch: '
++ (
+    app.Branch__r == null || String.isBlank(app.Branch__r.Name)
+        ? 'Not available'
+        : app.Branch__r.Name
+)
+            + '\nBranch: '
+            + firstNonBlank(
+                new List<String>{
+                    app.Branch_Name__c,
+                    'Not available'
+                }
+            )
+            + '\nCustomer OTP: Verified'
+            + '\nApproval OTP: Verified ('
+            + (
+                approvalType == 'BRANCH_APPROVER'
+                ? 'Branch Approver'
+                : 'EBS / Branch User'
+            )
+            + ')'
+            + '\nAdditional legal charges: '
+            + String.valueOf(
+                nz(additionalLegalCharges).setScale(2)
+            );
+    }
+
+    private static void insertRetentionLead(Lead retentionLead) {
+        System.debug(
+            LoggingLevel.INFO,
+            'insertRetentionLead START'
+            + ' | FirstName=' + retentionLead.FirstName
+            + ' | LastName=' + retentionLead.LastName
+            + ' | Company=' + retentionLead.Company
+            + ' | LeadPhone='
+            + maskPhone(
+                String.valueOf(
+                    retentionLead.Lead_Phone_Number_1__c
+                )
+            )
+            + ' | StandardMobileAssigned='
+            + !String.isBlank(retentionLead.MobilePhone)
+            + ' | StandardPhoneAssigned='
+            + !String.isBlank(retentionLead.Phone)
+        );
+
+        Database.SaveResult saveResult =
+            Database.insert(retentionLead, false);
+
+        if (saveResult.isSuccess()) {
+            retentionLead.Id = saveResult.getId();
+
+            System.debug(
+                LoggingLevel.INFO,
+                'insertRetentionLead SUCCESS'
+                + ' | LeadId=' + retentionLead.Id
+            );
+
+            return;
+        }
+
+        List<String> errors = new List<String>();
+
+        for (Database.Error errorItem : saveResult.getErrors()) {
+            String fields =
+                errorItem.getFields() == null
+                || errorItem.getFields().isEmpty()
+                ? ''
+                : ' | Fields: '
+                    + String.join(
+                        errorItem.getFields(),
+                        ', '
+                    );
+
+            String errorText =
+                String.valueOf(errorItem.getStatusCode())
+                + ' | '
+                + errorItem.getMessage()
+                + fields;
+
+            errors.add(errorText);
+
+            System.debug(
+                LoggingLevel.ERROR,
+                'insertRetentionLead FAILED'
+                + ' | ' + errorText
+            );
+        }
+
+        throw new AuraHandledException(
+            'Retention Lead could not be created. '
+            + String.join(errors, ' || ')
+        );
+    }
+
+    private static String getPhotoUrl(
+    String imageUrl,
+    String photographHtml,
+    String photoUrl
+) {
+    if (!String.isBlank(imageUrl)) {
+        return imageUrl;
+    }
+
+    if (!String.isBlank(photographHtml)) {
+        Matcher matcher = Pattern.compile(
+            '(?i)<img[^>]+src\\s*=\\s*["\\\']([^"\\\']+)["\\\']'
+        ).matcher(photographHtml);
+
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+    }
+
+    return null; // don't fall back to PhotoUrl — it's always a silhouette when empty
+}
+
+    private static String riskLevel(
+        Decimal dpd,
+        Decimal bounces
+    ) {
+        if (nz(dpd) >= 30 || nz(bounces) >= 2) {
+            return 'High';
+        }
+
+        if (nz(dpd) > 0 || nz(bounces) > 0) {
+            return 'Medium';
+        }
+
+        return 'Low';
+    }
+
+    private static String riskReason(
+        Decimal dpd,
+        Decimal bounces
+    ) {
+        List<String> values = new List<String>();
+
+        if (nz(dpd) > 0) {
+            values.add(
+                String.valueOf(dpd.setScale(0))
+                + ' DPD'
+            );
+        }
+
+        if (nz(bounces) > 0) {
+            values.add(
+                String.valueOf(bounces.setScale(0))
+                + ' bounce(s)'
+            );
+        }
+
+        return values.isEmpty()
+            ? 'No DPD or bounce count is available on this Application.'
+            : String.join(values, ' · ');
+    }
+
+    private static String maskPhone(String phoneNumber) {
+        if (String.isBlank(phoneNumber)) {
+            return 'blank';
+        }
+
+        String digits = phoneNumber.replaceAll('[^0-9]', '');
+
+        if (digits.length() <= 4) {
+            return '****';
+        }
+
+        return '******'
+            + digits.substring(
+                digits.length() - 4,
+                digits.length()
+            );
+    }
+
+    private static String maskOtp(String otp) {
+        if (String.isBlank(otp)) {
+            return 'blank';
+        }
+
+        if (otp.length() <= 2) {
+            return '**';
+        }
+
+        return '****'
+            + otp.substring(
+                otp.length() - 2,
+                otp.length()
+            );
+    }
+
+    private static Decimal nz(Decimal value) {
+        return value == null ? 0 : value;
+    }
+
+    private static Decimal firstNonNull(
+        Decimal firstValue,
+        Decimal secondValue
+    ) {
+        return firstValue == null
+            ? secondValue
+            : firstValue;
+    }
+
+    private static Decimal roundMoney(Decimal value) {
+        return value == null
+            ? null
+            : value.setScale(2);
+    }
+
+    private static String formatMoney(Decimal value) {
+        return value == null
+            ? '—'
+            : '₹' + String.valueOf(value.setScale(0));
+    }
+
+    private static String firstNonBlank(List<String> values) {
+        for (String value : values) {
+            if (!String.isBlank(value)) {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static String joinAddress(List<String> values) {
+        List<String> output = new List<String>();
+
+        for (String value : values) {
+            if (!String.isBlank(value)) {
+                output.add(value);
+            }
+        }
+
+        return String.join(output, ', ');
+    }
+
+    private static String initials(String name) {
+        if (String.isBlank(name)) {
+            return 'NA';
+        }
+
+        String output = '';
+
+        for (String part : name.split(' ')) {
+            if (
+                !String.isBlank(part)
+                && output.length() < 2
+            ) {
+                output += part.substring(0, 1).toUpperCase();
+            }
+        }
+
+        return output;
+    }
+
+    private static String colorFor(Integer index) {
+        List<String> colors = new List<String>{
+            '#C8102E',
+            '#138A7E',
+            '#5B4BC4',
+            '#B9740F',
+            '#2563EB'
+        };
+
+        return colors[
+            Math.mod(index - 1, colors.size())
+        ];
+    }
+    
+
+    /**
+     * Rate Change History for the given Application.
+     * Finnone ROI = Whatsapp_Name3__c, Sanctioned ROI = Sanctioned_ROI__c,
+     * Change = |Finnone ROI - Sanctioned ROI| (always positive).
+     * Read-only.
+     */
+    @AuraEnabled(cacheable=true)
+    public static RateChangeHistoryData getRateChangeHistory(Id applicationId) {
+        RateChangeHistoryData result = new RateChangeHistoryData();
+
+        if (applicationId == null) {
+            return result;
+        }
+
+        for (Opportunity opp : [
+            SELECT Id, First_Sanction_Date__c, Sanctioned_ROI__c, Whatsapp_Name3__c
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ]) {
+            result.firstSanctionDate = displayValue(opp.get('First_Sanction_Date__c'));
+            result.sanctionedRoi = toDecimal(opp.get('Sanctioned_ROI__c'));
+            result.finnoneRoi = toDecimal(opp.get('Whatsapp_Name3__c'));
+
+            if (result.sanctionedRoi != null && result.finnoneRoi != null) {
+                result.change = Math.abs(result.finnoneRoi - result.sanctionedRoi);
+            }
+        }
+
+        return result;
+    }
+
+    private static Decimal toDecimal(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Decimal) {
+            return (Decimal) raw;
+        }
+        String text = String.valueOf(raw).replace('%', '').replace(',', '').trim();
+        if (String.isBlank(text)) {
+            return null;
+        }
+        try {
+            return Decimal.valueOf(text);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Repayment Discipline details for the given Application.
+     * Finnone Running DPD = IA_File_Audit_Date__c, Total Bounce = Ttl_bou__c,
+     * MOB = MOB__c, Bounce dates = Date_of_Collection__c of Collection__c
+     * records with ClearenceStatus__c = 'Bounced' (comma separated).
+     * Read-only.
+     */
+    @AuraEnabled(cacheable=true)
+    public static RepaymentDisciplineData getRepaymentDiscipline(Id applicationId) {
+        RepaymentDisciplineData result = new RepaymentDisciplineData();
+
+        if (applicationId == null) {
+            return result;
+        }
+
+        for (Opportunity opp : [
+            SELECT Id, IA_File_Audit_Date__c, Ttl_bou__c, MOB__c
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ]) {
+            result.finnoneRunningDpd = displayValue(opp.get('IA_File_Audit_Date__c'));
+            result.totalBounce = displayValue(opp.get('Ttl_bou__c'));
+            result.mob = displayValue(opp.get('MOB__c'));
+        }
+
+        List<String> bounceDateList = new List<String>();
+        Set<Date> seenDates = new Set<Date>();
+
+        for (Collection__c coll : [
+            SELECT Id, Date_of_Collection__c
+            FROM Collection__c
+            WHERE SFDC_Customer__c = :applicationId
+              AND ClearenceStatus__c = 'Bounce'
+              AND Date_of_Collection__c != null
+            ORDER BY Date_of_Collection__c ASC
+            LIMIT 500
+        ]) {
+            Date d = coll.Date_of_Collection__c;
+            if (seenDates.add(d)) {
+                bounceDateList.add(d.format());
+            }
+        }
+
+        result.bounceDates = String.join(bounceDateList, ', ');
+        return result;
+    }
+
+    private static String displayValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Date) {
+            return ((Date) raw).format();
+        }
+        if (raw instanceof Datetime) {
+            return ((Datetime) raw).format();
+        }
+        return String.valueOf(raw);
+    }
+
+    /**
+     * Risk Score Card details for the given CAM: latest Scorecard__c
+     * (Scorecard__c.CAM__c = camId). Read-only; used alongside the
+     * existing scoreCardComponent gauge.
+     */
+    @AuraEnabled(cacheable=true)
+    public static ScorecardFieldsData getScorecardFields(Id camId) {
+        if (camId == null) {
+            return null;
+        }
+
+        List<Scorecard__c> rows = [
+            SELECT Id, Score_Value__c, Score_Card_Delegation__c,
+                   ROI_Decision__c, Branch_Risk_Category__c
+            FROM Scorecard__c
+            WHERE CAM__c = :camId
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+
+        if (rows.isEmpty()) {
+            return null;
+        }
+
+        Scorecard__c row = rows[0];
+        ScorecardFieldsData d = new ScorecardFieldsData();
+        d.id = row.Id;
+        d.scoreValue = row.Score_Value__c == null
+            ? null : String.valueOf(row.Score_Value__c);
+        d.scoreCardDelegation = row.Score_Card_Delegation__c == null
+            ? null : String.valueOf(row.Score_Card_Delegation__c);
+        d.roiDecision = row.ROI_Decision__c == null
+            ? null : String.valueOf(row.ROI_Decision__c);
+        d.branchRiskCategory = row.Branch_Risk_Category__c == null
+            ? null : String.valueOf(row.Branch_Risk_Category__c);
+        return d;
+    }
+
+    /**
+     * Credit Trajectory: CIBIL score of every applicant related to the
+     * Application. Application -> Customer__c (LoanAppID__c) ->
+     * Accounts (Household__c), plus Application.Household__c.
+     * Main Applicant is listed first.
+     * Read-only.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<CreditTrajectoryData> getCreditTrajectory(Id applicationId) {
+        List<CreditTrajectoryData> result = new List<CreditTrajectoryData>();
+
+        if (applicationId == null) {
+            return result;
+        }
+
+        Set<Id> customerIds = new Set<Id>();
+        for (Customer__c cust : [
+            SELECT Id
+            FROM Customer__c
+            WHERE LoanAppID__c = :applicationId
+        ]) {
+            customerIds.add(cust.Id);
+        }
+
+        /*
+         * Fallback / union: the console's Applicants tab already resolves
+         * applicants through Application.Household__c, so include it too.
+         * This keeps Credit Trajectory consistent with the Applicants tab
+         * even when no Customer__c record points back via LoanAppID__c.
+         */
+        for (Opportunity appRow : [
+            SELECT Household__c
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ]) {
+            if (appRow.Household__c != null) {
+                customerIds.add(appRow.Household__c);
+            }
+        }
+
+        if (customerIds.isEmpty()) {
+            return result;
+        }
+
+        List<CreditTrajectoryData> others = new List<CreditTrajectoryData>();
+
+        for (Account acc : [
+            SELECT Id, Name, RecordType.Name, CIBIL_Score__pc
+            FROM Account
+            WHERE Household__c IN :customerIds
+            ORDER BY Name ASC
+            LIMIT 200
+        ]) {
+            CreditTrajectoryData row = new CreditTrajectoryData();
+            row.id = acc.Id;
+            row.role = acc.RecordType.Name;
+            row.applicantName = acc.Name;
+            row.cibilScore = acc.CIBIL_Score__pc == null
+                ? null : String.valueOf(acc.CIBIL_Score__pc);
+
+            if (row.role != null && row.role.containsIgnoreCase('Main Applicant')) {
+                result.add(row);
+            } else {
+                others.add(row);
+            }
+        }
+
+        result.addAll(others);
+        return result;
+    }
+
+    /**
+     * Collateral tab data (applicant addresses + property addresses)
+     * for the given Application. Same source/logic as the Collections
+     * "Collateral" tab, driven by the Opportunity Id. Read-only.
+     */
+    @AuraEnabled(cacheable=true)
+    public static CollateralData getCollateralData(Id applicationId) {
+        CollateralData result = new CollateralData();
+        result.propertySiteAddress = '';
+        result.propertyLegalAddress = '';
+        result.addresses = new List<CollateralAddressData>();
+
+        if (applicationId == null) {
+            return result;
+        }
+
+        for (Opportunity opp : [
+            SELECT Id,
+                   Property_Code__r.Plot_No__c, Property_Code__r.Street_Name__c,
+                   Property_Code__r.Locality__c, Property_Code__r.Landmark__c,
+                   Property_Code__r.State__c, Property_Code__r.District__c,
+                   Property_Code__r.City__c, Property_Code__r.Village__c,
+                   Property_Code__r.Pin_Code__c,
+                   Property_Code__r.Collateral_Address_1__c,
+                   Property_Code__r.Collateral_Address_3__c,
+                   Property_Code__r.Collateral_State__c,
+                   Property_Code__r.Collateral_Address_2__c,
+                   Property_Code__r.Collateral_City__c,
+                   Property_Code__r.Collateral_Pin_Code_New__c
+            FROM Opportunity
+            WHERE Id = :applicationId
+            LIMIT 1
+        ]) {
+            result.propertySiteAddress = joinAddressParts(new List<Object>{
+                opp.Property_Code__r.Plot_No__c,
+                opp.Property_Code__r.Street_Name__c,
+                opp.Property_Code__r.Locality__c,
+                opp.Property_Code__r.Landmark__c,
+                opp.Property_Code__r.State__c,
+                opp.Property_Code__r.District__c,
+                opp.Property_Code__r.City__c,
+                opp.Property_Code__r.Village__c,
+                opp.Property_Code__r.Pin_Code__c
+            });
+            result.propertyLegalAddress = joinAddressParts(new List<Object>{
+                opp.Property_Code__r.Collateral_Address_1__c,
+                opp.Property_Code__r.Collateral_Address_3__c,
+                opp.Property_Code__r.Collateral_State__c,
+                opp.Property_Code__r.Collateral_Address_2__c,
+                opp.Property_Code__r.Collateral_City__c,
+                opp.Property_Code__r.Collateral_Pin_Code_New__c
+            });
+        }
+
+        List<CollateralAddressData> others = new List<CollateralAddressData>();
+
+        for (OpportunityContactRole ocr : [
+            SELECT Contact.Name, Role,
+                   Contact.Address_Line_1__c, Contact.Address_Line_2__c, Contact.Address_Line_3__c,
+                   Contact.City__c, Contact.State__c, Contact.Pin_Code__c,
+                   Contact.Communication_Address_Line_1__c, Contact.Communication_Address_Line_2__c,
+                   Contact.Communication_Address_Line_3__c, Contact.Communication_District__c,
+                   Contact.Communication_City__c, Contact.Communication_State__c,
+                   Contact.Communication_Pincode__c,
+                   Contact.Address_Office__c, Contact.Address_Office_2__c, Contact.Address_Office_3__c,
+                   Contact.City_Office__c, Contact.State_Office__c, Contact.Pin_Code_Office__c
+            FROM OpportunityContactRole
+            WHERE OpportunityId = :applicationId
+        ]) {
+            CollateralAddressData row = new CollateralAddressData();
+            row.contactName = ocr.Contact.Name;
+            row.role = ocr.Role;
+            row.residentialAddress = joinAddressParts(new List<Object>{
+                ocr.Contact.Address_Line_1__c, ocr.Contact.Address_Line_2__c,
+                ocr.Contact.Address_Line_3__c, ocr.Contact.City__c,
+                ocr.Contact.State__c, ocr.Contact.Pin_Code__c
+            });
+            row.communicationAddress = joinAddressParts(new List<Object>{
+                ocr.Contact.Communication_Address_Line_1__c, ocr.Contact.Communication_Address_Line_2__c,
+                ocr.Contact.Communication_Address_Line_3__c, ocr.Contact.Communication_District__c,
+                ocr.Contact.Communication_City__c, ocr.Contact.Communication_State__c,
+                ocr.Contact.Communication_Pincode__c
+            });
+            row.businessAddress = joinAddressParts(new List<Object>{
+                ocr.Contact.Address_Office__c, ocr.Contact.Address_Office_2__c,
+                ocr.Contact.Address_Office_3__c, ocr.Contact.City_Office__c,
+                ocr.Contact.State_Office__c, ocr.Contact.Pin_Code_Office__c
+            });
+
+            if (ocr.Role == 'Loan - Main Applicant' || ocr.Role == 'Main Applicant') {
+                result.addresses.add(row);
+            } else {
+                others.add(row);
+            }
+        }
+
+        result.addresses.addAll(others);
+        return result;
+    }
+
+    private static String joinAddressParts(List<Object> parts) {
+        List<String> out = new List<String>();
+        for (Object part : parts) {
+            if (part != null && String.isNotBlank(String.valueOf(part))) {
+                out.add(String.valueOf(part));
+            }
+        }
+        return String.join(out, ', ');
+    }
+
+    /**
+     * Returns all PDD__c records related to the given Application
+     * (Opportunity) via PDD__c.Opportunity__c. Read-only; used only
+     * by the PDD Aspect tab.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<PddData> getPddRecords(Id applicationId) {
+        List<PddData> result = new List<PddData>();
+
+        if (applicationId == null) {
+            return result;
+        }
+
+        for (PDD__c p : [
+            SELECT Id, Name, Document_Name__c, Document_Received__c,
+                   Document_Type__c, Document_Category__c,
+                   Date_of_Disbursement__c
+            FROM PDD__c
+            WHERE Opportunity__c = :applicationId
+            ORDER BY Document_Name__c ASC, Name ASC
+            LIMIT 500
+        ]) {
+            PddData d = new PddData();
+            d.id = p.Id;
+            d.pddName = p.Name;
+            d.documentName = p.Document_Name__c;
+            d.documentReceived = p.Document_Received__c == null
+                ? null : String.valueOf(p.Document_Received__c);
+            d.documentType = p.Document_Type__c == null
+                ? null : String.valueOf(p.Document_Type__c);
+            d.documentCategory = p.Document_Category__c == null
+                ? null : String.valueOf(p.Document_Category__c);
+            d.dateOfDisbursement = p.Date_of_Disbursement__c == null
+                ? null : p.Date_of_Disbursement__c.format();
+            result.add(d);
+        }
+
+        return result;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
