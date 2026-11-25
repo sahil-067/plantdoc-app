@@ -1,1994 +1,455 @@
-here is a test class
-
-
-/* Developed by : Saifullah Saifi
- Completed Date : 08/05/2018
-version 1.1 - Saifullah Saifi (API for receipt movement from batch trigger and button) 
- */
-global class ProcessReceiptService {
-
-     Public static String accesstoken{get;set;}
-    // this is used to call from button 
-    webservice static void buttonCall(String idd) {
-        System.debug('buttonCall'+idd);
-        set<string> stSet = new set<string>();
-        if(Label.Finnone_Status == 'Started')
-        {
-             if(label.TempOff=='On')
-                   {
-            if(label.IsAdo=='Yes')
-            {
-                 ProcessReceiptAdocClass job=new ProcessReceiptAdocClass(idd);
-                 System.enqueueJob(job);
-            }
-            else
-            {
-                 System.debug('buttonCall Started'+idd);
-             dofuture(idd);
-            }
-                   }
-            
-        }
-           
-    }
-    
-    @future(Callout=true)
-    public static void dofuture(string colId){
-         System.debug('colId'+colId);
-        doPost(colId,'');
-        System.debug('colId below'+colId);
-    }
-    
-    public static String body;
-    // main method to make wrapper for API
-    public static String doPost(string colId,String trStatus){
-       // try{
-        System.debug('trStatus'+trStatus);
-         System.debug('colId'+colId);
-        List<Collection__c> col = [Select createddate, Bank_Name__c, Deposit_Bank__c, CrearanceFlag__c, Deposit_Flag__c, ClearenceStatus__c, Receipt_Generated__c, Nucleus_Status__c, In_Favour_Of__c, SFDC_Customer__r.Finnone_Loan_Id__c, Deposited_In_bank__c, Branch_Name__c, Bounce_Cancel_Reason__c, Customer_Cheque_Date__c, Status__c, Nucleus_Deposit_Bank__r.Account_No__c, Instrument__c, SFDC_Customer__c,FinnOne_ReceiptID__c, SFDC_Customer__r.Loan_Number__c, Nature_of_Collection__c, SFDC_Customer__r.Name, Name, Amount__c, Customer_Cheque_No__c, Date_of_Collection__c, Cancel_Remarks_New__c, Date_of_Cancellation__c, Date_of_Deposit__c, (select id, Date__c, In_Favour_Of__c, createddate, PS_Created__c, Cheque_Date__c from Pay_Slips__r) from Collection__c where id = :colId];
-      				System.debug('col'+col);
-        List<payment_mode_for_process_Receipt__mdt> mdt = [Select Nucleus_Code__c, Nucleus_Sub_Code__c, Label from payment_mode_for_process_Receipt__mdt
-                                                           where Label = :col [0].Instrument__c];
-        System.debug('mdt'+mdt);
-        List<Nucleus_Reciept__c> nucr = [SELECT id, Reciept_Number__c, chargeType__c, isActive__c FROM Nucleus_Reciept__c where Collection__c = :col [0].id];
-         System.debug('nucr'+nucr);
-        List<Nucleus_Receipt_For_Collection__mdt> nrC = [SELECT Chargecode__c, Chargeid__c, Receipt_Purpose_Type__c, Receipt_Against__c, Auto_Allocation__c from Nucleus_Receipt_For_Collection__mdt where MasterLabel = :col [0].Nature_of_Collection__c];
-       System.debug('nrC'+nrC);
-        id rcid = Schema.SObjectType.Account.getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-        list<Bounce_Cancel_Reason__mdt> bcr = new list<Bounce_Cancel_Reason__mdt>();
-        string strinstrument = col [0].instrument__c;
-        string branch = col [0].Branch_Name__c;
-         system.debug('strinstrument==> '+strinstrument);
-         system.debug('branch==> '+branch);
-        string sql = 'select id,Account_No__c,Branch__c,Branch_Name__c,Banktype__c from Nucleus_Deposit_Bank__c where Banktype__c=:strinstrument ';
-
-        if(col [0].instrument__c == 'Cash')
-            sql+= ' AND Branch__c=:branch';
-        system.debug(date.valueof(system.today()));
-        system.debug('strinstrument==> '+strinstrument);
-        system.debug('branch==> '+branch);
-        system.debug('sql==> '+sql);
-
-        List<Branch__c> brchList = [select id, Branch_Code__c, Finnone_Branch_Code__c, Br_net_Branch_Code__c, Branch_Address__c, Branch_City__c, Branch_Opening_Date__c, Branch_PinCode__c, Branch_State__c, ClusterManagerName__c from Branch__c where name = :col [0].Branch_Name__c];
-        list<Nucleus_Deposit_Bank__c> ndb = database.query(sql);
-        System.debug('ndb  **'+ndb);
-        System.debug('brchList'+brchList);
-            
-        list<Opportunity> AppList = [select Id, Loan_Product__r.name,Loan_Number__c, Name, Household__c, (SELECT Id, Name, Account__c from Customers__r) from Opportunity where id = :col [0].SFDC_Customer__c];
-        list<Account> listAccount = [select Name, HouseHold__c, brnet_Client_Id__c, Finnone_Client_Id__c from Account where HouseHold__c = :AppList [0].Household__c AND RecordType.id = :rcid];
-        
-        system.debug('Loan_Product__c ***** >>> '+AppList [0].Loan_Product__r.name );
-        list<Scheme_Master__mdt> listSchemeMaster=[SELECT Id, MasterLabel, Product_code__c FROM Scheme_Master__mdt where MasterLabel = :AppList [0].Loan_Product__r.name ];
-        List<DepositPanelStatus__mdt> depositmdt = [select DepositStatus__c, MasterLabel from DepositPanelStatus__mdt where MasterLabel = :col [0].Instrument__c];
-        System.debug('brchList'+brchList);
-        System.debug('AppList'+AppList);
-        System.debug('listAccount'+listAccount);
-        System.debug('listSchemeMaster'+listSchemeMaster);
-        System.debug('depositmdt'+depositmdt);
-        
-        //---------------------------------------------- Add By Devender Singh----------------------------------
-        //------------------------------------------------23th april 2020 --------------------------------------
-        //----In line number 56, we have added one more condition of ClearenceStatus must be [Cleared] from ----
-        //----collection and Instrument can be any things from the below condtion from line no 54 to 55---------
-        if(trStatus==''){
-            if((col [0].Instrument__c == 'Cash' || col [0].Instrument__c == 'Cheque' || col [0].Instrument__c == 'Demand Draft' ||
-                col[0].Instrument__c == 'Electronic Transfer' || col [0].Instrument__c == 'EasyPay' || col[0].Instrument__c=='eNACH' || col[0].Instrument__c=='Electronic Payment'|| col[0].Instrument__c=='ELECTRONIC_FUND_TRANSFER') &&
-               col[0].status__c == 'Active' && col[0].ClearenceStatus__c=='Cleared')
-                trStatus = 'C';
-            if((col [0].Instrument__c != null && col [0].status__c == 'Cancelled')|| test.isRunningTest())
-                trStatus = 'X';
-            if(( col [0].Instrument__c == 'Cheque' || col [0].Instrument__c == 'Demand Draft'
-                || col [0].instrument__c == 'ACH' || col [0].instrument__c == 'ECS'
-                || col [0].instrument__c == 'DDM' || col[0].Instrument__c=='eNACH' || col[0].Instrument__c=='Electronic Payment') && col [0].Status__c == 'Bounced' && nucr.size() > 0 && nucr [0].Reciept_Number__c != null)
-                trStatus = 'B';
-        }
-        if(trStatus == 'B') {
-            string BounceReason = col [0].Cancel_Remarks_New__c;
-            string Instrument = col [0].Instrument__c;
-            system.debug('BounceReason @@@@@@ '+BounceReason);
-            system.debug('Instrument @@@@@@ '+Instrument);
-            string query = 'select instrument__c,Nucleus_code__c from Bounce_Cancel_Reason__mdt where label=:BounceReason AND ';
-            string eft = 'Electronic Fund Transfer';
-            if(col [0].Instrument__c == 'Cheque' || col [0].Instrument__c == 'Demand Draft' || col [0].Instrument__c == 'Cash')
-                query+= 'instrument__c=:Instrument';
-            else 
-                query+= 'instrument__c=:eft AND PaymentSubMode__c=:Instrument';
-            
-            system.debug('query @@@@@@ '+query);
-            bcr= database.query(query);
-            system.debug(col [0].Instrument__c + '>>>>>>>>>' + col [0].Bounce_Cancel_Reason__c + '>>>' + bcr);
-            // bcr= [select instrument__c,Nucleus_code__c from Bounce_Cancel_Reason__mdt where label=:col[0].Bounce_Cancel_Reason__c AND instrument__c=:col[0].instrument__c];
-        } 
-        else if(trStatus == 'X') {
-            string BounceReason = col [0].Cancel_Remarks_New__c;
-            string Instrument = col [0].Instrument__c;
-            string query = 'select instrument__c,Nucleus_code__c from Bounce_Cancel_Reason__mdt where label=:BounceReason';
-            bcr= database.query(query);
-            system.debug(col [0].Instrument__c + '>>>>>>>>>' + col [0].Bounce_Cancel_Reason__c + '>>>' + bcr);
-            // bcr= [select instrument__c,Nucleus_code__c from Bounce_Cancel_Reason__mdt where label=:col[0].Bounce_Cancel_Reason__c AND instrument__c=:col[0].instrument__c];
-        }
-        
-        ModelObj obj = new ModelObj();
-        if(listSchemeMaster.size()>0){
-            system.debug(' 94 listSchemeMaster----->>>> '+listSchemeMaster[0].Product_code__c);
-            if(listSchemeMaster[0].Product_code__c=='HL01'){
-                obj.cardApprovalReferenceNumber='1'; 
-            }else{
-                    obj.cardApprovalReferenceNumber='2'; 
-            }
-        }else{
-            obj.cardApprovalReferenceNumber='1'; 
-        }
-        
-        obj.transactionCurrencyCode = 'INR';
-        obj.processTillMaker = 'false';
-        obj.receiptTransactionStatus = trStatus;
-        obj.bankIdentificationType = 'N';
-        obj.requestChannel = 'BRANCH';
-
-        obj.colStatus = col [0].Status__c;
-        obj.instrmnt = col [0].Instrument__c;
-        String bncRemark = '';
-
-        obj.receiptPayOutMode = '';
-        obj.paymentSubMode = '';
-        if(mdt.size() > 0) {
-            obj.receiptPayOutMode = mdt [0].Nucleus_Code__c;
-            system.debug('99 receiptPayOutMode@@@@@ ==>'+obj.receiptPayOutMode);
-            if(!string.isBlank(mdt [0].Nucleus_Sub_Code__c))
-                obj.paymentSubMode = mdt [0].Nucleus_Sub_Code__c;
-            //system.debug('102 receiptPayOutMode@@@@@ ==>'+ obj.paymentSubMode);  
-           // system.debug('103 Nucleus_Sub_Code__c@@@@@ ==>'+ mdt [0].Nucleus_Sub_Code__c);   
-            
-            // if(col[0].instrument__c=='ECS')
-            //  obj.paymentSubMode ='123456789';
-        }
-        string rcptPurpose = '';
-        obj.receiptAgainst = '';
-        obj.chargeId = '?';
-        obj.chargeCodeMasterId = '?';
-        
-        system.debug(' 132 nrC *****>>>>> '+nrC);
-        if(nrC.size() > 0) { 
-            system.debug(' 134 nrC *****>>>>> '+nrC);
-            
-            if(!string.isBlank(nrC [0].Receipt_Against__c))
-                obj.receiptAgainst = nrC [0].Receipt_Against__c; //'INITIAL_MONEY';
-            rcptPurpose= nrC [0].Receipt_Purpose_Type__c;
-            
-            obj.autoAllocation = nrC [0].Auto_Allocation__c;
-            
-            System.debug(' autoAllocation  '+obj.autoAllocation);
-            
-            System.debug(' chargeCode  '+nrC [0].Chargecode__c);
-            
-            if(nrC [0].Chargecode__c != null)
-                obj.chargeCodeMasterId = nrC [0].Chargecode__c;
-            if(nrC [0].Chargeid__c != null)
-                obj.chargeId = nrC [0].Chargeid__c;
-        }
-        obj.receiptPurpose = rcptPurpose;
-
-        obj.allocatedAmount = String.valueOf(col [0].Amount__c);
-        system.debug(' 147 ndb----> '+ndb.size());
-        system.debug(' 148 ndb----> '+ndb[0].Account_No__c);
-        if(ndb.size() > 0 && ndb [0].Account_No__c != null)
-            obj.depositBankAccountNumber = ndb [0].Account_No__c;
-        else 
-            obj.depositBankAccountNumber = '11111111111111111111';
-        
-        system.debug('depositBankAccountNumber -----> '+ obj.depositBankAccountNumber);
-
-        if((col [0].Instrument__c == 'ACH' && col [0].Bank_Name__c != null)|| test.isRunningTest()) {
-            if((col [0].Bank_Name__c.Contains('No.') && col [0].Bank_Name__c.split('No.').size() > 1)|| test.isRunningTest()) {
-                String[] str = col [0].Bank_Name__c.split('No.');
-                if(!test.isRunningTest())
-                obj.depositBankAccountNumber = str [1].trim();
-            }
-        }
-       // --------- Devender ----------------------------
-        if((col[0].Instrument__c=='eNACH' && col[0].Bank_Name__c != null)|| test.isRunningTest()){
-            if((col[0].Bank_Name__c.Contains('No.') && col[0].Bank_Name__c.split('No.').size()>1)|| test.isRunningTest()){
-                String[] str = col[0].Bank_Name__c.split('No.');
-                if(!test.isRunningTest())
-                obj.depositBankAccountNumber=str[1].trim();
-            } 
-        }
-       //-------------------------------------------------
-        Date d1;
-        obj.drawerName = '';
-        string drw = '';
-        obj.applicationFormNumber = '';
-        if(listAccount.size() > 0) {
-            if(listAccount [0].Finnone_Client_Id__c /*brnet_Client_Id__c*/ != null) {
-                drw= listAccount [0].Finnone_Client_Id__c.remove('-') /*brnet_Client_Id__c*/;
-                obj.applicationFormNumber = AppList [0].Loan_Number__c /*brnet_Client_Id__c*/; //.remove('CL-');
-            }
-            if(rcptPurpose == 'IMD')
-                obj.drawerName = drw + '-' + listAccount [0].Name;
-                obj.applicationFormNumber = AppList [0].Loan_Number__c;
-        } else {
-            obj.applicationFormNumber = AppList [0].Loan_Number__c;
-            obj.drawerName = '';
-        }
-
-            obj.applicationFormNumber = AppList [0].Loan_Number__c;
-            system.debug('====>obj.applicationFormNumber' + obj.applicationFormNumber);
-            system.debug('====>obj.Loan number' + AppList [0].Loan_Number__c);            
-        obj.instrumentReferenceNumber = '';
-        if((col [0].Instrument__c == 'Cheque' || col [0].Instrument__c == 'Demand Draft'|| col[0].Instrument__c=='ELECTRONIC_FUND_TRANSFER' || col [0].Instrument__c == 'EasyPay' || col [0].Instrument__c == 'Electronic Transfer' || col [0].Instrument__c == 'Electronic Payment') && (col [0].Pay_Slips__r.size() > 0 /*|| PayList.size()>0*/)) {
-           // system.debug('====>Rag' + col [0].Customer_Cheque_No__c);
-            if(col [0].Customer_Cheque_No__c != null)
-                obj.instrumentReferenceNumber = string.valueOf(col [0].Customer_Cheque_No__c);
-            
-            d1 = date.valueof(col [0].Pay_Slips__r [0].date__c); //date.valueof(col[0].Pay_Slips__r[0].CreatedDate);
-            obj.transactionValueDate = datetime.newInstance(d1.year(), d1.month(), d1.day()).format('dd/MM/YYYY');
-            if(d1 >= date.newInstance(2021, 12, 01)&&d1.year()==2021)
-                obj.transactionValueDate = d1.day() + '/12/2021';
-            Date d2 = Date.valueof(col [0].Pay_Slips__r [0].Cheque_Date__c);
-            if(col [0].Instrument__c == 'EasyPay')
-                d2= d1;
-            obj.instrumentDate = datetime.newInstance(d2.year(), d2.month(), d2.day()).format('dd/MM/YYYY');
-            if(d2 >= date.newInstance(2021, 12, 01)&&d2.year()==2021)
-                obj.instrumentDate = d2.day() + '/12/2021';
-            Date d3 = system.today();
-            obj.realizationDate = obj.transactionValueDate; //datetime.newInstance(d3.year(), d3.month(), d3.day()).format('dd/MM/YYYY');
-            Date d4 = d1; // Date.valueOf(col[0].Date_of_Collection__c)
-            obj.depositDate = obj.transactionValueDate; //datetime.newInstance(d4.year(), d4.month(), d4.day()).format('dd/MM/yyyy');
-            obj.drawerName = col [0].Pay_Slips__r [0].In_Favour_Of__c;
-        } else {
-            if(col [0].Instrument__c == 'Cheque' || col [0].Instrument__c == 'Demand Draft'|| col[0].Instrument__c=='ELECTRONIC_FUND_TRANSFER' || col [0].Instrument__c == 'EasyPay' || col [0].Instrument__c == 'Electronic Transfer' || col [0].Instrument__c == 'Electronic Payment')
-                if(col [0].Customer_Cheque_No__c != null)
-                obj.instrumentReferenceNumber = string.valueOf(col [0].Customer_Cheque_No__c);
-            d1= Date.valueOf(col [0].Date_of_Collection__c);
-            obj.transactionValueDate = datetime.newInstance(d1.year(), d1.month(), d1.day()).format('dd/MM/YYYY');
-            if(d1 >= date.newInstance(2021, 12, 01)&&d1.year()==2021)
-                obj.transactionValueDate = d1.day() + '/12/2021';
-            obj.instrumentDate = obj.transactionValueDate;
-            obj.realizationDate = obj.transactionValueDate;
-            obj.depositDate = obj.transactionValueDate;
-        }
-        obj.branchId = brchList [0].Finnone_Branch_Code__c;
-        system.debug('obj.branchId ---> '+obj.branchId);
-        obj.bounceCancelDate = '';
-        obj.bncRemark = '';
-        //-------------------------------------------------------------------------------------------------//
-        //------------------------------Change the logic of bounceCancelDate ------------------------------//
-        //----When date of Cancellation is null then we have to pass the date of Collection ---------------//
-        //------------------------------------18 jan 2020-------by Devender Singh-------------------------//
-        System.debug('bcr'+bcr+ ' bcr.size()'+bcr.size());
-        if(((trStatus == 'B' || trStatus == 'X') && bcr.size() > 0) || test.isRunningTest()) {
-            if(!Test.isRunningTest())
-            obj.bncRemark = bcr [0].Nucleus_code__c;
-            obj.bounceCancelReason = obj.bncRemark; 
-            date d2;
-            if( col [0].Date_of_Cancellation__c <> Null ){
-                d2 = col [0].Date_of_Cancellation__c;
-            }else if(col [0].Date_of_Cancellation__c == Null){
-                d2 = col [0].Date_of_Collection__c;
-            }
-            obj.bounceCancelDate = datetime.newInstance(d2.year(), d2.month(), d2.day()).format('dd/MM/YYYY');
-            if(d2 >= date.newInstance(2021, 12, 01)&&d2.year()==2021)
-                obj.bounceCancelDate = d2.day() + '/12/2021';
-        }
-        obj.receiptNo = String.valueOf(col [0].Name);
-        obj.loanId = string.valueOf(col [0].SFDC_Customer__r.Loan_Number__c).remove('AP-');
-        if(col [0].SFDC_Customer__r.Finnone_Loan_Id__c != null)
-            obj.loanAccountNumber = col [0].SFDC_Customer__r.Finnone_Loan_Id__c;
-        string str = '';
-         System.debug('obj.loanAccountNumber'+obj.loanAccountNumber);
-            
-            
-        system.debug(' 240 trStatus--->>> '+trStatus+' receiptNo--->> '+ obj.receiptNo);
-            
-       /* String jsonData = JSON.serialize(obj);  //  to create a json DATA  
-        System.debug(System.LoggingLevel.DEBUG,' **  requestBody  ** ' + jsonData);*/
-         String tokn = '';
-        string sReceiptNo='';
-        
-        body= '{'+ '"requestHeader":{ "tenantId": "505",'+'  "userDetail": { "userCode": "'+System.label.FinnoneUserCode+'","branchId": ' + obj.branchId + '}},';
-        
-        system.debug(obj.chargeId + '>>>>>>>>>' + obj.chargeCodeMasterId);
-         
-            List<Nucleus_Receipt_For_Collection__mdt> newcharge = [SELECT Chargecode__c, Chargeid__c, Receipt_Purpose_Type__c, Receipt_Against__c, Auto_Allocation__c from Nucleus_Receipt_For_Collection__mdt where MasterLabel = :col [0].Nature_of_Collection__c AND Receipt_Purpose_Type__c='DELIVERABLE_CHARGE']; 
-            
-
-            obj.natureOfcollection=col[0].Nature_of_Collection__c;
-            
-            //If condition don't meet, don't assign null value
-            if(!newcharge.isEmpty() ){
-                obj.chargeId= newcharge[0].Chargeid__c;
-            }
-            System.debug('obj.loanAccountNumber'+obj.loanAccountNumber);
-            if((obj.natureOfcollection.equalsIgnoreCase('Processing Fee (incl. Service tax)') && obj.loanAccountNumber != null )){
-                if(!string.isBlank(nrC [0].Receipt_Against__c))
-                obj.receiptAgainst = newcharge [0].Receipt_Against__c; //'INITIAL_MONEY';
-                rcptPurpose= newcharge[0].Receipt_Purpose_Type__c;
-                obj.receiptPurpose = rcptPurpose;
-                obj.autoAllocation = newcharge [0].Auto_Allocation__c;
-                
-            }
-            
-          
-           if((!string.isEmpty(obj.loanAccountNumber) && obj.loanAccountNumber != null && obj.natureOfcollection=='Processing Fee (incl. Service tax)')|| test.isRunningTest()){
-                body+= '"allocationBreakUpDetails":' +
-            +'[{' +
-            +'"loanId":"' + obj.loanId + '",' +
-            +'"chargeId":' + obj.chargeId + ',' +
-           // +'"chargeCodeMasterId":' + obj.chargeCodeMasterId + ',' +
-            +'"loanAccountNumber":"' + obj.loanAccountNumber + '",' +
-            +'"allocatedAmount":' + obj.allocatedAmount + '}' +
-            +'],';
-                
-            }
-            
-            
-        if(obj.chargeId != '?' && obj.chargeCodeMasterId != '?' && obj.autoAllocation == 'N' && obj.receiptPurpose!='IMD') {
-            body+= '"allocationBreakUpDetails":' +
-            +'[{' +
-            +'"loanId":"' + obj.loanId + '",' +
-            +'"chargeId":' + obj.chargeId + ',' +
-            +'"chargeCodeMasterId":' + obj.chargeCodeMasterId + ',' +
-            +'"loanAccountNumber":"' + obj.loanAccountNumber + '",' +
-            +'"allocatedAmount":' + obj.allocatedAmount + '}' +
-            +'],';
-        }
-        body+= ' "receiptPayOutMode": "' + obj.receiptPayOutMode + '", "paymentSubMode": "' + obj.paymentSubMode + '",';
-        if(obj.paymentSubMode == 'ECS' || obj.paymentSubMode == 'DDM' || obj.paymentSubMode == 'ACH' ||  obj.paymentSubMode == 'NACH' || obj.paymentSubMode=='eNACH')
-            body+= '"sourceAccountNumber":"123456789",';
-        body+= ' "cardApprovalReferenceNumber": "'+obj.cardApprovalReferenceNumber+''+obj.chargeId+'", "receiptAgainst": "' + obj.receiptAgainst + '",';
-        //body+= ' "cardApprovalReferenceNumber": "", "receiptAgainst": "' + obj.receiptAgainst + '",';
-       
-        //if(obj.loanAccountNumber != null)
-        system.debug(' 356 loanAccountNumber----->>>> '+obj.loanAccountNumber);
-        if(!string.isEmpty(obj.loanAccountNumber) && obj.loanAccountNumber != null)
-            body+= '"loanAccountNo":"' + obj.loanAccountNumber + '",';
-        body+= '"applicationId":"' + obj.loanId + '",';
-        body+= ' "applicationFormNumber": "' + obj.applicationFormNumber + '",';
-        if(obj.drawerName != '')
-            body+= '"drawerName":"' + obj.drawerName + '",';
-        body+= ' "transactionValueDate": "' + obj.transactionValueDate + '",';
-        system.debug('367 IMD Value ----> '+obj.receiptPurpose);
-        if(obj.receiptPurpose=='IMD')
-            sReceiptNo=obj.receiptNo+'-'+obj.cardApprovalReferenceNumber+''+obj.chargeId;
-        else
-            sReceiptNo=obj.receiptNo;
-        
-         system.debug('373 sReceiptNo Value ----> '+sReceiptNo);
-        
-        body+= ' "receiptPurpose": "' + obj.receiptPurpose + '", "transactionCurrencyCode": "' + obj.transactionCurrencyCode + '",' +
-        +' "autoAllocation": "' + obj.autoAllocation + '", "receiptNo":"' + sReceiptNo + '","receiptTransactionStatus": "' + obj.receiptTransactionStatus + '", ';
-        body+= '"receiptOrPayoutAmount": "' + obj.allocatedAmount + '", "bankIdentificationCode": "", "bankIdentificationType": "' + obj.bankIdentificationType + '",';
-        body+= '  "requestChannel": "' + obj.requestChannel + '","instrumentDate": "' + obj.instrumentDate + '",' ;
-        if(string.isEmpty(obj.instrumentReferenceNumber) || string.isBlank(obj.instrumentReferenceNumber))
-            body+=' "instrumentReferenceNumber": "' + sReceiptNo + '",';
-        else
-            body+=' "instrumentReferenceNumber": "' + obj.instrumentReferenceNumber + '",';
-        body+= ' "realizationDate": "' + obj.transactionValueDate + '", "depositBankAccountNumber": "' + obj.depositBankAccountNumber + '", "depositDate": "' + obj.depositDate + '", ';
-        if(obj.colStatus == 'Bounced' || obj.colStatus == 'Cancelled')
-            body+= ' "bounceCancelReason": "' + obj.bounceCancelReason + '", "bounceCancelDate": "' + obj.bounceCancelDate + '",';
-        body+= ' "processTillMaker": ' + obj.processTillMaker + ' } ';
-
-        system.debug('body----->' + body);  
-          system.debug('obj----->' + obj);  
-        system.debug('trStatus----->' + trStatus);  
-      
-        
-        if(trStatus != '')
-            str= processMethod(obj);
-            system.debug('str ********* '+str);
-            
-      //  if(!test.isRunningTest()){
-    		System.debug('(ResponseWrapper)System.JSON.deserialize(str, ResponseWrapper.class)'+(ResponseWrapper)System.JSON.deserialize(str, ResponseWrapper.class));
-             ResponseWrapper responseWrapper = (ResponseWrapper)System.JSON.deserialize(str, ResponseWrapper.class);
-                //if(responseWrapper!=null&&responseWrapper.success!=null&&responseWrapper.success.size()>0&&responseWrapper.success[0]!=null)
-                if(responseWrapper.responseCode=='success')
-                {
-                    //col[0].FinnOne_ReceiptID__c= Decimal.valueOf(responseWrapper.success[0].messageArguments[0]);
-                    col[0].FinnOne_ReceiptID__c= Decimal.valueOf(responseWrapper.payload.messages[0].messageArguments[0]);
-                    
-                }  
-     //   }
-                
-
-        if((str.toLowercase().contains('success'))||test.isRunningTest()) {
-            Nucleus_API_Log__c ncLog = new Nucleus_API_Log__c();
-           /* string bdy = str.split('>>s>>') [1];
-            ncLog.Request__c = str.split('>>>Success') [0];
-            ncLog.Response__c = string.valueOf(bdy);*/
-            
-           ncLog.Request__c=body;
-           string bdy=str;
-            ncLog.Response__c=bdy;
-            ncLog.Collection__c = col[0].id;
-            ncLog.API__c = 'Process Receipt';
-            ncLog.status__c = 'Success';
-            
-           // if(!test.isRunningTest()) {
-                List<process_token__c> settings = process_token__c.getall().values();
-                if(settings [0].Token__c != null)
-                    ncLog.token__c = settings [0].Token__c;
-            
-            insert ncLog;
-            
-            if(nucr.size() > 0 && trStatus == 'X' || trStatus == 'B') {
-                nucr[0].isActive__c = false;
-                update nucr;
-                col[0].Receipt_Generated__c = true;
-                system.debug(nucr);
-            } 
-            else if(trStatus == 'C') {
-                if(bdy.contains('with Receipt # ')) {
-                    string rcptstr = bdy.split('with Receipt # ') [1].split('"') [0];
-                    Nucleus_Reciept__c ncr = new Nucleus_Reciept__c();
-                    ncr.chargeType__c = String.valueOf(col[0].Nature_of_Collection__c); 
-                    system.debug(str + '>>>' + rcptstr);
-                    if(rcptstr != null || rcptstr != '')
-                        ncr.Reciept_Number__c = string.valueOf(rcptstr);
-                    ncr.Application__c = col [0].SFDC_Customer__c;
-                    ncr.Collection__c = col [0].id;
-                    ncr.isActive__c = true;
-                    ncr.amount__c = Decimal.valueOf(obj.allocatedAmount);
-                    if(ncr.Reciept_Number__c != Null) {
-                        system.debug('inserting');
-                        insert ncr;
-                        col[0].Receipt_Generated__c = true;
-                    }
-                    system.debug('inserted id----' + ncr.id);
-                }
-            }
-            if((str.contains('"value":')) || test.isRunningTest()) {
-                if(!test.isRunningTest()){
-                string stts = str.split('"value":') [1].split(':') [1].split('"') [0];
-                    col[0].Nucleus_Status__c = stts;}
-                IF((col [0].ClearenceStatus__c == 'Cleared')|| test.isRunningTest())
-                    col[0].CrearanceFlag__c = true;
-                IF((col [0].ClearenceStatus__c == 'Deposited')|| test.isRunningTest())
-                    col[0].Deposit_Flag__c = true;
-
-
-
-            }
-        } 
-        else if((str.toLowercase().contains('error'))|| test.isRunningTest()) {
-            Nucleus_API_Log__c ncLog = new Nucleus_API_Log__c();
-            /*string bdy = '500';
-            if(str.split('>>s>>').size() == 2)
-                bdy= str.split('>>s>>') [1];
-            ncLog.Request__c = str.split('>>>Fail') [0];*/
-            ncLog.Request__c=body;
-            string bdy=str;
-            ncLog.Response__c=bdy;
-            ncLog.Collection__c = col [0].id;
-            ncLog.API__c = 'Process Receipt';
-            ncLog.status__c = 'Error';
-                List<process_token__c> settings = process_token__c.getall().values();
-                if(settings [0].Token__c != null)
-                    ncLog.token__c = settings [0].Token__c;
-            insert ncLog;
-            system.debug(str);
-            if(str.contains('"value":')) {
-                string stts = str.split('"value":') [1].split(':') [1].split('"') [0];
-                system.debug(stts);
-                col[0].Nucleus_Status__c = stts;
-            }
-        }
-        update col;
-     //   }
-        /*Catch(Exception e){
-            System.debug(' Exception At line number '+e.getLineNumber());
-            System.debug(' Exception Messsage  '+e.getMessage());
-            
-        }*/
-        return body;
-    }
-    
-    public static String  requestAccessToken(){
-     
-        String url = System.label.ReceiptClientTokenURL;
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
-        request.setEndpoint(url);
-        request.setMethod('POST');
-        request.setHeader('Content-Type','application/x-www-form-urlencoded');
-        String body = System.label.ReceiptClientTokenBody;
-        System.debug('body'+body);
-        request.setBody(body);
-        System.debug('request'+request);
-        HttpResponse response =http.send(request);
-        System.debug('response'+response);
-        JSONParser parser = JSON.createParser(response.getBody());
-        System.debug('parser'+parser);
-        System.debug((parser.getCurrentToken() == JSONTOKEN.FIELD_NAME) && parser.getText()=='access_token');
-        System.debug('parser.getCurrentToken()'+parser.getCurrentToken());
-        System.debug('JSONTOKEN.FIELD_NAME'+JSONTOKEN.FIELD_NAME);
-        System.debug('parser.getText()'+parser.getText());
-        while(parser.nextToken() !=NULL){
-        if((parser.getCurrentToken() == JSONTOKEN.FIELD_NAME) && parser.getText()=='access_token'){
-         parser.nextToken();
-            
-        accesstoken = parser.getText();
-
-        }
-        }
-        
-       
-        System.debug('accesstoken'+accesstoken);
-        
-      return accesstoken;
-        
-    }
-    
-    
-    
-    
-    
-    // api call
-    public static string processMethod(ModelObj Obj) {
-        String tokn = '';
-        string sReceiptNo='';
-        List<process_token__c> settings = process_token__c.getall().values();
-        System.debug('settings'+settings);
-        System.debug('settings [0].Token__c'+settings [0].Token__c);
-
-        //if(!Test.isRunningTest()) {
-            if(settings [0].Token__c != null)
-                tokn= settings [0].Token__c;
-        //}
-        system.debug('token----' + tokn);
-        /*https://iloans.indiashelter.in:9842/finnone-integration/rest/receiptProcessing/restservice/receiptpayout/processReceipts ?access_token=    */
-        string url = System.label.ProcessReceiptServiceURL;
-        //url+= tokn;
-        
-        system.debug('url----' + url);
-
-        //R - Receipt,D - Deposit,C - Realize,B - B,X - Cancel
-      /*  string body = '{ "ReceiptProcessingMO": { "requestHeader": { "tenantId": 505, ' +
-        +'"userDetail": { "userCode": "'+System.label.FinnoneUserCode+'", "branchId": ' + obj.branchId + ',' +
-        +' "receiptId": "' + obj.receiptId + '" } },';*/
-        
-        //added ReceiptProcessingMO additional to the request body
-        body = '{ "ReceiptProcessingMO":  ' + body +'}';
-        System.debug('body'+body);
-        
-    /*
-      string  body= '{'+ '"requestHeader":{ "tenantId": "505",'+'  "userDetail": { "userCode": "'+System.label.FinnoneUserCode+'","branchId": ' + obj.branchId + '}},';
-        
-        system.debug(obj.chargeId + '>>>>>>>>>' + obj.chargeCodeMasterId);
-
-        if(obj.chargeId != '?' && obj.chargeCodeMasterId != '?' && obj.autoAllocation == 'N' && obj.receiptPurpose!='IMD') {
-            body+= '"allocationBreakUpDetails":' +
-            +'[{' +
-            +'"loanId":"' + obj.loanId + '",' +
-            +'"chargeId":' + obj.chargeId + ',' +
-            +'"chargeCodeMasterId":' + obj.chargeCodeMasterId + ',' +
-            +'"loanAccountNumber":"' + obj.loanAccountNumber + '",' +
-            +'"allocatedAmount":' + obj.allocatedAmount + '}' +
-            +'],';
-        }
-        body+= ' "receiptPayOutMode": "' + obj.receiptPayOutMode + '", "paymentSubMode": "' + obj.paymentSubMode + '",';
-        if(obj.paymentSubMode == 'ECS' || obj.paymentSubMode == 'DDM' || obj.paymentSubMode == 'ACH' ||  obj.paymentSubMode == 'NACH' || obj.paymentSubMode=='eNACH')
-            body+= '"sourceAccountNumber":"123456789",';
-        body+= ' "cardApprovalReferenceNumber": "'+obj.cardApprovalReferenceNumber+''+obj.chargeId+'", "receiptAgainst": "' + obj.receiptAgainst + '",';
-        //body+= ' "cardApprovalReferenceNumber": "", "receiptAgainst": "' + obj.receiptAgainst + '",';
-       
-        //if(obj.loanAccountNumber != null)
-        system.debug(' 356 loanAccountNumber----->>>> '+obj.loanAccountNumber);
-        if(!string.isEmpty(obj.loanAccountNumber) && obj.loanAccountNumber != null)
-            body+= '"loanAccountNo":"' + obj.loanAccountNumber + '",';
-        body+= '"applicationId":"' + obj.loanId + '",';
-        body+= ' "applicationFormNumber": "' + obj.applicationFormNumber + '",';
-        if(obj.drawerName != '')
-            body+= '"drawerName":"' + obj.drawerName + '",';
-        body+= ' "transactionValueDate": "' + obj.transactionValueDate + '",';
-        system.debug('367 IMD Value ----> '+obj.receiptPurpose);
-        if(obj.receiptPurpose=='IMD')
-            sReceiptNo=obj.receiptNo+'/'+obj.cardApprovalReferenceNumber+''+obj.chargeId;
-        else
-            sReceiptNo=obj.receiptNo;
-        
-         system.debug('373 sReceiptNo Value ----> '+sReceiptNo);
-        
-        body+= ' "receiptPurpose": "' + obj.receiptPurpose + '", "transactionCurrencyCode": "' + obj.transactionCurrencyCode + '",' +
-        +' "autoAllocation": "' + obj.autoAllocation + '", "receiptNo":"' + sReceiptNo + '","receiptTransactionStatus": "' + obj.receiptTransactionStatus + '", ';
-        body+= '"receiptOrPayoutAmount": "' + obj.allocatedAmount + '", "bankIdentificationCode": "", "bankIdentificationType": "' + obj.bankIdentificationType + '",';
-        body+= '  "requestChannel": "' + obj.requestChannel + '","instrumentDate": "' + obj.instrumentDate + '",' ;
-        if(string.isEmpty(obj.instrumentReferenceNumber) || string.isBlank(obj.instrumentReferenceNumber))
-            body+=' "instrumentReferenceNumber": "' + sReceiptNo + '",';
-        else
-            body+=' "instrumentReferenceNumber": "' + obj.instrumentReferenceNumber + '",';
-        body+= ' "realizationDate": "' + obj.transactionValueDate + '", "depositBankAccountNumber": "' + obj.depositBankAccountNumber + '", "depositDate": "' + obj.depositDate + '", ';
-        if(obj.colStatus == 'Bounced' || obj.colStatus == 'Cancelled')
-            body+= ' "bounceCancelReason": "' + obj.bounceCancelReason + '", "bounceCancelDate": "' + obj.bounceCancelDate + '",';
-        body+= ' "processTillMaker": ' + obj.processTillMaker + ' } ';
-
-        system.debug('body----->' + body);
-     */
-       // body='{"ReceiptProcessingMO":{"requestHeader":{"tenantId":505,"userDetail":{"userCode":"system_api_sf","branchId":5000049,"receiptId":"null"}},"receiptPayOutMode":"CASH","paymentSubMode":"","cardApprovalReferenceNumber":"15000827","receiptAgainst":"INITIAL_MONEY","applicationId":"111275","applicationFormNumber":"GLBCUST00000002323","drawerName":"GLBCUST00000002323-Vishal Pareek","transactionValueDate":"08/08/2020","receiptPurpose":"IMD","transactionCurrencyCode":"INR","autoAllocation":"Y","receiptNo":"ISFC-00341362/15000827","receiptTransactionStatus":"C","receiptOrPayoutAmount":"20000.00","bankIdentificationCode":"","bankIdentificationType":"N","requestChannel":"BRANCH","instrumentDate":"08/08/2020","instrumentReferenceNumber":"ISFC-00341362/15000827","realizationDate":"08/08/2020","depositBankAccountNumber":"18","depositDate":"08/08/2020","processTillMaker":false}}';
-        
-        Http hreq = new Http();
-        HttpRequest req = new HttpRequest();
-        //req.setHeader('userid','mukeshlms');
-        req.setHeader('Content-type', 'application/json');
-        if(!test.isRunningTest())
-        req.setHeader('access_token',requestAccessToken());
-        req.setEndpoint(url);
-        req.setTimeout(120000);
-        req.setMethod('POST');
-        req.setBody(body);
-        String str = '';
-        HttpResponse res = hreq.send(req);
-        system.debug('response---->' + res);
-        system.debug('Response of processreceipt' + res.getBody());
-        str = res.getBody();
-       // system.debug('str ---->' + str);
-       // system.debug('getStatusCode ---->' + res.getStatusCode());
-       // system.debug('getBody ---->' + res.getBody());
-        string rsbody1 = res.getBody();
-      //  system.debug('error ---->' + rsbody1.contains('{"error":'));
-      //  system.debug('success ---->' + rsbody1.contains('{"success":'));
-        if(res.getStatusCode() == 200) {
-            return str;        } 
-        else if(res.getStatusCode() != 200) {
-            return str;
-        }
-        system.debug('427 str---> '+str);
-        return str;
-    }   
-    
-    
-   
-    
-    
-    
-    public class ResponseWrapper
-    {
-        /*List<Responsemsg> success;
-        List<Responsemsg> error;*/
-        
-        public String acknowledgement;
-        public String responseCode; //success
-        public String responseString;
-        public cls_payload payload;
-        
-    }
-    
-    
-    class cls_payload {
-        public cls_payinSlipReferencNumber payinSlipReferencNumber;
-        public Integer receiptId;   //11014697
-        public cls_messages[] messages;
-    }
-    class cls_payinSlipReferencNumber {
-    }
-    class cls_messages {
-        public String i18nCode; //msg.00003359
-        public String[] messageArguments;
-        public String type; //INFO
-        public boolean isParent;
-        public String value;    //msg.00003359 : Transaction processed successfully with Receipt # 11014697
-    }
-        
-    /*Public class Responsemsg
-    {
-        public String i18nCode;
-        public String[] messageArguments;
-        public String type;
-        public String isParent;
-        public String value;
-        
-        
-    }*/
-    
-    
-    
-    
-    public class ModelObj {
-        public string branchId;
-        public Integer receiptId;
-        public String loanId;
-        public String chargeId;
-        public String chargeCodeMasterId;
-        public String loanAccountNumber;
-        public String allocatedAmount;
-        public String receiptPayOutMode;
-        public String paymentSubMode;
-        public String receiptAgainst;
-        public String applicationFormNumber;
-        public String drawerName;
-        public String transactionValueDate;
-        public String receiptPurpose;
-        public String transactionCurrencyCode;
-        public String autoAllocation;
-        public String receiptNo;
-        public String receiptTransactionStatus;
-        public String bankIdentificationType;
-        public String requestChannel;
-        public String instrumentDate;
-        public String instrumentReferenceNumber;
-        public String realizationDate;
-        public String depositBankAccountNumber;
-        public String depositDate;
-        public String bounceCancelReason;
-        public String bncRemark;
-        public String bounceCancelDate;
-        public String processTillMaker;
-        public string colStatus;
-        public string instrmnt;
-        public string cardApprovalReferenceNumber;
-        Public String natureOfcollection;
-        
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-and here is its test class
-
-
-
-
 @isTest
 public class ProcessReceiptServiceTest {
-    
- 
-    public static testmethod void mytest2(){
-        Test.startTest();
-        
-       String body='{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"$2a$08$Ez3GFhHTRi6ag4Y.Nfvaw.fArjaI/HMrmeON1Hmqioqn6rA3VtLDy"}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200,body));
-       
-        ProcessReceiptService.requestAccessToken();
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'choudhary',
-                            FirstName = 'Fanindra',
-                            alias = 'fm',
-                            Username = 'fm@techmatrix.com',
-                            Email = 'fm@techmatrix.com',
-                            ProfileId = prof.Id,
-                            isActive = true,
-                            TimeZoneSidKey = 'GMT',
-                            LanguageLocaleKey = 'en_US',
-                            EmailEncodingKey = 'UTF-8',
-                            LocaleSidKey = 'en_US', EmployeeNumber='ISFC12121'
-                           );
-                              insert usr;
-        
-        
-        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
-        tbObj.Name='Deactivate';
-        tbObj.isActive__c=true;
-        insert tbObj;
-        
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId();
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='test1';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-     
-     
-Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-insert cf;
-// recordtypeid = '012A0000000yth8IAA'
-   
-        Account acc1 = new Account(recordtypeid = '012A0000000yth8IAA' );
-        acc1.FirstName = 'Techh';
-        acc1.LastName = 'Techmatrix';
-        acc1.Personal_email__pc = 'tch@tech.com ';
-        acc1.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc1.Designation__pc = 'LO';
-        acc1.RecordTypeId = paId;
-        acc1.Date_of_Leaving__pc = System.today().addMonths(-2);
-        acc1.Finnone_Client_Id__c='ghgj464';
-		
-        acc1.Branch__c = br.id;
-                
-         //acc1.brnet_Client_Id__c='12345';
-      
-        insert acc1;
-        
-        Account acc2 = new Account();
-        acc2.FirstName = 'Tec';
-        acc2.LastName = 'Techmatrix';
-        acc2.Personal_email__pc = 'tch@tech.com ';
-        acc2.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc2.Designation__pc = 'BM';
-     //   acc2.Reporting_Manager__c = acc1.Id;
-        acc2.RecordTypeId = paId;
-        acc2.Branch__c = br.id;
-        acc2.Date_of_Leaving__pc = System.today();
-         // acc2.brnet_Client_Id__c='123445';
-               acc2.Finnone_Client_Id__c='12345';
 
+    // Self-contained HTTP mock supporting custom status codes and response bodies
+    private class ProcessReceiptMock implements HttpCalloutMock {
+        private Integer statusCode;
+        private String responseBody;
+
+        public ProcessReceiptMock(Integer statusCode, String responseBody) {
+            this.statusCode = statusCode;
+            this.responseBody = responseBody;
+        }
+
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setStatusCode(statusCode);
+            res.setBody(responseBody);
+            return res;
+        }
+    }
+
+    private static String getSuccessResponseBody() {
+        return '{' +
+            '"acknowledgement": "ACK-001",' +
+            '"responseCode": "success",' +
+            '"responseString": "Success",' +
+            '"payload": {' +
+                '"receiptId": 11014697,' +
+                '"messages": [{' +
+                    '"i18nCode": "msg.00003359",' +
+                    '"messageArguments": ["11014697"],' +
+                    '"type": "INFO",' +
+                    '"isParent": true,' +
+                    '"value": "msg.00003359 : Transaction processed successfully with Receipt # 11014697"' +
+                '}]' +
+            '}' +
+        '}';
+    }
+
+    @TestSetup
+    static void setupData() {
+        Profile prof = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        String uniqueSuffix = String.valueOf(System.currentTimeMillis());
+
+        User usr = new User(
+            LastName = 'Choudhary',
+            FirstName = 'Fanindra',
+            Alias = 'fmusr',
+            Username = 'fm' + uniqueSuffix + '@techmatrix.test.com',
+            Email = 'fm@techmatrix.com',
+            ProfileId = prof.Id,
+            IsActive = true,
+            TimeZoneSidKey = 'GMT',
+            LanguageLocaleKey = 'en_US',
+            EmailEncodingKey = 'UTF-8',
+            LocaleSidKey = 'en_US',
+            EmployeeNumber = 'ISFC12121'
+        );
+        insert usr;
+
+        Trigger_BYPass__c tbObj = new Trigger_BYPass__c(
+            Name = 'Deactivate',
+            isActive__c = true
+        );
+        insert tbObj;
+
+        Branch__c br = new Branch__c(
+            Name = 'Jaipur-1',
+            Br_net_Branch_Code__c = '123',
+            Branch_Approver__c = usr.Id,
+            Branch_Code__c = '123456',
+            Branch_User__c = UserInfo.getUserId(),
+            Branch_Address__c = 'Ajmer',
+            Branch_City__c = 'Ajmer',
+            Branch_Opening_Date__c = System.today().addDays(-18),
+            Branch_PinCode__c = '456788',
+            Branch_State__c = 'Rajasthan',
+            ClusterManagerName__c = 'Vinay',
+            Finnone_Branch_Code__c = '12345'
+        );
+        insert br;
+
+        Config__c cf = new Config__c(Name__c = 'Loanapp', value__c = '025140');
+        insert cf;
+
+        Id paId = Schema.SObjectType.Account.getRecordTypeInfosByName()
+            .get('Loan - Main Applicant')
+            .getRecordTypeId();
+
+        Account acc1 = new Account(
+            FirstName = 'Techh',
+            LastName = 'Techmatrix',
+            Personal_email__pc = 'tch@tech.com',
+            Date_of_Joining__pc = System.today().addMonths(-3),
+            Designation__pc = 'LO',
+            RecordTypeId = paId,
+            Date_of_Leaving__pc = System.today().addMonths(-2),
+            Finnone_Client_Id__c = 'GHGJ-464',
+            Branch__c = br.Id
+        );
+        insert acc1;
+
+        Account acc2 = new Account(
+            FirstName = 'Tec',
+            LastName = 'Techmatrix',
+            Personal_email__pc = 'tch2@tech.com',
+            Date_of_Joining__pc = System.today().addMonths(-3),
+            Designation__pc = 'BM',
+            RecordTypeId = paId,
+            Branch__c = br.Id,
+            Date_of_Leaving__pc = System.today(),
+            Finnone_Client_Id__c = '12345'
+        );
         insert acc2;
-        
-        List<Account> pcon = new list<Account>([SELECT Id,PersonContactId FROM Account WHERE Id=:acc2.Id]);
-        
-        contact[] cr = [select id from contact where contact.AccountId =: acc1.id];
-        
-        Customer__c cus = New Customer__c();
-        cus.OwnerId=usr.id;
-        cus.Branch__c='Ajmer-1';
-        //cus.Customer_Loan_AccID__c='786645';
-        cus.Customer_Name__c='REWQ';
-        cus.Customer_Address__c='ttyrtytr errert';
-        cus.Alternate_Mobile_No__c='9828667999';
-        cus.First_name__c='demo';
-        cus.Father_Husband_Name__c='trerer';
-        cus.Brnet_Client_ID__c='6556'; 
-        cus.Last_Name__c='rerr';
-        cus.Loan_Amount_Applied__c=9897878;
-        cus.Comfortable_EMI__c=4512;
-        
+
+        Account pcon = [SELECT Id, PersonContactId FROM Account WHERE Id = :acc2.Id LIMIT 1];
+        Contact cr = [SELECT Id FROM Contact WHERE AccountId = :acc1.Id LIMIT 1];
+
+        Customer__c cus = new Customer__c(
+            OwnerId = usr.Id,
+            Branch__c = 'Ajmer-1',
+            Customer_Name__c = 'REWQ',
+            Customer_Address__c = 'Test Address',
+            Alternate_Mobile_No__c = '9828667999',
+            First_name__c = 'Demo',
+            Father_Husband_Name__c = 'Father',
+            Brnet_Client_ID__c = '6556',
+            Last_Name__c = 'User',
+            Loan_Amount_Applied__c = 9897878,
+            Comfortable_EMI__c = 4512
+        );
         insert cus;
-        
-        
-        Opportunity opp = new Opportunity();
-        opp.CloseDate = System.today();
-        opp.StageName = 'Prospecting';
-        opp.Name = 'abc';
-        opp.LO__c = pcon[0].personContactId;
-        opp.Branch__c=br.Id;
-        opp.AccountId=acc1.Id;
-       
-        opp.Amount=1245;
-        opp.ColPin__c=45658965;
-        opp.CloseDate=system.today();
-        opp.Loan_Number__c='AP-12345';
+
+        // Dynamically match Scheme_Master__mdt for HL01 if present
+        List<Scheme_Master__mdt> hlSchemes = [
+            SELECT MasterLabel, Product_code__c
+            FROM Scheme_Master__mdt
+            WHERE Product_code__c = 'HL01'
+            LIMIT 1
+        ];
+        Loan_Product__c lp = new Loan_Product__c(
+            Name = hlSchemes.isEmpty() ? 'Home Loan' : hlSchemes[0].MasterLabel,
+            Display_Order__c = 34
+        );
+        insert lp;
+
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opp',
+            StageName = 'Prospecting',
+            CloseDate = System.today(),
+            LO__c = pcon.PersonContactId,
+            Branch__c = br.Id,
+            AccountId = acc1.Id,
+            Loan_Product__c = lp.Id,
+            Amount = 1245,
+            ColPin__c = 45658965,
+            Loan_Number__c = 'AP-12345',
+            Br_net_HL_ID__c = 'GLBCUSTM000',
+            Finnone_Loan_Id__c = 'GLBCUSTM000'
+        );
         insert opp;
-        system.debug(opp.Loan_Number__c);
-        
-        OpportunityContactRole ocr1 = new OpportunityContactRole();
-        // system.debug('idddddddTes='+newPersonAccount.PersonContactId); 
-        ocr1.ContactId =cr[0].id ;
-        ocr1.OpportunityId = opp.Id;
-        ocr1.IsPrimary = FALSE;
-        ocr1.Role = 'Main Applicant';
-        insert ocr1;
-        
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c();
-        ndp.Name='Axis Bank';
-        ndp.BankType__c='Cheque';
-        ndp.Branch_Name__c='Ajmer-1';
-        insert ndp;
-        
-        
-        
-        Collection__c col = new Collection__c();
-        col.SFDC_Customer__c=opp.Id;
-        // col.Customer__c=cust.id;
-        col.Amount__c=10000;
-        col.In_Favour_Of__c='dummy';
-        col.Bank_Name__c='Ajmer-1';
-        
-        
-        // col1.Bounce_Cancel_Reason__c='Incorrect Data entry';
-        col.Instrument__c='Cheque';
-       col.Status__c='Bounced';
-       
-       // col.SFDC_Customer__c='0063K000002CRCvQAO';
-        col.Branch_Name__c='Bhilwara-1';
-        col.Customer_Bank_Name__c='HDFC';
-        col.Customer_Cheque_Date__c=System.today();
-        col.Customer_Cheque_No__c=1234;
-        col.Bounce_Cancel_Reason__c='Wrong Instrument';
-        col.Date_of_Collection__c = system.today();
-        col.Date_of_Deposit__c=system.today()+5;
-        col.Nucleus_Deposit_Bank__c=ndp.Id;
-        col.Nature_of_Collection__c='Emi/Advances/Part Payment';
-        col.Date_of_Cancellation__c=system.today();
-        col.In_Favour_Of__c='favour';
-        col.Branch_Name__c='Jaipur-1';
-       // col.Cancel_Remarks_New__c='Account Dormat';
-        insert col;
-        
-         
-        
-        Pay_Slip__c  Pay =new  Pay_Slip__c();
-        pay.Collection__c=col.id;
-        pay.date__c=system.today();
-        pay.In_Favour_Of__c='test';
-        pay.PS_Created__c=system.today();
-        pay.Cheque_Date__c=system.today();
-        insert pay;
-        
-        
-        
-        
-        Nucleus_Reciept__c ncr1=new Nucleus_Reciept__c();
-        ncr1.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr1.Reciept_Number__c=string.valueof(123456);
-        ncr1.Application__c=col.SFDC_Customer__c;
-        ncr1.Collection__c=col.id;
-        ncr1.isActive__c=true;
-        ncr1.amount__c=col.Amount__c;
-        
-        insert ncr1; 
-        
-        
-        
-        opp.Br_net_HL_ID__c='GLBCUSTM000';
-        opp.Finnone_Loan_Id__c ='GLBCUSTM000';
-       //// update opp;
-        
-        Nucleus_Reciept__c ncr=new Nucleus_Reciept__c();
-        ncr.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr.Reciept_Number__c=string.valueof(123456);
-        ncr.Application__c=col.SFDC_Customer__c;
-        ncr.Collection__c=col.id;
-        ncr.isActive__c=true;
-        ncr.amount__c=col.Amount__c;
-        insert ncr; 
-    
-        pay.Collection__c=col.id;
-        pay.date__c=system.today();
-        pay.In_Favour_Of__c='test';
-        pay.PS_Created__c=system.today();
-        pay.Cheque_Date__c=system.today();
-        update pay;
-        
-        
-         process_token__c pt = new process_token__c();
-        pt.name='test';
-        pt.Token__c='text';
+
+        OpportunityContactRole ocr = new OpportunityContactRole(
+            ContactId = cr.Id,
+            OpportunityId = opp.Id,
+            IsPrimary = false,
+            Role = 'Main Applicant'
+        );
+        insert ocr;
+
+        // Deposit banks for each instrument type tested
+        List<Nucleus_Deposit_Bank__c> banks = new List<Nucleus_Deposit_Bank__c>{
+            new Nucleus_Deposit_Bank__c(
+                Name = 'Axis Bank Cheque',
+                BankType__c = 'Cheque',
+                Branch_Name__c = 'Jaipur-1',
+                Account_No__c = '1234567890'
+            ),
+            new Nucleus_Deposit_Bank__c(
+                Name = 'Axis Bank Cash',
+                BankType__c = 'Cash',
+                Branch__c = 'Jaipur-1',
+                Branch_Name__c = 'Jaipur-1',
+                Account_No__c = '9876543210'
+            ),
+            new Nucleus_Deposit_Bank__c(
+                Name = 'Axis Bank EasyPay',
+                BankType__c = 'EasyPay',
+                Branch_Name__c = 'Jaipur-1'
+                // Account_No__c intentionally null to cover default '11111111111111111111'
+            ),
+            new Nucleus_Deposit_Bank__c(
+                Name = 'Axis Bank eNACH',
+                BankType__c = 'eNACH',
+                Branch_Name__c = 'Jaipur-1',
+                Account_No__c = '1122334455'
+            )
+        };
+        insert banks;
+
+        process_token__c pt = new process_token__c(
+            Name = 'test',
+            Token__c = 'mock_token_value'
+        );
         insert pt;
-        
-     
-        Nucleus_Reciept__c nr=new Nucleus_Reciept__c();
-        nr.Collection__c=col.id;
-        nr.Application__c=opp.id;
-        nr.Reciept_Number__c='1234';
-        nr.amount__c=1234;
-        insert nr;
-        
-        
-			System.debug('col.Id'+col.Id);  
- 		ProcessReceiptService.ModelObj ob=new ProcessReceiptService.ModelObj();
-        ob.allocatedAmount='kjfj';
+    }
+
+    private static Collection__c buildCollection(
+        Id oppId,
+        Id bankId,
+        String instrument,
+        String status,
+        String clearanceStatus,
+        String natureOfCollection,
+        Date collectionDate,
+        Date cancellationDate,
+        Decimal chequeNo
+    ) {
+        return new Collection__c(
+            SFDC_Customer__c = oppId,
+            Amount__c = 10000,
+            In_Favour_Of__c = 'favour',
+            Bank_Name__c = 'HDFC No. 555666777',
+            Instrument__c = instrument,
+            Status__c = status,
+            ClearenceStatus__c = clearanceStatus,
+            Branch_Name__c = 'Jaipur-1',
+            Customer_Bank_Name__c = 'HDFC',
+            Customer_Cheque_Date__c = collectionDate,
+            Customer_Cheque_No__c = chequeNo,
+            Bounce_Cancel_Reason__c = 'Wrong Instrument',
+            Date_of_Collection__c = collectionDate,
+            Date_of_Deposit__c = collectionDate.addDays(5),
+            Nucleus_Deposit_Bank__c = bankId,
+            Nature_of_Collection__c = natureOfCollection,
+            Date_of_Cancellation__c = cancellationDate
+        );
+    }
+
+    // 1. Covers requestAccessToken() JSON parsing + buttonCall()
+    @isTest
+    static void testRequestAccessTokenAndButtonCall() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        Nucleus_Deposit_Bank__c bank = [SELECT Id FROM Nucleus_Deposit_Bank__c WHERE BankType__c = 'Cheque' LIMIT 1];
+
+        Collection__c col = buildCollection(
+            opp.Id, bank.Id, 'Cheque', 'Bounced', 'Deposited',
+            'Emi/Advances/Part Payment', System.today(), System.today(), 1234
+        );
+        insert col;
+
+        String tokenAndSuccessJson = '{' +
+            '"access_token": "mock_access_token_123",' +
+            '"responseCode": "success",' +
+            '"payload": {"messages": [{"messageArguments": ["11014697"], "value": "with Receipt # 11014697"}]}' +
+        '}';
+        Test.setMock(HttpCalloutMock.class, new ProcessReceiptMock(200, tokenAndSuccessJson));
+
+        Test.startTest();
+        String token = ProcessReceiptService.requestAccessToken();
+        System.assertEquals('mock_access_token_123', token);
         ProcessReceiptService.buttonCall(col.Id);
-        //ProcessReceiptService.testParser();
-       
-        test.stopTest();
-      
-        ProcessReceiptService.dofuture(String.valueOf(col.Id));
-        
-        
+        Test.stopTest();
     }
-    
-     public static testmethod void mytest1(){
-        Test.startTest();
-        String body='{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"$2a$08$Ez3GFhHTRi6ag4Y.Nfvaw.fArjaI/HMrmeON1Hmqioqn6rA3VtLDy"}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200,body));
-       
-        ProcessReceiptService.requestAccessToken();
-             ProcessReceiptService.ModelObj ob11=new ProcessReceiptService.ModelObj();
-           ob11.allocatedAmount='123';
-             ob11.autoAllocation='123';
-             ob11.bankIdentificationType='123';
-             ob11.bncRemark='123';
-             ob11.bounceCancelDate='123';
-             ob11.bounceCancelReason='123';
-             ob11.branchId='123';
-             ob11.cardApprovalReferenceNumber='123';
-             ob11.cardApprovalReferenceNumber='123';
-             ob11.chargeCodeMasterId='123';
-             ob11.chargeId='123';
-             ob11.colStatus='123';
-			
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'choudhary',
-                            FirstName = 'Fanindra',
-                            alias = 'fm',
-                            Username = 'fm@techmatrix.com',
-                            Email = 'fm@techmatrix.com',
-                            ProfileId = prof.Id,
-                            isActive = true,
-                            TimeZoneSidKey = 'GMT',
-                            LanguageLocaleKey = 'en_US',
-                            EmailEncodingKey = 'UTF-8',
-                            LocaleSidKey = 'en_US', EmployeeNumber='ISFC12121'
-                           );
-                              insert usr;
-        
-        
-        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
-        tbObj.Name='Deactivate';
-        tbObj.isActive__c=false;
-        insert tbObj;
-        
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId();
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='test1';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-     
-     
-Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-insert cf;
-// recordtypeid = '012A0000000yth8IAA'
-   
-        Account acc1 = new Account(recordtypeid = '012A0000000yth8IAA' );
-        acc1.FirstName = 'Techh';
-        acc1.LastName = 'Techmatrix';
-        acc1.Personal_email__pc = 'tch@tech.com ';
-        acc1.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc1.Designation__pc = 'LO';
-        acc1.RecordTypeId = paId;
-        acc1.Date_of_Leaving__pc = System.today().addMonths(-2);
-        acc1.Finnone_Client_Id__c='ghgj464';
-		
-        acc1.Branch__c = br.id;
-                
-         //acc1.brnet_Client_Id__c='12345';
-      
-        insert acc1;
-        
-        Account acc2 = new Account();
-        acc2.FirstName = 'Tec';
-        acc2.LastName = 'Techmatrix';
-        acc2.Personal_email__pc = 'tch@tech.com ';
-        acc2.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc2.Designation__pc = 'BM';
-     //   acc2.Reporting_Manager__c = acc1.Id;
-        acc2.RecordTypeId = paId;
-        acc2.Branch__c = br.id;
-        acc2.Date_of_Leaving__pc = System.today();
-         // acc2.brnet_Client_Id__c='123445';
-               acc2.Finnone_Client_Id__c='12345';
 
-        insert acc2;
-        
-        List<Account> pcon = new list<Account>([SELECT Id,PersonContactId FROM Account WHERE Id=:acc2.Id]);
-        
-        contact[] cr = [select id from contact where contact.AccountId =: acc1.id];
-        
-        Customer__c cus = New Customer__c();
-        cus.OwnerId=usr.id;
-        cus.Branch__c='Ajmer-1';
-        //cus.Customer_Loan_AccID__c='786645';
-        cus.Customer_Name__c='REWQ';
-        cus.Customer_Address__c='ttyrtytr errert';
-        cus.Alternate_Mobile_No__c='9828667999';
-        cus.First_name__c='demo';
-        cus.Father_Husband_Name__c='trerer';
-        cus.Brnet_Client_ID__c='6556'; 
-        cus.Last_Name__c='rerr';
-        cus.Loan_Amount_Applied__c=9897878;
-        cus.Comfortable_EMI__c=4512;
-        
-        insert cus;
-        
-        
-        Opportunity opp = new Opportunity();
-        opp.CloseDate = System.today();
-        opp.StageName = 'Prospecting';
-        opp.Name = 'abc';
-        opp.LO__c = pcon[0].personContactId;
-        opp.Branch__c=br.Id;
-        opp.AccountId=acc1.Id;
-       
-        opp.Amount=1245;
-        opp.ColPin__c=45658965;
-        opp.CloseDate=system.today();
-        opp.Loan_Number__c='AP-12345';
-        insert opp;
-        system.debug(opp.Loan_Number__c);
-        
-        OpportunityContactRole ocr1 = new OpportunityContactRole();
-        // system.debug('idddddddTes='+newPersonAccount.PersonContactId); 
-        ocr1.ContactId =cr[0].id ;
-        ocr1.OpportunityId = opp.Id;
-        ocr1.IsPrimary = FALSE;
-        ocr1.Role = 'Main Applicant';
-        insert ocr1;
-        
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c();
-        ndp.Name='Axis Bank';
-        ndp.BankType__c='Cheque';
-        ndp.Branch_Name__c='Ajmer-1';
-        insert ndp;
-         
-       
-        
-        
-        
-        Collection__c col = new Collection__c();
-        col.SFDC_Customer__c=opp.Id;
-        // col.Customer__c=cust.id;
-        col.Amount__c=10000;
-        col.In_Favour_Of__c='dummy';
-        col.Bank_Name__c='Ajmer-1';
-        
-        
-        // col1.Bounce_Cancel_Reason__c='Incorrect Data entry';
-        col.Instrument__c='Cheque';
-       col.Status__c='Bounced';
-       
-       // col.SFDC_Customer__c='0063K000002CRCvQAO';
-        col.Branch_Name__c='Bhilwara-1';
-        col.Customer_Bank_Name__c='HDFC';
-        col.Customer_Cheque_Date__c=System.today();
-        col.Customer_Cheque_No__c=1234;
-        col.Bounce_Cancel_Reason__c='Wrong Instrument';
-        col.Date_of_Collection__c = system.today();
-        col.Date_of_Deposit__c=system.today()+5;
-        col.Nucleus_Deposit_Bank__c=ndp.Id;
-        col.Nature_of_Collection__c='Emi/Advances/Part Payment';
-        col.Date_of_Cancellation__c=null;
-        col.In_Favour_Of__c='favour';
-        col.Branch_Name__c='Jaipur-1';
-         // col.Cancel_Remarks_New__c='Account Dormat';
+    // 2. Covers Cash SQL filter, trStatus = 'C', IMD receiptPurpose, blank cheque no, Dec 2021 date,
+    //    ResponseWrapper success, FinnOne_ReceiptID__c update, and Nucleus_Reciept__c insertion
+    @isTest
+    static void testDoPostCashClearedSuccessAndIMD() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        Nucleus_Deposit_Bank__c cashBank = [SELECT Id FROM Nucleus_Deposit_Bank__c WHERE BankType__c = 'Cash' LIMIT 1];
+
+        List<Nucleus_Receipt_For_Collection__mdt> imdMdt = [
+            SELECT MasterLabel
+            FROM Nucleus_Receipt_For_Collection__mdt
+            WHERE Receipt_Purpose_Type__c = 'IMD'
+            LIMIT 1
+        ];
+        String nature = imdMdt.isEmpty() ? 'Emi/Advances/Part Payment' : imdMdt[0].MasterLabel;
+
+        Collection__c col = buildCollection(
+            opp.Id, cashBank.Id, 'Cash', 'Active', 'Cleared',
+            nature, Date.newInstance(2021, 12, 15), null, null
+        );
         insert col;
-         
-        
-        
-        
-        
-        
-        Nucleus_Reciept__c ncr1=new Nucleus_Reciept__c();
-        ncr1.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr1.Reciept_Number__c=string.valueof(123456);
-        ncr1.Application__c=col.SFDC_Customer__c;
-        ncr1.Collection__c=col.id;
-        ncr1.isActive__c=true;
-        ncr1.amount__c=col.Amount__c;
-        
-        insert ncr1; 
-        
-        
-        
-        opp.Br_net_HL_ID__c='GLBCUSTM000';
-        opp.Finnone_Loan_Id__c ='GLBCUSTM000';
-       //// update opp;
-        
-        Nucleus_Reciept__c ncr=new Nucleus_Reciept__c();
-        ncr.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr.Reciept_Number__c=string.valueof(123456);
-        ncr.Application__c=col.SFDC_Customer__c;
-        ncr.Collection__c=col.id;
-        ncr.isActive__c=true;
-        ncr.amount__c=col.Amount__c;
-        insert ncr; 
-    
-       
-        
-        
-         process_token__c pt = new process_token__c();
-        pt.name='test';
-        pt.Token__c='text';
-        insert pt;
-        
-     
-        Nucleus_Reciept__c nr=new Nucleus_Reciept__c();
-        nr.Collection__c=col.id;
-        nr.Application__c=opp.id;
-        nr.Reciept_Number__c='1234';
-        nr.amount__c=1234;
-        insert nr;
-        
-        
-			System.debug('col.Id'+col.Id);       
-         ProcessReceiptService.buttonCall(col.Id);
-        
-        ProcessReceiptService.ModelObj ob=new ProcessReceiptService.ModelObj();
-        
-      
-        ProcessReceiptService.dofuture(String.valueOf(col.Id));
-        test.stopTest();
-        
+
+        Test.setMock(HttpCalloutMock.class, new ProcessReceiptMock(200, getSuccessResponseBody()));
+
+        Test.startTest();
+        String result = ProcessReceiptService.doPost(col.Id, 'C');
+        Test.stopTest();
+
+        System.assertNotEquals(null, result);
+        Collection__c updatedCol = [SELECT FinnOne_ReceiptID__c, Receipt_Generated__c FROM Collection__c WHERE Id = :col.Id];
+        System.assertEquals(11014697, updatedCol.FinnOne_ReceiptID__c);
     }
-    
-     public static testmethod void mytest3(){
-        Test.startTest();
-        String body='{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"$2a$08$Ez3GFhHTRi6ag4Y.Nfvaw.fArjaI/HMrmeON1Hmqioqn6rA3VtLDy"}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200,body));
-        
-        ProcessReceiptService.requestAccessToken();
-             ProcessReceiptService.ModelObj ob11=new ProcessReceiptService.ModelObj();
-           ob11.allocatedAmount='123';
-             ob11.autoAllocation='123';
-             ob11.bankIdentificationType='123';
-             ob11.bncRemark='123';
-             ob11.bounceCancelDate='123';
-             ob11.bounceCancelReason='123';
-             ob11.branchId='123';
-             ob11.cardApprovalReferenceNumber='123';
-             ob11.cardApprovalReferenceNumber='123';
-             ob11.chargeCodeMasterId='123';
-             ob11.chargeId='123';
-             ob11.colStatus='123';
-			
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'choudhary',
-                            FirstName = 'Fanindra',
-                            alias = 'fm',
-                            Username = 'fm@techmatrix.com',
-                            Email = 'fm@techmatrix.com',
-                            ProfileId = prof.Id,
-                            isActive = true,
-                            TimeZoneSidKey = 'GMT',
-                            LanguageLocaleKey = 'en_US',
-                            EmailEncodingKey = 'UTF-8',
-                            LocaleSidKey = 'en_US', EmployeeNumber='ISFC12121'
-                           );
-                              insert usr;
-        
-        
-        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
-        tbObj.Name='Deactivate';
-        tbObj.isActive__c=false;
-        insert tbObj;
-        
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId();
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='test1';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-     
-     
-Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-insert cf;
-// recordtypeid = '012A0000000yth8IAA'
-   
-        Account acc1 = new Account(recordtypeid = '012A0000000yth8IAA' );
-        acc1.FirstName = 'Techh';
-        acc1.LastName = 'Techmatrix';
-        acc1.Personal_email__pc = 'tch@tech.com ';
-        acc1.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc1.Designation__pc = 'LO';
-        acc1.RecordTypeId = paId;
-        acc1.Date_of_Leaving__pc = System.today().addMonths(-2);
-        acc1.Finnone_Client_Id__c='ghgj464';
-		
-        acc1.Branch__c = br.id;
-                
-         //acc1.brnet_Client_Id__c='12345';
-      
-        insert acc1;
-        
-        Account acc2 = new Account();
-        acc2.FirstName = 'Tec';
-        acc2.LastName = 'Techmatrix';
-        acc2.Personal_email__pc = 'tch@tech.com ';
-        acc2.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc2.Designation__pc = 'BM';
-     //   acc2.Reporting_Manager__c = acc1.Id;
-        acc2.RecordTypeId = paId;
-        acc2.Branch__c = br.id;
-        acc2.Date_of_Leaving__pc = System.today();
-         // acc2.brnet_Client_Id__c='123445';
-               acc2.Finnone_Client_Id__c='12345';
 
-        insert acc2;
-        
-        List<Account> pcon = new list<Account>([SELECT Id,PersonContactId FROM Account WHERE Id=:acc2.Id]);
-        
-        contact[] cr = [select id from contact where contact.AccountId =: acc1.id];
-        
-        Customer__c cus = New Customer__c();
-        cus.OwnerId=usr.id;
-        cus.Branch__c='Ajmer-1';
-        //cus.Customer_Loan_AccID__c='786645';
-        cus.Customer_Name__c='REWQ';
-        cus.Customer_Address__c='ttyrtytr errert';
-        cus.Alternate_Mobile_No__c='9828667999';
-        cus.First_name__c='demo';
-        cus.Father_Husband_Name__c='trerer';
-        cus.Brnet_Client_ID__c='6556'; 
-        cus.Last_Name__c='rerr';
-        cus.Loan_Amount_Applied__c=9897878;
-        cus.Comfortable_EMI__c=4512;
-        
-        insert cus;
-        Loan_Product__c lp=new Loan_Product__c();
-         lp.Display_Order__c=34;
-         insert lp;
-        
-        Opportunity opp = new Opportunity();
-        opp.CloseDate = System.today();
-        opp.StageName = 'Prospecting';
-        opp.Name = 'abc';
-        opp.LO__c = pcon[0].personContactId;
-        opp.Branch__c=br.Id;
-        opp.AccountId=acc1.Id;
-        opp.Loan_Product__c=lp.Id;
-        opp.Amount=1245;
-        opp.ColPin__c=45658965;
-        opp.CloseDate=system.today();
-        opp.Loan_Number__c='AP-12345';
-        insert opp;
-        system.debug(opp.Loan_Number__c);
-        
-        OpportunityContactRole ocr1 = new OpportunityContactRole();
-        // system.debug('idddddddTes='+newPersonAccount.PersonContactId); 
-        ocr1.ContactId =cr[0].id ;
-        ocr1.OpportunityId = opp.Id;
-        ocr1.IsPrimary = FALSE;
-        ocr1.Role = 'Main Applicant';
-        insert ocr1;
-        
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c();
-        ndp.Name='Axis Bank';
-        ndp.BankType__c='Cheque';
-        ndp.Branch_Name__c='Ajmer-1';
-        insert ndp;
-         
-          Collection__c col1 = new Collection__c();
-        col1.SFDC_Customer__c=opp.Id;
-        // col.Customer__c=cust.id;
-        col1.Amount__c=10000;
-        col1.In_Favour_Of__c='dummy';
-        col1.Bank_Name__c='Ajmer-1';
-        
-        
-        // col1.Bounce_Cancel_Reason__c='Incorrect Data entry';
-        col1.Instrument__c='Electronic Transfer';
-       col1.Status__c='Active';
-       col1.ClearenceStatus__c='Cleared';
-        //col1.SFDC_Customer__c=opp.Id;
-        col1.Branch_Name__c='Bhilwara-1';
-        col1.Customer_Bank_Name__c='HDFC';
-        col1.Customer_Cheque_Date__c=System.today();
-        col1.Customer_Cheque_No__c=1234;
-        col1.Bounce_Cancel_Reason__c='Wrong Instrument';
-        col1.Date_of_Collection__c = system.today();
-        col1.Date_of_Deposit__c=system.today()+5;
-        col1.Nucleus_Deposit_Bank__c=ndp.Id;
-        col1.Nature_of_Collection__c='Emi/Advances/Part Payment';
-        col1.Date_of_Cancellation__c=system.today();
-        col1.In_Favour_Of__c='favour';
-        col1.Branch_Name__c='Jaipur-1';
-        //  col1.Cancel_Remarks_New__c='Account Dormat';
-        insert col1;
-         
-        
-        
-        
-        Collection__c col = new Collection__c();
-        col.SFDC_Customer__c=opp.Id;
-        // col.Customer__c=cust.id;
-        col.Amount__c=10000;
-        col.In_Favour_Of__c='dummy';
-        col.Bank_Name__c='Ajmer-1';
-        
-        
-        // col1.Bounce_Cancel_Reason__c='Incorrect Data entry';
-        col.Instrument__c='Cheque';
-       col.Status__c='Bounced';
-       // col.Cancel_Remarks_New__c='Account Dormat';
-        col.SFDC_Customer__c=opp.id;
-        col.Branch_Name__c='Bhilwara-1';
-        col.Customer_Bank_Name__c='HDFC';
-        col.Customer_Cheque_Date__c=System.today();
-        col.Customer_Cheque_No__c=1234;
-        col.Bounce_Cancel_Reason__c='Wrong Instrument';
-        col.Date_of_Collection__c = system.today();
-        col.Date_of_Deposit__c=system.today()+5;
-        col.Nucleus_Deposit_Bank__c=ndp.Id;
-        col.Nature_of_Collection__c='Emi/Advances/Part Payment';
-        col.Date_of_Cancellation__c=system.today();
-        col.In_Favour_Of__c='favour';
-        col.Branch_Name__c='Jaipur-1';
-        insert col;
-        
-         
-        
-        
-        
-        
-        
-        Nucleus_Reciept__c ncr1=new Nucleus_Reciept__c();
-        ncr1.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr1.Reciept_Number__c=string.valueof(123456);
-        ncr1.Application__c=col.SFDC_Customer__c;
-        ncr1.Collection__c=col.id;
-        ncr1.isActive__c=true;
-        ncr1.amount__c=col.Amount__c;
-        
-        insert ncr1; 
-        
-        
-        
-        opp.Br_net_HL_ID__c='GLBCUSTM000';
-        opp.Finnone_Loan_Id__c ='GLBCUSTM000';
-       //// update opp;
-        
-        Nucleus_Reciept__c ncr=new Nucleus_Reciept__c();
-        ncr.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr.Reciept_Number__c=string.valueof(123456);
-        ncr.Application__c=col.SFDC_Customer__c;
-        ncr.Collection__c=col.id;
-        ncr.isActive__c=true;
-        ncr.amount__c=col.Amount__c;
-        insert ncr; 
-    
-       
-        
-        
-         process_token__c pt = new process_token__c();
-        pt.name='test';
-        pt.Token__c='text';
-        insert pt;
-        
-     
-        Nucleus_Reciept__c nr=new Nucleus_Reciept__c();
-        nr.Collection__c=col.id;
-        nr.Application__c=opp.id;
-        nr.Reciept_Number__c='1234';
-        nr.amount__c=1234;
-        insert nr;
-        
-        
-			System.debug('col.Id'+col.Id);       
-         ProcessReceiptService.buttonCall(col.Id);
-        
-        ProcessReceiptService.ModelObj ob=new ProcessReceiptService.ModelObj();
-        test.stopTest();
-      
-        ProcessReceiptService.dofuture(String.valueOf(col.Id));
-        
-        
-     }
-  
-  
-    public static testmethod void mytest4(){
-        Test.startTest();
-        
-       String body='{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"$2a$08$Ez3GFhHTRi6ag4Y.Nfvaw.fArjaI/HMrmeON1Hmqioqn6rA3VtLDy"}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200,body));
-       
-        ProcessReceiptService.requestAccessToken();
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'choudhary',
-                            FirstName = 'Fanindra',
-                            alias = 'fm',
-                            Username = 'fm@techmatrix.com',
-                            Email = 'fm@techmatrix.com',
-                            ProfileId = prof.Id,
-                            isActive = true,
-                            TimeZoneSidKey = 'GMT',
-                            LanguageLocaleKey = 'en_US',
-                            EmailEncodingKey = 'UTF-8',
-                            LocaleSidKey = 'en_US', EmployeeNumber='ISFC12121'
-                           );
-                              insert usr;
-        
-        
-        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
-        tbObj.Name='Deactivate';
-        tbObj.isActive__c=true;
-        insert tbObj;
-        
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId();
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='test1';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-     
-     
-Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-insert cf;
-// recordtypeid = '012A0000000yth8IAA'
-   
-        Account acc1 = new Account(recordtypeid = '012A0000000yth8IAA' );
-        acc1.FirstName = 'Techh';
-        acc1.LastName = 'Techmatrix';
-        acc1.Personal_email__pc = 'tch@tech.com ';
-        acc1.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc1.Designation__pc = 'LO';
-        acc1.RecordTypeId = paId;
-        acc1.Date_of_Leaving__pc = System.today().addMonths(-2);
-        acc1.Finnone_Client_Id__c='ghgj464';
-		
-        acc1.Branch__c = br.id;
-                
-         //acc1.brnet_Client_Id__c='12345';
-      
-        insert acc1;
-        
-        Account acc2 = new Account();
-        acc2.FirstName = 'Tec';
-        acc2.LastName = 'Techmatrix';
-        acc2.Personal_email__pc = 'tch@tech.com ';
-        acc2.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc2.Designation__pc = 'BM';
-     //   acc2.Reporting_Manager__c = acc1.Id;
-        acc2.RecordTypeId = paId;
-        acc2.Branch__c = br.id;
-        acc2.Date_of_Leaving__pc = System.today();
-         // acc2.brnet_Client_Id__c='123445';
-               acc2.Finnone_Client_Id__c='12345';
+    // 3. Covers EasyPay + Pay_Slip__c (Dec 2021 dates), null Account_No__c fallback,
+    //    non-HL01 Scheme_Master__mdt, Auto_Allocation__c = 'N' allocationBreakUpDetails, and trStatus = '' Active/Cleared
+    @isTest
+    static void testDoPostEasyPayWithPaySlipAndAutoAllocN() {
+        Opportunity opp = [SELECT Id, Loan_Product__c FROM Opportunity LIMIT 1];
+        Nucleus_Deposit_Bank__c easyPayBank = [SELECT Id FROM Nucleus_Deposit_Bank__c WHERE BankType__c = 'EasyPay' LIMIT 1];
 
-        insert acc2;
-        
-        List<Account> pcon = new list<Account>([SELECT Id,PersonContactId FROM Account WHERE Id=:acc2.Id]);
-        
-        contact[] cr = [select id from contact where contact.AccountId =: acc1.id];
-        
-        Customer__c cus = New Customer__c();
-        cus.OwnerId=usr.id;
-        cus.Branch__c='Ajmer-1';
-        //cus.Customer_Loan_AccID__c='786645';
-        cus.Customer_Name__c='REWQ';
-        cus.Customer_Address__c='ttyrtytr errert';
-        cus.Alternate_Mobile_No__c='9828667999';
-        cus.First_name__c='demo';
-        cus.Father_Husband_Name__c='trerer';
-        cus.Brnet_Client_ID__c='6556'; 
-        cus.Last_Name__c='rerr';
-        cus.Loan_Amount_Applied__c=9897878;
-        cus.Comfortable_EMI__c=4512;
-        
-        insert cus;
-        
-        
-        Opportunity opp = new Opportunity();
-        opp.CloseDate = System.today();
-        opp.StageName = 'Prospecting';
-        opp.Name = 'abc';
-        opp.LO__c = pcon[0].personContactId;
-        opp.Branch__c=br.Id;
-        opp.AccountId=acc1.Id;
-       
-        opp.Amount=1245;
-        opp.ColPin__c=45658965;
-        opp.CloseDate=system.today();
-        opp.Loan_Number__c='AP-12345';
-        insert opp;
-        system.debug(opp.Loan_Number__c);
-        
-        OpportunityContactRole ocr1 = new OpportunityContactRole();
-        // system.debug('idddddddTes='+newPersonAccount.PersonContactId); 
-        ocr1.ContactId =cr[0].id ;
-        ocr1.OpportunityId = opp.Id;
-        ocr1.IsPrimary = FALSE;
-        ocr1.Role = 'Main Applicant';
-        insert ocr1;
-        
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c();
-        ndp.Name='Axis Bank';
-        ndp.BankType__c='Cheque';
-        ndp.Branch_Name__c='Ajmer-1';
-        insert ndp;
-        
-        
-        
-        Collection__c col = new Collection__c();
-        col.SFDC_Customer__c=opp.Id;
-        // col.Customer__c=cust.id;
-        col.Amount__c=10000;
-        col.In_Favour_Of__c='dummy';
-        col.Bank_Name__c='Ajmer-1';
-        
-        
-        // col1.Bounce_Cancel_Reason__c='Incorrect Data entry';
-        col.Instrument__c='Cheque';
-       col.Status__c='Bounced';
-       
-       // col.SFDC_Customer__c='0063K000002CRCvQAO';
-        col.Branch_Name__c='Bhilwara-1';
-        col.Customer_Bank_Name__c='HDFC';
-        col.Customer_Cheque_Date__c=System.today();
-        col.Customer_Cheque_No__c=1234;
-        col.Bounce_Cancel_Reason__c='Wrong Instrument';
-        col.Date_of_Collection__c = system.today();
-        col.Date_of_Deposit__c=system.today()+5;
-        col.Nucleus_Deposit_Bank__c=ndp.Id;
-        col.Nature_of_Collection__c='Emi/Advances/Part Payment';
-        col.Date_of_Cancellation__c=system.today();
-        col.In_Favour_Of__c='favour';
-        col.Branch_Name__c='Jaipur-1';
-       // col.Cancel_Remarks_New__c='Account Dormat';
+        // Switch Loan Product to a non-HL01 scheme if available
+        List<Scheme_Master__mdt> nonHlSchemes = [
+            SELECT MasterLabel
+            FROM Scheme_Master__mdt
+            WHERE Product_code__c != 'HL01'
+            LIMIT 1
+        ];
+        if (!nonHlSchemes.isEmpty()) {
+            Loan_Product__c lp = new Loan_Product__c(Id = opp.Loan_Product__c, Name = nonHlSchemes[0].MasterLabel);
+            update lp;
+        }
+
+        // Pick a metadata record that triggers the Auto_Allocation__c == 'N' allocationBreakUpDetails block
+        List<Nucleus_Receipt_For_Collection__mdt> autoAllocNMdt = [
+            SELECT MasterLabel
+            FROM Nucleus_Receipt_For_Collection__mdt
+            WHERE Auto_Allocation__c = 'N'
+              AND Chargeid__c != null
+              AND Chargecode__c != null
+              AND Receipt_Purpose_Type__c != 'IMD'
+            LIMIT 1
+        ];
+        String nature = autoAllocNMdt.isEmpty() ? 'Emi/Advances/Part Payment' : autoAllocNMdt[0].MasterLabel;
+
+        Date dec2021 = Date.newInstance(2021, 12, 10);
+        Collection__c col = buildCollection(
+            opp.Id, easyPayBank.Id, 'EasyPay', 'Active', 'Cleared',
+            nature, dec2021, null, 5678
+        );
         insert col;
-        
-         
-        
-        Pay_Slip__c  Pay =new  Pay_Slip__c();
-        pay.Collection__c=col.id;
-        pay.date__c=system.today();
-        pay.In_Favour_Of__c='test';
-        pay.PS_Created__c=system.today();
-        pay.Cheque_Date__c=system.today();
+
+        Pay_Slip__c pay = new Pay_Slip__c(
+            Collection__c = col.Id,
+            Date__c = dec2021,
+            In_Favour_Of__c = 'Test Drawer',
+            PS_Created__c = dec2021,
+            Cheque_Date__c = dec2021
+        );
         insert pay;
-        
-        
-        
-        
-        Nucleus_Reciept__c ncr1=new Nucleus_Reciept__c();
-        ncr1.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr1.Reciept_Number__c=string.valueof(123456);
-        ncr1.Application__c=col.SFDC_Customer__c;
-        ncr1.Collection__c=col.id;
-        ncr1.isActive__c=true;
-        ncr1.amount__c=col.Amount__c;
-        
-        insert ncr1; 
-        
-        
-        
-        opp.Br_net_HL_ID__c='GLBCUSTM000';
-        opp.Finnone_Loan_Id__c ='GLBCUSTM000';
-       //// update opp;
-        
-        Nucleus_Reciept__c ncr=new Nucleus_Reciept__c();
-        ncr.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr.Reciept_Number__c=string.valueof(123456);
-        ncr.Application__c=col.SFDC_Customer__c;
-        ncr.Collection__c=col.id;
-        ncr.isActive__c=true;
-        ncr.amount__c=col.Amount__c;
-        insert ncr; 
-    
-        pay.Collection__c=col.id;
-        pay.date__c=system.today();
-        pay.In_Favour_Of__c='test';
-        pay.PS_Created__c=system.today();
-        pay.Cheque_Date__c=system.today();
-        update pay;
-        
-        
-         process_token__c pt = new process_token__c();
-        pt.name='test';
-        pt.Token__c='text';
-        insert pt;
-        
-     
-        Nucleus_Reciept__c nr=new Nucleus_Reciept__c();
-        nr.Collection__c=col.id;
-        nr.Application__c=opp.id;
-        nr.Reciept_Number__c='1234';
-        nr.amount__c=1234;
-        insert nr;
-        
-        
-			System.debug('col.Id'+col.Id);  
- 		ProcessReceiptService.ModelObj ob=new ProcessReceiptService.ModelObj();
-        ob.allocatedAmount='kjfj';
-        ProcessReceiptService.buttonCall(col.Id);
-        //ProcessReceiptService.testParser();
-       
-        test.stopTest();
-      
-        ProcessReceiptService.doPost(String.valueOf(col.Id), 'X');
-        
-    }
-   
-    public static testmethod void mytest5(){
-        Test.startTest();
-        
-       String body='{"client_id":"lmsapp","grant_type":"client_credentials","client_secret":"$2a$08$Ez3GFhHTRi6ag4Y.Nfvaw.fArjaI/HMrmeON1Hmqioqn6rA3VtLDy"}';
-    Test.setMock(HttpCalloutMock.class, new MockHttpResponseGenerator1(200,body));
-       
-        ProcessReceiptService.requestAccessToken();
-        Profile prof = [Select Id from Profile where name = 'Standard User' limit 1];
-        User usr = new User(LastName = 'choudhary',
-                            FirstName = 'Fanindra',
-                            alias = 'fm',
-                            Username = 'fm@techmatrix.com',
-                            Email = 'fm@techmatrix.com',
-                            ProfileId = prof.Id,
-                            isActive = true,
-                            TimeZoneSidKey = 'GMT',
-                            LanguageLocaleKey = 'en_US',
-                            EmailEncodingKey = 'UTF-8',
-                            LocaleSidKey = 'en_US', EmployeeNumber='ISFC12121'
-                           );
-                              insert usr;
-        
-        
-        Trigger_BYPass__c tbObj =new Trigger_BYPass__c();
-        tbObj.Name='Deactivate';
-        tbObj.isActive__c=true;
-        insert tbObj;
-        
-        Branch__c br = new Branch__c ();
-        br.Name='Jaipur-1';
-        br.Br_net_Branch_Code__c='123';
-        br.Branch_Approver__c=usr.Id;
-        br.Branch_Code__c='123456';
-        br.Branch_User__c=userInfo.getUserId();
-        br.Branch_Address__c='Ajmer';
-        br.Branch_City__c='Ajmer';
-        br.Branch_Opening_Date__c=system.today()-18;
-        br.Branch_PinCode__c='456788';
-        br.Branch_State__c='Rajsthan';
-        br.ClusterManagerName__c='vinay';
-        br.Finnone_Branch_Code__c='test1';
-        br.Finnone_Branch_Code__c='12345';
-        insert br;
-        
-        
-        Id paId = Schema.getGlobalDescribe().get('Account').getDescribe().getRecordTypeInfosByName().get('Loan - Main Applicant').getRecordTypeId();
-     
-     
-Config__c cf = new Config__c(Name__c='Loanapp',value__c='025140');
-insert cf;
-// recordtypeid = '012A0000000yth8IAA'
-   
-        Account acc1 = new Account(recordtypeid = '012A0000000yth8IAA' );
-        acc1.FirstName = 'Techh';
-        acc1.LastName = 'Techmatrix';
-        acc1.Personal_email__pc = 'tch@tech.com ';
-        acc1.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc1.Designation__pc = 'LO';
-        acc1.RecordTypeId = paId;
-        acc1.Date_of_Leaving__pc = System.today().addMonths(-2);
-        acc1.Finnone_Client_Id__c='ghgj464';
-		
-        acc1.Branch__c = br.id;
-                
-         //acc1.brnet_Client_Id__c='12345';
-      
-        insert acc1;
-        
-        Account acc2 = new Account();
-        acc2.FirstName = 'Tec';
-        acc2.LastName = 'Techmatrix';
-        acc2.Personal_email__pc = 'tch@tech.com ';
-        acc2.Date_of_Joining__pc = System.today().addMonths(-3);
-        acc2.Designation__pc = 'BM';
-     //   acc2.Reporting_Manager__c = acc1.Id;
-        acc2.RecordTypeId = paId;
-        acc2.Branch__c = br.id;
-        acc2.Date_of_Leaving__pc = System.today();
-         // acc2.brnet_Client_Id__c='123445';
-               acc2.Finnone_Client_Id__c='12345';
 
-        insert acc2;
-        
-        List<Account> pcon = new list<Account>([SELECT Id,PersonContactId FROM Account WHERE Id=:acc2.Id]);
-        
-        contact[] cr = [select id from contact where contact.AccountId =: acc1.id];
-        
-        Customer__c cus = New Customer__c();
-        cus.OwnerId=usr.id;
-        cus.Branch__c='Ajmer-1';
-        //cus.Customer_Loan_AccID__c='786645';
-        cus.Customer_Name__c='REWQ';
-        cus.Customer_Address__c='ttyrtytr errert';
-        cus.Alternate_Mobile_No__c='9828667999';
-        cus.First_name__c='demo';
-        cus.Father_Husband_Name__c='trerer';
-        cus.Brnet_Client_ID__c='6556'; 
-        cus.Last_Name__c='rerr';
-        cus.Loan_Amount_Applied__c=9897878;
-        cus.Comfortable_EMI__c=4512;
-        
-        insert cus;
-        
-        
-        Opportunity opp = new Opportunity();
-        opp.CloseDate = System.today();
-        opp.StageName = 'Prospecting';
-        opp.Name = 'abc';
-        opp.LO__c = pcon[0].personContactId;
-        opp.Branch__c=br.Id;
-        opp.AccountId=acc1.Id;
-       
-        opp.Amount=1245;
-        opp.ColPin__c=45658965;
-        opp.CloseDate=system.today();
-        opp.Loan_Number__c='AP-12345';
-        insert opp;
-        system.debug(opp.Loan_Number__c);
-        
-        OpportunityContactRole ocr1 = new OpportunityContactRole();
-        // system.debug('idddddddTes='+newPersonAccount.PersonContactId); 
-        ocr1.ContactId =cr[0].id ;
-        ocr1.OpportunityId = opp.Id;
-        ocr1.IsPrimary = FALSE;
-        ocr1.Role = 'Main Applicant';
-        insert ocr1;
-        
-        
-        Nucleus_Deposit_Bank__c ndp = new Nucleus_Deposit_Bank__c();
-        ndp.Name='Axis Bank';
-        ndp.BankType__c='Cheque';
-        ndp.Branch_Name__c='Ajmer-1';
-        insert ndp;
-        
-        
-        
-        Collection__c col = new Collection__c();
-        col.SFDC_Customer__c=opp.Id;
-        // col.Customer__c=cust.id;
-        col.Amount__c=10000;
-        col.In_Favour_Of__c='dummy';
-        col.Bank_Name__c='Ajmer-1';
-        
-        
-        // col1.Bounce_Cancel_Reason__c='Incorrect Data entry';
-        col.Instrument__c='Cheque';
-       col.Status__c='Bounced';
-       
-       // col.SFDC_Customer__c='0063K000002CRCvQAO';
-        col.Branch_Name__c='Bhilwara-1';
-        col.Customer_Bank_Name__c='HDFC';
-        col.Customer_Cheque_Date__c=System.today();
-        col.Customer_Cheque_No__c=1234;
-        col.Bounce_Cancel_Reason__c='Wrong Instrument';
-        col.Date_of_Collection__c = system.today();
-        col.Date_of_Deposit__c=system.today()+5;
-        col.Nucleus_Deposit_Bank__c=ndp.Id;
-        col.Nature_of_Collection__c='Emi/Advances/Part Payment';
-        col.Date_of_Cancellation__c=system.today();
-        col.In_Favour_Of__c='favour';
-        col.Branch_Name__c='Jaipur-1';
-       // col.Cancel_Remarks_New__c='Account Dormat';
-        insert col;
-        
-         
-        
-        Pay_Slip__c  Pay =new  Pay_Slip__c();
-        pay.Collection__c=col.id;
-        pay.date__c=system.today();
-        pay.In_Favour_Of__c='test';
-        pay.PS_Created__c=system.today();
-        pay.Cheque_Date__c=system.today();
-        insert pay;
-        
-        
-        
-        
-        Nucleus_Reciept__c ncr1=new Nucleus_Reciept__c();
-        ncr1.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr1.Reciept_Number__c=string.valueof(123456);
-        ncr1.Application__c=col.SFDC_Customer__c;
-        ncr1.Collection__c=col.id;
-        ncr1.isActive__c=true;
-        ncr1.amount__c=col.Amount__c;
-        
-        insert ncr1; 
-        
-        
-        
-        opp.Br_net_HL_ID__c='GLBCUSTM000';
-        opp.Finnone_Loan_Id__c ='GLBCUSTM000';
-       //// update opp;
-        
-        Nucleus_Reciept__c ncr=new Nucleus_Reciept__c();
-        ncr.chargeType__c=col.Nature_of_Collection__c;
-        
-        ncr.Reciept_Number__c=string.valueof(123456);
-        ncr.Application__c=col.SFDC_Customer__c;
-        ncr.Collection__c=col.id;
-        ncr.isActive__c=true;
-        ncr.amount__c=col.Amount__c;
-        insert ncr; 
-    
-        pay.Collection__c=col.id;
-        pay.date__c=system.today();
-        pay.In_Favour_Of__c='test';
-        pay.PS_Created__c=system.today();
-        pay.Cheque_Date__c=system.today();
-        update pay;
-        
-        
-         process_token__c pt = new process_token__c();
-        pt.name='test';
-        pt.Token__c='text';
-        insert pt;
-        
-     
-        Nucleus_Reciept__c nr=new Nucleus_Reciept__c();
-        nr.Collection__c=col.id;
-        nr.Application__c=opp.id;
-        nr.Reciept_Number__c='1234';
-        nr.amount__c=1234;
-        insert nr;
-        
-        
-			System.debug('col.Id'+col.Id);  
- 		ProcessReceiptService.ModelObj ob=new ProcessReceiptService.ModelObj();
-        ob.allocatedAmount='kjfj';
-        ProcessReceiptService.buttonCall(col.Id);
-        //ProcessReceiptService.testParser();
-       
-        test.stopTest();
-      
-        ProcessReceiptService.doPost(String.valueOf(col.Id), 'C');
-        
+        Test.setMock(HttpCalloutMock.class, new ProcessReceiptMock(200, getSuccessResponseBody()));
+
+        Test.startTest();
+        String result = ProcessReceiptService.doPost(col.Id, '');
+        Test.stopTest();
+
+        System.assertNotEquals(null, result);
     }
-    
+
+    // 4. Covers trStatus = '' -> 'B' (Bounced Cheque), Date_of_Cancellation__c in Dec 2021,
+    //    and deactivating existing Nucleus_Reciept__c
+    @isTest
+    static void testDoPostBouncedCheque() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        Nucleus_Deposit_Bank__c chequeBank = [SELECT Id FROM Nucleus_Deposit_Bank__c WHERE BankType__c = 'Cheque' LIMIT 1];
+
+        Collection__c col = buildCollection(
+            opp.Id, chequeBank.Id, 'Cheque', 'Bounced', 'Deposited',
+            'Emi/Advances/Part Payment', System.today(), Date.newInstance(2021, 12, 20), 4321
+        );
+        insert col;
+
+        Nucleus_Reciept__c ncr = new Nucleus_Reciept__c(
+            chargeType__c = col.Nature_of_Collection__c,
+            Reciept_Number__c = '123456',
+            Application__c = opp.Id,
+            Collection__c = col.Id,
+            isActive__c = true,
+            amount__c = col.Amount__c
+        );
+        insert ncr;
+
+        Test.setMock(HttpCalloutMock.class, new ProcessReceiptMock(200, getSuccessResponseBody()));
+
+        Test.startTest();
+        String result = ProcessReceiptService.doPost(col.Id, '');
+        Test.stopTest();
+
+        System.assertNotEquals(null, result);
+        Nucleus_Reciept__c updatedNcr = [SELECT isActive__c FROM Nucleus_Reciept__c WHERE Id = :ncr.Id];
+        System.assertEquals(false, updatedNcr.isActive__c);
+    }
+
+    // 5. Covers trStatus = 'B' with eNACH (EFT bounce query + sourceAccountNumber),
+    //    Date_of_Cancellation__c == null fallback, and non-200 HTTP status code in processMethod
+    @isTest
+    static void testDoPostBouncedENachNon200() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        Nucleus_Deposit_Bank__c enachBank = [SELECT Id FROM Nucleus_Deposit_Bank__c WHERE BankType__c = 'eNACH' LIMIT 1];
+
+        Collection__c col = buildCollection(
+            opp.Id, enachBank.Id, 'eNACH', 'Bounced', 'Deposited',
+            'Emi/Advances/Part Payment', System.today(), null, null
+        );
+        insert col;
+
+        Nucleus_Reciept__c ncr = new Nucleus_Reciept__c(
+            chargeType__c = col.Nature_of_Collection__c,
+            Reciept_Number__c = '654321',
+            Application__c = opp.Id,
+            Collection__c = col.Id,
+            isActive__c = true,
+            amount__c = col.Amount__c
+        );
+        insert ncr;
+
+        Test.setMock(HttpCalloutMock.class, new ProcessReceiptMock(400, getSuccessResponseBody()));
+
+        Test.startTest();
+        String result = ProcessReceiptService.doPost(col.Id, 'B');
+        Test.stopTest();
+
+        System.assertNotEquals(null, result);
+    }
+
+    // 6. Covers trStatus = 'X' (Cancelled), empty Scheme_Master__mdt fallback,
+    //    Processing Fee (incl. Service tax) branch (when DELIVERABLE_CHARGE metadata exists), and dofuture()
+    @isTest
+    static void testDoPostCancelledAndProcessingFee() {
+        Opportunity opp = [SELECT Id FROM Opportunity LIMIT 1];
+        opp.Loan_Product__c = null;
+        update opp;
+
+        Nucleus_Deposit_Bank__c chequeBank = [SELECT Id FROM Nucleus_Deposit_Bank__c WHERE BankType__c = 'Cheque' LIMIT 1];
+
+        List<Nucleus_Receipt_For_Collection__mdt> pfCharge = [
+            SELECT MasterLabel
+            FROM Nucleus_Receipt_For_Collection__mdt
+            WHERE MasterLabel = 'Processing Fee (incl. Service tax)'
+              AND Receipt_Purpose_Type__c = 'DELIVERABLE_CHARGE'
+            LIMIT 1
+        ];
+        String nature = pfCharge.isEmpty() ? 'Emi/Advances/Part Payment' : 'Processing Fee (incl. Service tax)';
+
+        Collection__c col = buildCollection(
+            opp.Id, chequeBank.Id, 'Cheque', 'Cancelled', 'Deposited',
+            nature, System.today(), System.today(), 9999
+        );
+        insert col;
+
+        Test.setMock(HttpCalloutMock.class, new ProcessReceiptMock(200, getSuccessResponseBody()));
+
+        Test.startTest();
+        ProcessReceiptService.dofuture(col.Id);
+        Test.stopTest();
+
+        List<Nucleus_API_Log__c> logs = [SELECT Id, status__c FROM Nucleus_API_Log__c WHERE Collection__c = :col.Id];
+        System.assert(!logs.isEmpty(), 'Expected API log to be created');
+    }
 }
