@@ -1,787 +1,133 @@
-@isTest
-public class DmValidatorMandatoryChecks2Test {
+Here is an apex class
 
-    // Helper: initializes DmValidatorMandatoryChecks.sharedVals required by Checks()
-    private static void initSharedVals(Integer cersaiOtcVal) {
-        DmValidatorMandatoryChecks.sharedVals = new Map<String, Object>{
-            'accRecordTypeCheck' => 'OK',
-            'sanctionDetailsPostSanction' => 'OK',
-            'PanValidatortoberun' => 'OK',
-            'productDetailsCAM' => 'OK',
-            'insuranceCheckPS' => 'OK',
-            'propertyMasterApproval' => 'OK',
-            'camFinalDecision' => 'OK',
-            'postSanction' => 'OK',
-            'bureauGenerationCheck' => 'OK',
-            'technicalFinalDecision' => 'OK',
-            'loanStatus' => 'OK',
-            'PropertyPaperVerification' => 'OK',
-            'iServeAppCheck' => 'OK',
-            'PANValidatorValuescheck' => 'OK',
-            'FacelivenessCheck' => 'OK',
-            'CersaiMatchResultcheck' => 'OK',
-            'CompletePFreceivedcheck' => 'OK',
-            'CreditHindsightingApproval' => 'OK',
-            'RCUInitiatedCheck' => 'OK',
-            'Estimateamountcheck' => 'OK',
-            'SellerCersaimatchCheck' => 'OK',
-            'EstimateUploadCheck' => 'OK',
-            'RnRSubsequentnormsof15Days' => 'OK',
-            'ExtensionDMnotallowedabove40ofSanctionAmount' => 'OK',
-            'RnRMaxDisbursementNormsonLTVCheck' => 'OK',
-            'TypeofcaseinDMisnotmatchwithCAM' => 'OK',
-            'BankAccountdetailsCheck' => 'OK',
-            'BeneficiaryNamecheck' => 'OK',
-            'ConsideredTechnicalexpiration' => 'OK',
-            'AmountTobeTransferred' => 'OK',
-            'NACHCheck' => 'OK',
-            'SalutationIncorrect' => 'OK',
-            'CersaiCheck' => 'OK',
-            'CersaiOTC' => cersaiOtcVal,
-            'ScreenzaaCheck' => 'OK',
-            'CollateralReviewCheck' => 'OK',
-            'RCUStatusholdNAcheck' => 'OK',
-            'UdyamCertificateverificationcheck' => 'OK',
-            'DisbursementMode' => 'OK',
-            'PDDcheckinNormalCase' => 'OK',
-            'OTCStatuscheckinNormalDM' => 'OK'
-        };
+
+public class CreateApplicationDataQueueable implements Queueable, Database.AllowsCallouts {
+	private String application_Data;
+
+    // Constructor
+    public CreateApplicationDataQueueable(String application_Data) {
+        this.application_Data = application_Data;
     }
 
-    // Helper: creates a mock SObject via JSON so child subqueries, RecordType.Name, and formula/audit fields work in-memory
-    private static SObject buildMock(Type sObjType, Map<String, Object> fieldsMap) {
-        return (SObject) JSON.deserialize(JSON.serialize(fieldsMap), sObjType);
-    }
-
-    private static Map<String, Object> buildSubquery(List> records) {
-        return new Map<String, Object>{
-            'totalSize' => records.size(),
-            'done' => true,
-            'records' => records
-        };
-    }
-
-    // Helper: invokes DmValidatorMandatoryChecks2.Checks with empty defaults for unused params
-    private static String callChecks(
-        List<Account> accLst,
-        List<Opportunity> appList,
-        Map<String, Integer> boolMap,
-        List<cam__c> camLst,
-        List<Disbursement__c> disList,
-        List<Technical_Verification__c> tvList,
-        List<Vendor_Request__c> vrList,
-        Decimal totalAmount,
-        List<Technical_Verification__c> tvList1,
-        Map<Id, Disbursement__c> oldMap,
-        Disbursement__c newDis,
-        List<Manual_Bureau__c> mbList
-    ) {
-        return DmValidatorMandatoryChecks2.Checks(
-            accLst,
-            appList,
-            new List<Post_Sanction_Pre_Disbursement_Changes__c>(),
-            boolMap,
-            camLst,
-            new List<Property_Master__c>(),
-            disList,
-            new Map<String, Boolean>(),
-            tvList,
-            new List<Case>(),
-            new List<Customer_App_Login_Log__c>(),
-            new List<String>(),
-            new List<Customer__c>(),
-            new List<String>(),
-            new List<Bank_Account_Detail__c>(),
-            vrList,
-            totalAmount,
-            tvList1,
-            oldMap,
-            newDis,
-            mbList,
-            appList
-        );
-    }
-
-    @TestSetup
-    static void setupData() {
-        // Custom Settings
-        insert new DMValidator__c(Name = 'DM Validator');
-        insert new Neilon_Check__c(
-            Name = 'Neilon Check',
-            LegalandVetting_Category__c = 'Vetting',
-            LegalandVetting_Subcategory__c = 'Vetting Sub',
-            Legal_Report__c = 'Legal Report',
-            Legal_Report_SubCategory__c = 'Legal Report Sub',
-            Legal_Opinion__c = 'Legal Opinion',
-            Legal_Opinion_SubCategory__c = 'Legal Opinion Sub',
-            HLAPhoto_Category__c = 'HLA Photo',
-            HLAPhoto_Subcategory__c = 'HLA Photo Sub',
-            CLD_Category__c = 'CLD',
-            CLD_Subcategory__c = 'CLD Sub'
-        );
-
-        // Base Opportunity
-        Opportunity opp = new Opportunity(
-            Name = 'Test Application',
-            StageName = 'Prospecting',
-            CloseDate = Date.today().addDays(30)
-        );
-        insert opp;
-
-        // Current Disbursement
-        Disbursement__c dis = new Disbursement__c(
-            Application__c = opp.Id,
-            Disb_Status__c = 'Send to CPU',
-            Date_Of_Disbursement__c = Date.today()
-        );
-        insert dis;
-    }
-
-    // 1. Null sharedVals early return + outer catch block
-    @isTest
-    static void testNullSharedValsAndExceptionCatch() {
-        DmValidatorMandatoryChecks.sharedVals = null;
-        String resNull = callChecks(
-            new List<Account>(), new List<Opportunity>(), new Map<String, Integer>(),
-            new List<cam__c>(), new List<Disbursement__c>(), new List<Technical_Verification__c>(),
-            new List<Vendor_Request__c>(), 0, new List<Technical_Verification__c>(),
-            new Map<Id, Disbursement__c>(), new Disbursement__c(), new List<Manual_Bureau__c>()
-        );
-        System.assertEquals(null, resNull);
-
-        // Trigger outer catch (disList[0] on empty list)
-        initSharedVals(0);
-        String resCatch = callChecks(
-            new List<Account>(), new List<Opportunity>(), new Map<String, Integer>(),
-            new List<cam__c>(), new List<Disbursement__c>(), new List<Technical_Verification__c>(),
-            new List<Vendor_Request__c>(), 0, new List<Technical_Verification__c>(),
-            new Map<Id, Disbursement__c>(), new Disbursement__c(), new List<Manual_Bureau__c>()
-        );
-        System.assertEquals(null, resCatch);
-    }
-
-    // 2. First Tranche — maximizes NOT OK checks and error-logging lines
-    @isTest
-    static void testFirstTrancheAllNotOk() {
-        initSharedVals(0);
-        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
-        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
-
-        // DB records to trigger NOT OK in SOQL-based checks
-        insert new Deviation__c(Opportunity__c = dbOpp.Id, Approval_Status__c = 'Pending');
-        insert new HLA_Audit_Trail__c(
-            Application__c = dbOpp.Id,
-            Sanctioned_EMI__c = 15000,
-            Sanctioned_ROI__c = 10.5,
-            Sanctioned_Amount__c = 900000,
-            Loan_Product__c = 'Other Product',
-            Sanctioned_Tenure__c = 120,
-            Collateral_Pin_Code__c = '122001',
-            Collateral_Address_1__c = 'Addr1',
-            Collateral_Address_2__c = 'Addr2',
-            Collateral_Address_3__c = 'Addr3',
-            Collateral_City__c = 'Gurgaon',
-            Collateral_District__c = 'Gurgaon'
-        );
-        insert new Insurance_Generation_Data__c(
-            Application__c = dbOpp.Id,
-            Critical_illness_Premium__c = 100,
-            Health_Insurance_Premium__c = 200,
-            Life_Insurance_Premium_2__c = 300,
-            Accidental_Death_Insurance_Premium__c = 400,
-            Property_Insurance_Premium__c = 500
-        );
-        Document_Checklist__c docChk = new Document_Checklist__c(Application__c = dbOpp.Id);
-        insert docChk;
-
-        // Dynamically populate parent lookup on Document_Checklist_History__c
-        SObject docHist = Schema.getGlobalDescribe().get('Document_Checklist_History__c').newSObject();
-        for (Schema.ChildRelationship cr : Document_Checklist__c.SObjectType.getDescribe().getChildRelationships()) {
-            if (cr.getRelationshipName() == 'Document_Checklist_History__r') {
-                docHist.put(cr.getField(), docChk.Id);
-                break;
-            }
+    // Execute method (entry point for Queueable job)
+    public void execute(QueueableContext context) {
+        try{
+            System.debug('12345---->> ' + application_Data);
+            ApplicationFunctionAPIPWASync.createApplicant(application_Data);
+        } 
+        catch (Exception ex) {
+            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. = ' + ex.getLineNumber());
+            throw ex;
         }
-        docHist.put('Type_Of_Case__c', 'Purchase');
-        insert docHist;
-
-        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
-            'Id' => dbOpp.Id,
-            'Name' => 'Test Application',
-            'Type' => 'New',
-            'Loan_Type__c' => 'Housing Loan',
-            'Sanctioned_Amont__c' => 1000000,
-            'HLA_Sign_Date__c' => null,
-            'LM_Loan_Status__c' => 'Active',
-            'Sanc_EMI__c' => 12000,
-            'Sanctioned_ROI__c' => 9.5,
-            'Sanctioned_Tenure__c' => 180,
-            'ColPin__c' => '110001',
-            'CollAdd1__c' => 'Diff1',
-            'CollAdd2__c' => 'Diff2',
-            'CollAdd3__c' => 'Diff3',
-            'CollCity__c' => 'Delhi',
-            'C_District__c' => 'Delhi',
-            'IA_Field_Audit__c' => 100000,
-            'Effective_PF__c' => 5000,
-            'Loan_Product__r' => new Map<String, Object>{ 'Name' => 'Home Loan' },
-            'HLA_Audit_Trails__r' => buildSubquery(new List>{
-                new Map<String, Object>{ 'Processing_Fees__c' => 2000 }
-            }),
-            'Nupay_Responses__r' => buildSubquery(new List>()),
-            'PMAY_Application_Details__r' => buildSubquery(new List>{
-                new Map<String, Object>{
-                    'ISS_Disbursal_Check_Q1__c' => 'No',
-                    'ISS_Disbursal_Check_Q2__c' => 'No',
-                    'ISS_Disbursal_Check_Q3__c' => 'No',
-                    'ISS_Disbursal_Check_Q4__c' => 'No',
-                    'ISS_Disbursal_Check_Q5__c' => 'No',
-                    'PMAY_Application_No__c' => ''
-                }
-            })
-        });
-
-        Disbursement__c mockDis = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'First',
-            'Levels_Of_Tranch__c' => 'First Tranche',
-            'caseTyp__c' => 'Normal',
-            'Disbursement_Amount__c' => 700000,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today(),
-            'Maker_CRD_Sign_Date__c' => Date.today().addDays(-10),
-            'Insurance_Premium__c' => 0,
-            'CIP__c' => 0,
-            'Health_Insurance_Premium__c' => 0,
-            'Accidental_Life_Insurance__c' => 0,
-            'Property_Insurance__c' => 0,
-            'PF_Waiver_Amount__c' => 1000
-        });
-
-        cam__c mockCam = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'Is_Clone_CAM__c' => false,
-            'NHB_PURPOSE_OF_LOAN__c' => 'New Construction (Other than P+C)',
-            'NHB_Categories__c' => 'Plot purchase cum construction',
-            'Land_Area__c' => 100,
-            'Total_Prop_Val__c' => 500000,
-            'Build_Up_Area__c' => 500,
-            'Build_Up_Construction_Value__c' => 400000,
-            'Proposed_Construction_Value__c' => 400000,
-            'Property_Location__c' => 'Gram Panchayat Area',
-            'Combined_Exposure__c' => 800000,
-            'Pre_Sanctioned_Conditions__r' => buildSubquery(new List>{
-                new Map<String, Object>{
-                    'Rule_Status__c' => 'FORWARD ACM',
-                    'Name' => 'ISS Subsidy Applicable - Disbursal Check required'
-                }
-            })
-        });
-
-        Account mockAcc = (Account) buildMock(Account.class, new Map<String, Object>{
-            'Personal_email__pc' => 'test@example.com',
-            'Email_Verified__c' => false,
-            'Income__pc' => 50000,
-            'RecordType' => new Map<String, Object>{ 'Name' => 'Loan - Main Applicant' }
-        });
-
-        Technical_Verification__c mockTv = (Technical_Verification__c) buildMock(Technical_Verification__c.class, new Map<String, Object>{
-            'Area_Land_Measurement__c' => 200,
-            'Total_Property_Value__c' => 600000,
-            'Area_Existing_Construction__c' => 700,
-            'RecordType' => new Map<String, Object>{ 'Name' => 'Pre-Sanction' }
-        });
-
-        Map<String, Integer> boolMap = new Map<String, Integer>{
-            'temporaryValue' => 0,
-            'PCTranchabove75' => 0,
-            'idfyAccountCheck' => 1,
-            'idfyCount' => 0,
-            'AMLCheck' => 1,
-            'ScreenzaaDV' => 0,
-            'Legalandvetting' => 0,
-            'LoanDetailsCheck' => 0,
-            'CollateralAddressDetailscheck' => 0,
-            'devApprovedOtherAdmCharge' => 0,
-            'FullInsurance' => 0,
-            'PropertyOwnerYes' => 0,
-            'PropertyOwner' => 1,
-            'Mismatchtypeoddv' => 0,
-            'accAddSpChar' => 1,
-            'zipCodeError' => 1,
-            'accNameSpChar' => 1,
-            'officeAddPinBlank' => 1,
-            'PanOtcCheck' => 0,
-            'isBlankPanCardNumber' => 1,
-            'dmCheckPfrecieved' => 0,
-            'pmayEligibilityWaiver' => 0
-        };
-
-        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
-        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
-
-        Test.startTest();
-        callChecks(
-            new List<Account>{ mockAcc },
-            new List<Opportunity>{ mockOpp },
-            boolMap,
-            new List<cam__c>{ mockCam },
-            new List<Disbursement__c>{ mockDis },
-            new List<Technical_Verification__c>{ mockTv },
-            new List<Vendor_Request__c>(),
-            1100000, // > Sanctioned -> triggers Check 43 & Check 62 NOT OK
-            new List<Technical_Verification__c>(),
-            oldMap,
-            mockDis,
-            new List<Manual_Bureau__c>()
-        );
-        Test.stopTest();
-
-        List<DMValidatorHistory__c> hist = [SELECT Id FROM DMValidatorHistory__c WHERE Disbursement__c = :dbDis.Id];
-        System.assert(hist.size() >= 0);
-    }
-
-    // 3. First Tranche — Purchase / Seller BT / Topup / Manual Bureau / Plot LTV / Security NACH branches
-    @isTest
-    static void testPurchaseSellerTopupAndPlotLTV() {
-        initSharedVals(0);
-        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
-        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
-        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
-        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
-
-        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
-            'Id' => dbOpp.Id,
-            'Name' => 'Test Purchase App',
-            'Type' => 'New',
-            'Sanctioned_Amont__c' => 1000000,
-            'HLA_Sign_Date__c' => Date.today().addDays(-5),
-            'LM_Loan_Status__c' => 'Active',
-            'FinnoneClient_Id__c' => '',
-            'CollAdd1__c' => 'Valid Addr 1',
-            'CollAdd2__c' => 'Valid Addr 2',
-            'CollAdd3__c' => 'Valid Addr 3',
-            'Loan_Product__r' => new Map<String, Object>{ 'Name' => 'Regular HL' },
-            'Nupay_Responses__r' => buildSubquery(new List>())
-        });
-
-        Account nonEarnerMain = (Account) buildMock(Account.class, new Map<String, Object>{
-            'Personal_email__pc' => 'ok@example.com',
-            'Email_Verified__c' => true,
-            'Income__pc' => 0,
-            'RecordType' => new Map<String, Object>{ 'Name' => 'Loan - Main Applicant' }
-        });
-
-        // Sub-case A: Purchase + Direct Transfer + empty mbList + Plot LTV (60%) + officeaddresscheck=1 + Municipal Corp <= 10L
-        Disbursement__c disPurchase = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'First',
-            'Levels_Of_Tranch__c' => 'First Tranche',
-            'caseTyp__c' => 'Purchase',
-            'Disbursement_Mode__c' => 'Direct Transfer',
-            'Details_to_be_printed_on_Cheque__c' => '',
-            'Disbursement_Amount__c' => 600000,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today(),
-            'Maker_CRD_Sign_Date__c' => Date.today()
-        });
-
-        cam__c camPlot = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'NHB_PURPOSE_OF_LOAN__c' => 'Plot Purchase + Construction',
-            'Land_Value__c' => 1000000,
-            'Property_Location__c' => 'Municipal Corporation Area',
-            'Combined_Exposure__c' => 900000
-        });
-
-        Map<String, Integer> boolMapA = new Map<String, Integer>{
-            'officeaddresscheck' => 1,
-            'pcLandltvNormsupto' => 0,
-            'pcLandltvNormsabove' => 0,
-            'spdcFemaleCheckBelow' => 1
-        };
-
-        Test.startTest();
-        callChecks(
-            new List<Account>{ nonEarnerMain }, new List<Opportunity>{ mockOpp }, boolMapA,
-            new List<cam__c>{ camPlot }, new List<Disbursement__c>{ disPurchase },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
-            new List<Technical_Verification__c>(), oldMap, disPurchase, new List<Manual_Bureau__c>()
-        );
-
-        // Sub-case B: Seller BT + Manual_Bureau NOT OK + Plot LTV > 70% + Municipal Corp > 10L
-        Disbursement__c disSellerBT = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'First',
-            'Levels_Of_Tranch__c' => 'First Tranche',
-            'caseTyp__c' => 'Seller BT',
-            'Disbursement_Mode__c' => 'Cheque',
-            'Disbursement_Amount__c' => 800000,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today(),
-            'Maker_CRD_Sign_Date__c' => Date.today()
-        });
-        cam__c camPlotHigh = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'NHB_PURPOSE_OF_LOAN__c' => 'Plot Purchase + Construction',
-            'Land_Value__c' => 1000000,
-            'Property_Location__c' => 'Municipal Corporation Area',
-            'Combined_Exposure__c' => 1500000
-        });
-        Manual_Bureau__c mbRecent = (Manual_Bureau__c) buildMock(Manual_Bureau__c.class, new Map<String, Object>{
-            'Account_opening_date__c' => Date.today().addMonths(-3),
-            'Any_active_property_loan_in_seller_CIBIL__c' => 'Yes',
-            'Is_seller_having_any_defaults__c' => 'Yes - Critical'
-        });
-        Manual_Bureau__c mbNullDate = (Manual_Bureau__c) buildMock(Manual_Bureau__c.class, new Map<String, Object>{
-            'Account_opening_date__c' => null
-        });
-
-        callChecks(
-            new List<Account>{ nonEarnerMain }, new List<Opportunity>{ mockOpp },
-            new Map<String, Integer>{ 'spdcFemaleCheckAbove' => 1 },
-            new List<cam__c>{ camPlotHigh }, new List<Disbursement__c>{ disSellerBT },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
-            new List<Technical_Verification__c>(), oldMap, disSellerBT,
-            new List<Manual_Bureau__c>{ mbRecent, mbNullDate }
-        );
-
-        // Sub-case C: Topup (ClientLinkingTopUpCaseCheck NOT OK) + Plot LTV <= 50% + Gram Panchayat > 10L
-        Disbursement__c disTopup = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'First',
-            'Levels_Of_Tranch__c' => 'First Tranche',
-            'caseTyp__c' => 'Topup',
-            'Disbursement_Mode__c' => 'Cheque',
-            'Disbursement_Amount__c' => 400000,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today(),
-            'Maker_CRD_Sign_Date__c' => Date.today()
-        });
-        cam__c camPlotLow = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'NHB_PURPOSE_OF_LOAN__c' => 'Plot Purchase + Construction',
-            'Land_Value__c' => 1000000,
-            'Property_Location__c' => 'Gram Panchayat Area',
-            'Combined_Exposure__c' => 1500000
-        });
-        callChecks(
-            new List<Account>{ nonEarnerMain }, new List<Opportunity>{ mockOpp },
-            new Map<String, Integer>{ 'spdcFemaleWaiver' => 1 },
-            new List<cam__c>{ camPlotLow }, new List<Disbursement__c>{ disTopup },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
-            new List<Technical_Verification__c>(), oldMap, disTopup, new List<Manual_Bureau__c>()
-        );
-        Test.stopTest();
-    }
-
-    // 4. First Tranche — OK / Waiver / Cloned / Attachments / CF Product paths
-    @isTest
-    static void testFirstTrancheAllOkAndWaivers() {
-        initSharedVals(1);
-        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
-        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
-        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
-        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
-
-        // Insert Attachments + Collection + PMAY for OK paths
-        insert new List<Attachment>{
-            new Attachment(ParentId = dbOpp.Id, Name = 'Vetting Report.pdf', Body = Blob.valueOf('test')),
-            new Attachment(ParentId = dbOpp.Id, Name = 'Legal Report.pdf', Body = Blob.valueOf('test')),
-            new Attachment(ParentId = dbOpp.Id, Name = 'HLA Photograph.jpg', Body = Blob.valueOf('test')),
-            new Attachment(ParentId = dbOpp.Id, Name = 'CLD Doc.pdf', Body = Blob.valueOf('test'))
-        };
-        insert new Collection__c(
-            SFDC_Customer__c = dbOpp.Id,
-            Nature_of_Collection__c = 'Other Administrative Charges',
-            Status__c = 'Active'
-        );
-        insert new PMAY_Application_Detail__c(Application__c = dbOpp.Id);
-
-        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
-            'Id' => dbOpp.Id,
-            'Name' => 'Test Normal App',
-            'Type' => 'Cloned',
-            'Sanctioned_Amont__c' => 1000000,
-            'HLA_Sign_Date__c' => Date.today().addDays(-2),
-            'LM_Loan_Status__c' => 'Active',
-            'Effective_PF__c' => 1000,
-            'Loan_Product__r' => new Map<String, Object>{ 'Name' => 'HL CF Product' },
-            'HLA_Audit_Trails__r' => buildSubquery(new List>{
-                new Map<String, Object>{ 'Processing_Fees__c' => 1000 }
-            })
-        });
-
-        Disbursement__c mockDis = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'First',
-            'Levels_Of_Tranch__c' => 'First Tranche',
-            'caseTyp__c' => 'Normal',
-            'Disbursement_Mode__c' => 'Cheque',
-            'Disbursement_Amount__c' => 200000,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today().addDays(-40),
-            'Maker_CRD_Sign_Date__c' => Date.today(),
-            'PF_Waiver_Amount__c' => 1000
-        });
-
-        cam__c mockCam = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'Is_Clone_CAM__c' => true
-        });
-
-        // First call: with attachments, no waivers on legal/admin/PF
-        Test.startTest();
-        callChecks(
-            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
-            new List<cam__c>{ mockCam }, new List<Disbursement__c>{ mockDis },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
-            new List<Technical_Verification__c>(), oldMap, mockDis, new List<Manual_Bureau__c>()
-        );
-
-        // Second call: all waiver flags = 1
-        Map<String, Integer> allWaivers = new Map<String, Integer>{
-            'temporaryValue' => 1,
-            'PCTranchabove75' => 1,
-            'SubsequentNorms' => 1,
-            'PerAbovesubsequent' => 1,
-            'idfyCount' => 1,
-            'Legalandvetting' => 1,
-            'techCheck' => 1,
-            'LoanDetailsCheck' => 1,
-            'CollateralAddressDetailscheck' => 1,
-            'devApprovedOtherAdmCharge' => 1,
-            'FullInsurance' => 1,
-            'PropertyOwnerYes' => 1,
-            'Mismatchtypeoddv' => 1,
-            'recentlyOpenedSellerbnkac' => 1,
-            'sellerVisitMeetDev' => 1,
-            'PanOtcCheck' => 1,
-            'activeLoanProof' => 1,
-            'criticalDefaultCibil' => 1,
-            'dmCheckPfrecieved' => 1,
-            'dmValidatorPostdv' => 1,
-            'pmayEligibilityWaiver' => 1
-        };
-
-        Disbursement__c disPurWaiver = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'First',
-            'caseTyp__c' => 'Purchase',
-            'Disbursement_Mode__c' => 'Cheque',
-            'Disbursement_Amount__c' => 200000,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today()
-        });
-        callChecks(
-            new List<Account>(), new List<Opportunity>{ mockOpp }, allWaivers,
-            new List<cam__c>{ mockCam }, new List<Disbursement__c>{ disPurWaiver },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
-            new List<Technical_Verification__c>(), oldMap, disPurWaiver, new List<Manual_Bureau__c>()
-        );
-        Test.stopTest();
-    }
-
-    // 5. Subsequent Tranche — Checks 42, 44, 45, 49, 57, 58, 72, TechnicalApprovalAfterDM, RnR
-    @isTest
-    static void testSubsequentTrancheChecks() {
-        initSharedVals(0);
-        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
-        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
-        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
-        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
-
-        // Prior disbursement within 15 days (triggers Check 44 NOT OK & Check 49 Construction = true)
-        Disbursement__c priorDis = new Disbursement__c(
-            Application__c = dbOpp.Id,
-            Disb_Status__c = 'Payment Processed',
-            Date_Of_Disbursement__c = Date.today().addDays(-5)
-        );
-        insert priorDis;
-
-        // Vendor Request + Post-Sanction Approved Technical Verification for Check 49
-        Vendor_Request__c vr = new Vendor_Request__c(
-            Application__c = dbOpp.Id,
-            Date_Recevied__c = Date.today().addDays(-5)
-        );
-        insert vr;
-
-        List<RecordType> postRts = [
-            SELECT Id FROM RecordType
-            WHERE SObjectType = 'Technical_Verification__c'
-              AND (Name = 'Post_Sanction' OR Name = 'Post- Sanction')
-            LIMIT 1
-        ];
-        if (!postRts.isEmpty()) {
-            insert new Technical_Verification__c(
-                Application__c = dbOpp.Id,
-                Vendor_Request__c = vr.Id,
-                RecordTypeId = postRts[0].Id,
-                Status__c = 'Approved',
-                Percentage_as_per_on_date__c = 50,
-                Completion_PER__c = 75
-            );
-        }
-
-        String validPurpose = Label.Purpose_of_loan_New.split(',')[0].trim();
-
-        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
-            'Id' => dbOpp.Id,
-            'Name' => 'Test Subsequent App',
-            'Sanctioned_Amont__c' => 1000000,
-            'HLA_Sign_Date__c' => Date.today().addDays(-10),
-            'LM_Loan_Status__c' => 'Partially Disbursed',
-            'Finnone_Loan_Id__c' => ''
-        });
-
-        Disbursement__c mockDisSub = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-            'Id' => dbDis.Id,
-            'Application__c' => dbOpp.Id,
-            'CreatedDate' => dbDis.CreatedDate,
-            'Tranch_Details__c' => 'Subsequent',
-            'Levels_Of_Tranch__c' => '2nd Tranche',
-            'caseTyp__c' => 'Normal',
-            'Disbursement_Mode__c' => 'Direct Transfer',
-            'Disbursement_Amount__c' => 400000,
-            'Technical_Charges__c' => 0,
-            'Disb_Status__c' => 'Send to CPU',
-            'Date_Of_Disbursement__c' => Date.today()
-        });
-
-        cam__c mockCamSub = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'Loan_Type__c' => 'Home Loan (HL)',
-            'NHB_PURPOSE_OF_LOAN__c' => 'New Construction (Other than P+C)',
-            'NHB_Categories__c' => 'Plot purchase cum construction',
-            'Purpose_of_Loan__c' => validPurpose,
-            'TV_considered__c' => 'TV1'
-        });
-
-        Technical_Verification__c tvPostPending = (Technical_Verification__c) buildMock(Technical_Verification__c.class, new Map<String, Object>{
-            'Status__c' => 'Pending',
-            'LastModifiedDate' => Datetime.now().addHours(1),
-            'RecordType' => new Map<String, Object>{ 'Name' => 'Post- Sanction' }
-        });
-        Technical_Verification__c tvDesktop = (Technical_Verification__c) buildMock(Technical_Verification__c.class, new Map<String, Object>{
-            'Status__c' => 'Approved',
-            'RecordType' => new Map<String, Object>{ 'Name' => 'Desktop Valuation' }
-        });
-
-        Vendor_Request__c vrRecent = new Vendor_Request__c(Date_Recevied__c = Date.today().addDays(-5));
-        Vendor_Request__c vrOld = new Vendor_Request__c(Date_Recevied__c = Date.today().addDays(-45));
-
-        Test.startTest();
-        // Call A: totalAmount == Sanctioned -> Check 49 (<90% NOT OK), Check 42/44/45/57/72/TechApproval NOT OK
-        callChecks(
-            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
-            new List<cam__c>{ mockCamSub }, new List<Disbursement__c>{ mockDisSub },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>{ vrRecent },
-            1000000, new List<Technical_Verification__c>{ tvPostPending }, oldMap, mockDisSub,
-            new List<Manual_Bureau__c>()
-        );
-
-        // Call B: totalAmount <= tsan (500000 <= 600000) -> Check 49 OK, Desktop Valuation -> Check 57 OK, vrOld -> Check 58 branch 1
-        callChecks(
-            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
-            new List<cam__c>{ mockCamSub }, new List<Disbursement__c>{ mockDisSub },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>{ vrOld },
-            500000, new List<Technical_Verification__c>{ tvDesktop }, oldMap, mockDisSub,
-            new List<Manual_Bureau__c>()
-        );
-
-        // Call C: totalAmount > tsan (800000 > 600000, != Sanctioned) -> Check 49 NOT OK else branch
-        callChecks(
-            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
-            new List<cam__c>{ mockCamSub }, new List<Disbursement__c>{ mockDisSub },
-            new List<Technical_Verification__c>(), new List<Vendor_Request__c>{ vrRecent },
-            800000, new List<Technical_Verification__c>{ tvDesktop }, oldMap, mockDisSub,
-            new List<Manual_Bureau__c>()
-        );
-        Test.stopTest();
-    }
-
-    // 6. Subsequent Tranche — PDD Check across Tranches 2 to 8 + RnR Check (daterangeCheck == false)
-    @isTest
-    static void testPddCheckAllTranchesAndRnR() {
-        initSharedVals(0);
-        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
-        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
-        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
-        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
-
-        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
-            'Id' => dbOpp.Id,
-            'Name' => 'Test PDD App',
-            'Sanctioned_Amont__c' => 1000000,
-            'HLA_Sign_Date__c' => Date.today().addDays(-10),
-            'LM_Loan_Status__c' => 'Active',
-            'PDDs__r' => buildSubquery(new List>{
-                new Map<String, Object>{
-                    'Document_Received__c' => 'NO',
-                    'Expected_Time__c' => 'First Tranche'
-                }
-            })
-        });
-
-        cam__c mockCamRnR = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
-            'NHB_Categories__c' => 'Repair & renovation of existing units'
-        });
-
-        List<String> tranches = new List<String>{
-            '2nd Tranche', '3rd Tranche', '4th Tranche', '5th Tranche'
-        };
-
-        for (String tr : tranches) {
-            Disbursement__c disTr = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-                'Id' => dbDis.Id,
-                'Application__c' => dbOpp.Id,
-                'CreatedDate' => dbDis.CreatedDate,
-                'Tranch_Details__c' => 'Subsequent',
-                'Levels_Of_Tranch__c' => tr,
-                'caseTyp__c' => 'Normal',
-                'Disbursement_Amount__c' => 50000,
-                'Disb_Status__c' => 'Send to CPU',
-                'Date_Of_Disbursement__c' => Date.today()
-            });
-            callChecks(
-                new List<Account>(), new List<Opportunity>{ mockOpp },
-                new Map<String, Integer>{ 'SubsequentNorms' => 1 },
-                new List<cam__c>{ mockCamRnR }, new List<Disbursement__c>{ disTr },
-                new List<Technical_Verification__c>(), new List<Vendor_Request__c>(),
-                500000, new List<Technical_Verification__c>(), oldMap, disTr,
-                new List<Manual_Bureau__c>()
-            );
-        }
-
-        // Reset governor limits for Tranches 6–8
-        Test.startTest();
-        for (String tr : new List<String>{ '6th Tranche', '7th Tranche', '8th Tranche' }) {
-            Disbursement__c disTr = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
-                'Id' => dbDis.Id,
-                'Application__c' => dbOpp.Id,
-                'CreatedDate' => dbDis.CreatedDate,
-                'Tranch_Details__c' => 'Subsequent',
-                'Levels_Of_Tranch__c' => tr,
-                'caseTyp__c' => 'Normal',
-                'Disbursement_Amount__c' => 50000,
-                'Disb_Status__c' => 'Send to CPU',
-                'Date_Of_Disbursement__c' => Date.today()
-            });
-            callChecks(
-                new List<Account>(), new List<Opportunity>{ mockOpp },
-                new Map<String, Integer>{ 'SubsequentNorms' => 1 },
-                new List<cam__c>{ mockCamRnR }, new List<Disbursement__c>{ disTr },
-                new List<Technical_Verification__c>(), new List<Vendor_Request__c>(),
-                500000, new List<Technical_Verification__c>(), oldMap, disTr,
-                new List<Manual_Bureau__c>()
-            );
-        }
-        Test.stopTest();
     }
 }
+
+
+and here is its test class
+
+
+
+@isTest
+public class CreateApplicationDataQueueableTest {
+    
+    @isTest
+    public static void test1() {
+        
+        try {
+            Test.startTest();
+            CreateApplicationDataQueueable ctrl = new CreateApplicationDataQueueable('');
+            System.enqueueJob(ctrl);
+            Test.stopTest();
+        } catch (Exception e) {}
+            
+    }
+    
+    @isTest
+    public static void test2() {
+        
+        try {
+            Test.startTest();
+            CreateApplicationDataQueueable ctrl1 = new CreateApplicationDataQueueable('{"status":"success", "PWALO_OPP__c":"1234567890"}');
+            System.enqueueJob(ctrl1);
+            Test.stopTest();
+        } catch (Exception e) {}
+            
+    }
+    
+    public static testMethod void testException() {
+
+        String str = null; 
+        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable(str);
+        
+        Test.startTest();
+        try {
+            queueableJob.execute(null);
+        } catch (Exception ex) {}
+        Test.stopTest();
+    }
+    
+    public static testMethod void testException1() {
+
+        String str = null; 
+        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable(str);
+        
+        Test.startTest();
+        try {
+            queueableJob.execute(null);
+        } catch (Exception ex) {}
+        Test.stopTest();
+    }
+    
+    static void testQueueable_CalloutExceptionPath() {
+
+        Test.setMock(HttpCalloutMock.class, new MockCallout());
+        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable('{"test":"data"}');
+            
+        Test.startTest();
+        try {
+            System.enqueueJob(queueableJob);
+        } catch (Exception ex) {}
+        Test.stopTest();
+    }
+
+    public class MockCallout implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            CalloutException e = new CalloutException();
+            e.setMessage('Callout failure');
+            throw e;
+        }
+    }
+
+}
+
+
+
+
+
+and here at last the class ApplicationFunctionAPIPWASyncfor referencxe
+
+/*
+@Author: Shivam Agarwal
+@Description: This API is used to Creating Applicant Data and Update the Application
+@version:2.0
+*/
+public class ApplicationFunctionAPIPWASync {
+    
+    public static void createApplicant() {
+        testParser();
+    }
+    
+    public static void testParser(){
+        if(Test.isRunningTest()){
+            integer i=0;
+            i=0;
+            i=0;
+        }
+    }
+}
+
+
+
+the code coverage for the test class is only 71% as its covering 5/7 lines and the 2 lines that are not runnig are the catch block 
+
+so make it run the catch block only keeep evrything else and give updated test class
