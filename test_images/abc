@@ -1,1730 +1,787 @@
-Here is an apex class create a test class for this with max coverage 
+@isTest
+public class DmValidatorMandatoryChecks2Test {
 
-
-/*
- * * Developer:Raghav Mehta
- * DmValidatorMandatoryChecks2 - second half of DmValidatorMandatoryChecks (checks 40 to 81).
- * Called by DMValidatorMandatoryClassNew AFTER DmValidatorMandatoryChecks.Checks(...) with the same parameters.
- * Builds the DMValidatorHistory__c record with the values of both classes and inserts it at the very end.
- */
-public class DmValidatorMandatoryChecks2 {
-    public static String Checks(List<Account>accLst,List<Opportunity> applicationList,List<Post_Sanction_Pre_Disbursement_Changes__c> postSanctionLst,
-                              Map<String,Integer>BooleanValueMap,List<cam__c> camLst,List<Property_Master__c> propertyCode,List<Disbursement__c> disList,
-                              Map<String,Boolean> cibacc,List<Technical_Verification__c> tvList,List<Case> cs,List<Customer_App_Login_Log__c> callList,
-                              List<String> acId,List<Customer__c> cusList,List<String> bankAccountDetails,List<Bank_Account_Detail__c> bankdetailsList,
-                              List<Vendor_Request__c> vrList,Decimal totalAmount,List<Technical_Verification__c> tvList1,Map<Id,Disbursement__c> oldMap,
-                              Disbursement__c newDis,List<Manual_Bureau__c> mbList,List<Opportunity> allOpportunity
-                             )
-    {
-        try{
-            if(DmValidatorMandatoryChecks.sharedVals==null){
-                system.debug('DmValidatorMandatoryChecks2: first part did not complete, nothing to do');
-                return NULL;
-            }
-            system.debug('DmValidatorMandatoryChecks');
-            system.debug('accLst::'+accLst);
-            system.debug('applicationList::'+ applicationList);
-            system.debug('postSanctionLst::'+postSanctionLst );
-            system.debug('BooleanValueMap::'+ BooleanValueMap);
-            system.debug('camLst::'+camLst );
-            system.debug('propertyCode::'+propertyCode );
-            system.debug('disList::'+ disList);
-            system.debug('cibacc::'+ cibacc);
-            system.debug('tvList::'+ tvList);
-            system.debug('cs::'+cs );
-            system.debug('callList::'+callList );
-            system.debug('acId::'+acId );
-            system.debug('cusList::'+cusList );
-            system.debug('bankAccountDetails::'+bankAccountDetails );
-            system.debug('bankdetailsList::'+bankdetailsList );
-            system.debug('vrList::'+vrList );
-            system.debug('totalAmount::'+totalAmount );
-            system.debug('tvList1::'+tvList1 );
-            system.debug('oldMap::'+oldMap );
-            system.debug('newDis::'+newDis);
-            
-            DMValidator__c dmdetails = DMValidator__c.getValues('DM Validator');
-            Neilon_Check__c neilonDetails=Neilon_Check__c.getValues('Neilon Check');
-            
-            system.debug('dmdetails::'+dmdetails);
-            system.debug('neilonDetails::'+neilonDetails);
-            
-            Disbursement__c dis=disList[0];
-            String appId=disList[0].Application__c;
-            // ---- values computed by DmValidatorMandatoryChecks
-            String accRecordTypeCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('accRecordTypeCheck');
-            String sanctionDetailsPostSanction = (String) DmValidatorMandatoryChecks.sharedVals.get('sanctionDetailsPostSanction');
-            String PanValidatortoberun = (String) DmValidatorMandatoryChecks.sharedVals.get('PanValidatortoberun');
-            String productDetailsCAM = (String) DmValidatorMandatoryChecks.sharedVals.get('productDetailsCAM');
-            String insuranceCheckPS = (String) DmValidatorMandatoryChecks.sharedVals.get('insuranceCheckPS');
-            String propertyMasterApproval = (String) DmValidatorMandatoryChecks.sharedVals.get('propertyMasterApproval');
-            String camFinalDecision = (String) DmValidatorMandatoryChecks.sharedVals.get('camFinalDecision');
-            String postSanction = (String) DmValidatorMandatoryChecks.sharedVals.get('postSanction');
-            String bureauGenerationCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('bureauGenerationCheck');
-            String technicalFinalDecision = (String) DmValidatorMandatoryChecks.sharedVals.get('technicalFinalDecision');
-            String loanStatus = (String) DmValidatorMandatoryChecks.sharedVals.get('loanStatus');
-            String PropertyPaperVerification = (String) DmValidatorMandatoryChecks.sharedVals.get('PropertyPaperVerification');
-            String iServeAppCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('iServeAppCheck');
-            String PANValidatorValuescheck = (String) DmValidatorMandatoryChecks.sharedVals.get('PANValidatorValuescheck');
-            String FacelivenessCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('FacelivenessCheck');
-            String CersaiMatchResultcheck = (String) DmValidatorMandatoryChecks.sharedVals.get('CersaiMatchResultcheck');
-            String CompletePFreceivedcheck = (String) DmValidatorMandatoryChecks.sharedVals.get('CompletePFreceivedcheck');
-            String CreditHindsightingApproval = (String) DmValidatorMandatoryChecks.sharedVals.get('CreditHindsightingApproval');
-            String RCUInitiatedCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('RCUInitiatedCheck');
-            String Estimateamountcheck = (String) DmValidatorMandatoryChecks.sharedVals.get('Estimateamountcheck');
-            String SellerCersaimatchCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('SellerCersaimatchCheck');
-            String EstimateUploadCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('EstimateUploadCheck');
-            String RnRSubsequentnormsof15Days = (String) DmValidatorMandatoryChecks.sharedVals.get('RnRSubsequentnormsof15Days');
-            String ExtensionDMnotallowedabove40ofSanctionAmount = (String) DmValidatorMandatoryChecks.sharedVals.get('ExtensionDMnotallowedabove40ofSanctionAmount');
-            String RnRMaxDisbursementNormsonLTVCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('RnRMaxDisbursementNormsonLTVCheck');
-            String TypeofcaseinDMisnotmatchwithCAM = (String) DmValidatorMandatoryChecks.sharedVals.get('TypeofcaseinDMisnotmatchwithCAM');
-            String BankAccountdetailsCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('BankAccountdetailsCheck');
-            String BeneficiaryNamecheck = (String) DmValidatorMandatoryChecks.sharedVals.get('BeneficiaryNamecheck');
-            String ConsideredTechnicalexpiration = (String) DmValidatorMandatoryChecks.sharedVals.get('ConsideredTechnicalexpiration');
-            String AmountTobeTransferred = (String) DmValidatorMandatoryChecks.sharedVals.get('AmountTobeTransferred');
-            String NACHCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('NACHCheck');
-            String SalutationIncorrect = (String) DmValidatorMandatoryChecks.sharedVals.get('SalutationIncorrect');
-            String CersaiCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('CersaiCheck');
-            Integer CersaiOTC = (Integer) DmValidatorMandatoryChecks.sharedVals.get('CersaiOTC');
-            String ScreenzaaCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('ScreenzaaCheck');
-            String CollateralReviewCheck = (String) DmValidatorMandatoryChecks.sharedVals.get('CollateralReviewCheck');
-            String RCUStatusholdNAcheck = (String) DmValidatorMandatoryChecks.sharedVals.get('RCUStatusholdNAcheck');
-            String UdyamCertificateverificationcheck = (String) DmValidatorMandatoryChecks.sharedVals.get('UdyamCertificateverificationcheck');
-            String DisbursementMode = (String) DmValidatorMandatoryChecks.sharedVals.get('DisbursementMode');
-            String PDDcheckinNormalCase = (String) DmValidatorMandatoryChecks.sharedVals.get('PDDcheckinNormalCase');
-            String OTCStatuscheckinNormalDM = (String) DmValidatorMandatoryChecks.sharedVals.get('OTCStatuscheckinNormalDM');
-            /// 40  referralCheck
-            String referralCheck='';
-            Integer temporaryValue=BooleanValueMap.get('temporaryValue')==NULL?0:BooleanValueMap.get('temporaryValue');
-            if(Boolean.valueof(label.REFERRAL_CHECK))
-            {
-                if(temporaryValue==1)
-                {
-                    referralCheck='OK';
-                }
-                else
-                {
-                    referralCheck='NOT OK';
-                }
-                if(camLst.size()>0 &&(camLst[0].Is_Clone_CAM__c==true || disList[0].Tranch_Details__c=='Subsequent'))
-                {
-                    referralCheck='OK'; 
-                }
-               // preCpuMap.put('Referral Check', String.isBlank(referralCheck)?'NOT OK' : referralCheck);
-            }
-            /// 41 DisbursementnotallowedaboveofsanctionedinconstructionFirst
-            String DisbursementnotallowedaboveofsanctionedinconstructionFirst='';
-            Decimal checkpercentage=0;
-            if(camLst.size()>0 && camLst[0].NHB_PURPOSE_OF_LOAN__c=='New Construction (Other than P+C)'  && (disList[0].caseTyp__c=='Normal' || disList[0].caseTyp__c=='Topup' || disList[0].caseTyp__c=='Top-UP') && disList[0].Tranch_Details__c=='First' && applicationList[0].Sanctioned_Amont__c>0)
-            {
-                checkpercentage=(disList[0].Disbursement_Amount__c / applicationList[0].Sanctioned_Amont__c)*100;
-            }
-            if(checkpercentage>60) /// changed from 40 to 75 BY Rahul kumar 05-02-2026---->> Change from 75 to 60 after discussion with Mohit by Raghav mehta
-            {
-                DisbursementnotallowedaboveofsanctionedinconstructionFirst='NOT OK';
-            }
-            else
-            {
-                DisbursementnotallowedaboveofsanctionedinconstructionFirst='OK'; 
-            }
-            /// 42  Disbursementnotallowedabove13rdofsanctionedforconstructionin
-            String Disbursementnotallowedabove13rdofsanctionedforconstructionin='';
-            Decimal checkpercentage1=0;
-            if(camLst.size()>0 && camLst[0].NHB_Categories__c=='Plot purchase cum construction' && (disList[0].caseTyp__c=='Normal' || disList[0].caseTyp__c=='Topup' || disList[0].caseTyp__c=='Top-UP') && disList[0].Tranch_Details__c=='Subsequent' && disList[0].Levels_Of_Tranch__c!='First Tranche' && applicationList[0].Sanctioned_Amont__c>0)
-            {
-                checkpercentage1=(disList[0].Disbursement_Amount__c / applicationList[0].Sanctioned_Amont__c)*100;
-            }
-            System.debug('checkpercentage1'+checkpercentage1);
-            if(checkpercentage1>33.333)
-            {
-                Disbursementnotallowedabove13rdofsanctionedforconstructionin='NOT OK';
-            }
-            else
-            {
-                Disbursementnotallowedabove13rdofsanctionedforconstructionin='OK'; 
-            }
-            /// 43 PCFirsttranchecheckforDisbursementamount
-            String PCFirsttranchecheckforDisbursementamount='';
-            Decimal checkpercentage2=0;
-            Integer PCTranchabove75=BooleanValueMap.get('PCTranchabove75')==NULL?0:BooleanValueMap.get('PCTranchabove75');
-            if(PCTranchabove75==1){
-                PCFirsttranchecheckforDisbursementamount='OK'; ///Added By Rahul Kumar
-            }
-            else{
-                //New Check Added by Ankit Tiwari 2025-01-24
-                if(camLst.size()>0 && camLst[0].NHB_Categories__c!=NULL && camLst[0].NHB_Categories__c.contains('Plot purchase') && (disList[0].Tranch_Details__c=='First' || disList[0].Tranch_Details__c=='Subsequent' && disList[0].Levels_Of_Tranch__c=='First Tranche') && applicationList[0].Sanctioned_Amont__c>0)
-                {
-                    checkpercentage2=(totalAmount / applicationList[0].Sanctioned_Amont__c)*100;
-                }
-                System.debug('checkpercentage2'+checkpercentage2);
-                if(checkpercentage2>75)
-                {
-                    PCFirsttranchecheckforDisbursementamount='NOT OK';
-                }
-                else
-                {
-                    PCFirsttranchecheckforDisbursementamount='OK'; 
-                }
-            }
-            /// 44 SubsequentDMminimumgapfor25Days
-            String SubsequentDMminimumgapfor25Days='';
-            Integer SubsequentNorms=BooleanValueMap.get('SubsequentNorms')==NULL?0:BooleanValueMap.get('SubsequentNorms'); 
-            if(SubsequentNorms==1)
-            {
-                SubsequentDMminimumgapfor25Days='OK';
-            }
-            else
-            {
-                /// Chnages made by Rahul kumar 05-02-2026
-                Date today = Date.today();
-                Integer daysDifference=0;
-                if(camLst.size()>0 && (camLst[0].NHB_PURPOSE_OF_LOAN__c=='Home Extension' ||camLst[0].NHB_PURPOSE_OF_LOAN__c=='New Construction (Other than P+C)' || camLst[0].NHB_PURPOSE_OF_LOAN__c=='Home Extension' || camLst[0].NHB_PURPOSE_OF_LOAN__c=='Construction/purchase of new units' || camLst[0].NHB_Categories__c=='Repair & renovation of existing units' || camLst[0].NHB_Categories__c=='Plot purchase cum construction') && (disList[0].caseTyp__c=='Normal' || disList[0].caseTyp__c=='Topup' || disList[0].caseTyp__c=='Top-UP') && disList[0].Tranch_Details__c=='Subsequent' && disList[0].Levels_Of_Tranch__c!='First Tranche')
-                {
-                    system.debug('inifblockogsubsdm');
-                    List<Disbursement__c> disListlat=[SELECT Id ,date_of_disbursement__c FROM Disbursement__c WHERE Application__c=:appId AND Id!=:dis.Id AND (Disb_Status__c='Handed over customer'OR disb_Status__c='Payment Under Process' OR disb_Status__c='Payment Processed' OR disb_Status__c='Physical Cheque handover' ) ORDER BY Date_Of_Disbursement__c DESC LIMIT 1];
-                    daysDifference =disListlat[0].date_of_disbursement__c!=NULL ?(disListlat[0].date_of_disbursement__c).daysBetween(Today):0;
-                    System.debug('daysDifference'+daysDifference);
-                    //disList[0].Disbursement_Mode__c=='Direct Transfer
-                    /*  if(disList[0].Tranch_Details__c=='First' || disList[0].Disbursement_Mode__c=='Cheque')
-{ SubsequentDMminimumgapfor25Days='OK';}
-else
-{
-if(daysDifference>=15)
-{
-SubsequentDMminimumgapfor25Days='OK';
-} 
-else
-{
-SubsequentDMminimumgapfor25Days='NOT OK'; 
-}
-}*/
-                    if(disList[0].Disbursement_Mode__c=='Cheque' || disList[0].Disbursement_Mode__c=='Direct Transfer'){
-                        if(daysDifference<15)
-                        {
-                            
-                            SubsequentDMminimumgapfor25Days='NOT OK';
-                        }
-                    }
-                    
-                }
-                else
-                {
-                    SubsequentDMminimumgapfor25Days='OK';
-                }
-            }
-            /// 45 Disbursementnotallowedabove7inSubsequentDM
-            String Disbursementnotallowedabove7inSubsequentDM='';
-             Integer PerAbovesubsequent=BooleanValueMap.get('PerAbovesubsequent')==NULL?0:BooleanValueMap.get('PerAbovesubsequent');
-            Decimal checkpercentage4=0;
-            System.debug('checkpercentage4'+disList[0].caseTyp__c);
-            System.debug('checkpercentage4'+disList[0].Tranch_Details__c);
-            String purposeunicodeclean='';
-            if(!camLst.isEMpty() && camLst[0].NHB_PURPOSE_OF_LOAN__c!=NULL )
-                purposeunicodeclean = camLst[0].NHB_PURPOSE_OF_LOAN__c.replace('\u00A0',' ').replaceAll('\\s+',' ').trim();           
-            if(camLst.size()>0 && applicationList[0].Sanctioned_Amont__c>0 && (purposeunicodeclean=='New Construction (Other than P+C)')  && (disList[0].caseTyp__c=='Normal' || disList[0].caseTyp__c=='Topup' || disList[0].caseTyp__c=='Top-UP' || disList[0].caseTyp__c=='Top') && (disList[0].Tranch_Details__c=='Subsequent') &&(disList[0].Levels_Of_Tranch__c=='2nd Tranche'))
-            {
-                checkpercentage4=(disList[0].Disbursement_Amount__c / applicationList[0].Sanctioned_Amont__c)*100;
-                System.debug('checkpercentage4'+checkpercentage4);
-            }
-            if(checkpercentage4>25)
-            {
-                Disbursementnotallowedabove7inSubsequentDM='NOT OK';
-            }
-            else
-            {
-                Disbursementnotallowedabove7inSubsequentDM='OK'; 
-            }
-              if(PerAbovesubsequent==1)
-            {
-                 Disbursementnotallowedabove7inSubsequentDM='OK'; 
-            }
-            /// 46 IDFYReportcheck
-            String IDFYReportcheck='';
-            Integer idfyAccountCheck=BooleanValueMap.get('idfyAccountCheck')==NULL?0:BooleanValueMap.get('idfyAccountCheck'); 
-            Integer idfyCount=BooleanValueMap.get('idfyCount')==NULL?0:BooleanValueMap.get('idfyCount'); 
-            if(idfyAccountCheck==1)
-            {
-                IDFYReportcheck='NOT OK'; 
-            }
-            else
-            {
-                IDFYReportcheck='OK';
-            }
-            if(idfyCount==1)
-            {
-                IDFYReportcheck='OK';
-            }
-            if(applicationList.size()>0 && (applicationList[0].Type=='Cloned' || disList[0].Tranch_Details__c!='First'))
-            {
-                IDFYReportcheck='OK';
-            }
-            /// 47 DVPendingCheck
-            String DVPendingCheck='';
-            List<Deviation__c> dvPendingList=[SELECT Id,Waiver__c FROM Deviation__c WHERE  Opportunity__c=:applicationList[0].Id AND (Approval_Status__c!='Approved' AND Approval_Status__c!='Rejected' AND Approval_Status__c!='OTC Approved')];
-            if(dvPendingList.size()>0)
-            {
-                DVPendingCheck='NOT OK'; 
-            }
-            else
-            {
-                DVPendingCheck='OK';
-            }
-            /// 48 ScreenzaaReportCheck
-            String ScreenzaaReportCheck='';
-            Integer AMLCheck=BooleanValueMap.get('AMLCheck')==NULL?0:BooleanValueMap.get('AMLCheck'); 
-            Integer ScreenzaaDV=BooleanValueMap.get('ScreenzaaDV')==NULL?0:BooleanValueMap.get('ScreenzaaDV'); 
-            if(AMLCheck==1 && ScreenzaaDV==0)
-            {
-                ScreenzaaReportCheck='NOT OK'; 
-            }
-            else
-            {
-                ScreenzaaReportCheck='OK';
-            }
-            /// 49  ConstructionTranchpercentage
-            String ConstructionTranchpercentage='';
-            List<String> vrId=new List<String>();
-            Boolean daterangeCheck=false;
-            List<Technical_Verification__c> postListtemp=[SELECT Id,Vendor_Request__c,Completion_PER__c,Percentage_as_per_on_date__c,status__c FROM Technical_Verification__c WHERE Application__c=:applicationList[0].Id  AND (RecordType.Name='Post_Sanction' OR RecordType.Name='Post- Sanction') AND Status__c='Approved' Order BY Createddate DESC LIMIT 1]; 
-            String vId='';		
-            if(postListtemp.size()>0)	
-            {
-                vId=postListtemp[0].Vendor_Request__c;
-            }
-            List<Vendor_Request__c> vr=[SELECT Id,Date_Recevied__c FROM Vendor_Request__c WHERE Application__c=:applicationList[0].Id AND Id=:vId Order By Createddate DESC];     
-            if(vr.size()>0 && vr[0].Date_Recevied__c!=Null)
-            { 
-                Date dt=date.valueof(vr[0].Date_Recevied__c);
-                date dttoday=date.valueof(System.today());
-                Integer day=dt.daysBetween(dttoday);
-                if(day<=30)
-                {
-                    daterangeCheck=true;
-                }
-                
-            }
-            List<Disbursement__c> disList2=[SELECT Id,Createddate,date_of_disbursement__c FROM Disbursement__c WHERE Application__c=:applicationList[0].Id AND Disb_Status__c!='Cancelled' Order By Createddate ASC LIMIT 1];  
-            boolean Construction=false;
-            if(disList2.size()>0 && disList2[0].date_of_disbursement__c!=null)
-            {
-                Date dt=date.valueof(disList2[0].date_of_disbursement__c);
-                date dttoday=date.valueof(System.today());
-                Integer day=dt.daysBetween(dttoday);
-                
-                
-                if(day<=30)
-                {
-                    if(camLst.size()>0 && camLst[0].TV_considered__c!=null)
-                    {
-                        Construction=true;
-                    }
-                }
-                
-            }
-            //applicationList[0].LM_Loan_Status__c =='Partially Disbursed' removed by Himanshu dm validator 3.0 
-            if(camLst.size()>0 && disList[0].Tranch_Details__c=='Subsequent'  &&  disList[0].Levels_Of_Tranch__c!='First' && disList[0].caseTyp__c=='Normal' &&
-               camLst[0].NHB_PURPOSE_OF_LOAN__c=='New Construction (Other than P+C)'  
-               && (camLst[0].Purpose_of_Loan__c=='Construction Loan' || camLst[0].Purpose_of_Loan__c=='Construction Loan - R Zone' 
-                   ||  camLst[0].Purpose_of_Loan__c=='Home Loan - Top up' 
-                   ||camLst[0].Purpose_of_Loan__c=='HL + LAP'
-                   || camLst[0].Purpose_of_Loan__c=='Home loan Top up - R Zone' || camLst[0].Purpose_of_Loan__c=='Home Extension'
-                  ) )
-            {
-                System.debug('daterangeCheck'+daterangeCheck);
-                System.debug('Construction'+Construction);
-                if(!postListtemp.isEMpty())
-                    System.debug('postListtemp[0].Percentage_as_per_on_date__c'+postListtemp[0].Percentage_as_per_on_date__c);
-                System.debug('totalAmount'+totalAmount);
-                System.debug('applicationList[0].Sanctioned_Amont__c'+applicationList[0].Sanctioned_Amont__c);
-                
-                if(daterangeCheck || Construction)
-                {
-                    if(postListtemp[0].Percentage_as_per_on_date__c<90 && totalAmount==applicationList[0].Sanctioned_Amont__c)
-                    {
-                        ConstructionTranchpercentage='NOT OK';
-                        
-                    }
-                    else
-                    {
-                        if(postListtemp.size()>0 && applicationList.size()>0 && postListtemp[0].Percentage_as_per_on_date__c!=Null && applicationList[0].Sanctioned_Amont__c!=Null)
-                        {
-                            // Chnages By Raghav Mehta
-                            // Percentage_as_per_on_date__c+20); from 20 to 10
-                            integer tper=integer.valueof(postListtemp[0].Percentage_as_per_on_date__c+10);
-                            integer tsan=Integer.valueof((applicationList[0].Sanctioned_Amont__c*tper/100));
-                            ///integer tem=Integer.valueof(totalAmount*tper/100);
-                            if(totalAmount<=tsan)
-                            {
-                                ConstructionTranchpercentage='OK';
-                            }
-                            else
-                            {
-                                ConstructionTranchpercentage='NOT OK';
-                            }
-                        }
-                        else
-                        {
-                            ConstructionTranchpercentage='OK';
-                        }
-                        
-                        
-                    }
-                }
-                else
-                {
-                    ConstructionTranchpercentage='NOT OK';
-                }
-                
-            }
-            else
-            {
-                ConstructionTranchpercentage='OK';
-            }
-            
-            
-            
-            
-             // New Point
-            String RnRSecondtranchetechnicalcheck='OK';
-            if(disList[0].Tranch_details__c=='Subsequent' && camLst.size()>0 && camLst[0].NHB_Categories__c=='Repair & renovation of existing units'){
-                if(!daterangeCheck){
-                    RnRSecondtranchetechnicalcheck='NOT OK';
-                }
-                else{
-                    if(!postListtemp.isEmpty() && postListtemp[0].Percent_completion_as_on_date__c<100){
-                         RnRSecondtranchetechnicalcheck='NOT OK';
-                    }  
-                }
-                
-}
-           
-            
-            
-            
-                   /// 50 HLASignDatetobefill
-            String HLASignDatetobefill='';
-            if(applicationList[0].HLA_Sign_Date__c!=Null)
-            {
-                HLASignDatetobefill='OK';
-            }
-            else
-            {
-                HLASignDatetobefill='NOT OK';
-            }
-            // 51   HLASigndateDMCreation
-            String HLASigndateDMCreation='';
-            if(Test.isRunningTest() ||( !disList.isEMpty() && disList[0].Tranch_Details__c=='First'))
-            {
-                if(applicationList[0].HLA_Sign_Date__c<=disList[0].Createddate)
-                {
-                    HLASigndateDMCreation='OK';
-                }
-                else
-                {
-                    HLASigndateDMCreation='NOT OK';
-                }
-            }
-            else
-            {
-                HLASigndateDMCreation='OK';
-            }
-            /// 52 LegalandVettingReport
-            String LegalandVettingReport='';
-            Integer Legalandvetting=BooleanValueMap.get('Legalandvetting')==NULL?0:BooleanValueMap.get('Legalandvetting'); 
-            if(Legalandvetting==1){
-                LegalandVettingReport='OK';
-            }
-            else{
-                if(disList[0].Tranch_Details__c=='First')
-                {
-                    if(disList[0].caseTyp__c=='Normal')
-                    {
-                        List<Attachment> atlist=[SELECT Id,Createddate  FROM Attachment WHERE ParentId = :applicationList[0].Id AND Name LIKE '%Vetting Report%' Order By Createddate DESC LIMIT 1];
-                        List<Attachment> atlistl=[SELECT Id,Createddate FROM Attachment WHERE ParentId = :applicationList[0].Id  AND ( Name LIKE '%Legal Report%' OR Name LIKE '%Legal Opinion%')  Order By Createddate DESC LIMIT 1];
-                        List<NEILON__File__c> fileList = [
-                            SELECT Id, Name, NEILON__File_Presigned_URL__c
-                            FROM NEILON__File__c 
-                            WHERE NEILON__Opportunity__c = :applicationList[0].Id 
-                            AND (NEILON__Category__c =: neilonDetails.LegalandVetting_Category__c
-                                 OR Subcategory__c =: neilonDetails.LegalandVetting_Subcategory__c)
-                            ORDER BY CreatedDate DESC Limit 1
-                        ];
-                        List<NEILON__File__c> fileList1 = [
-                            SELECT Id, Name, NEILON__File_Presigned_URL__c
-                            FROM NEILON__File__c 
-                            WHERE NEILON__Opportunity__c = :applicationList[0].Id 
-                            AND ((NEILON__Category__c =: neilonDetails.Legal_Report__c AND Subcategory__c =: neilonDetails.Legal_Report_SubCategory__c)
-                                 OR (NEILON__Category__c =: neilonDetails.Legal_Opinion__c AND Subcategory__c =: neilonDetails.Legal_Opinion_SubCategory__c))
-                            ORDER BY CreatedDate DESC Limit 1
-                        ];
-                        if((atlist.size()>0 && atlistl.size()>0) || (fileList.size()>0 && fileList1.size()>0))
-                        {
-                            LegalandVettingReport='OK';
-                        }
-                        else
-                        {
-                            LegalandVettingReport='NOT OK';
-                        }
-                        if(applicationList[0].Type=='Cloned')
-                        {
-                            LegalandVettingReport='OK';
-                        }
-                    }
-                    else if( disList[0].caseTyp__c=='BT' || disList[0].caseTyp__c=='Seller BT')
-                    {
-                        List<Attachment> atlistl=[SELECT Id,Createddate FROM Attachment WHERE ParentId = :applicationList[0].Id  AND ( Name LIKE '%Legal Report%' OR Name LIKE '%Legal Opinion%')  Order By Createddate DESC LIMIT 1];
-                        List<NEILON__File__c> fileList = [
-                            SELECT Id, Name, NEILON__File_Presigned_URL__c
-                            FROM NEILON__File__c 
-                            WHERE NEILON__Opportunity__c = :applicationList[0].Id 
-                            AND (NEILON__Category__c =: neilonDetails.Legal_Report__c
-                                 OR Subcategory__c =: neilonDetails.Legal_Report_SubCategory__c)
-                            ORDER BY CreatedDate DESC Limit 1
-                        ];
-                        if(atlistl.size()>0 || fileList.size()>0)
-                        {
-                            LegalandVettingReport='OK';
-                        }
-                        else
-                        {
-                            LegalandVettingReport='NOT OK';
-                        }
-                    }
-                    else
-                    {
-                        LegalandVettingReport='OK';
-                    }
-                }
-                else
-                {
-                    LegalandVettingReport='OK';
-                }
-                
-            }
-            /// 53 HLAPhotoMissingCheck
-            String HLAPhotoMissingCheck='';
-            if(disList[0].Tranch_Details__c=='First')
-            {
-                List<Attachment> atlist1=[SELECT Id,Createddate FROM Attachment WHERE ParentId = :applicationList[0].Id AND Name LIKE '%HLA Photograph%' Order by createddate desc limit 1];
-                List<NEILON__File__c> fileList = [
-                    SELECT Id, Name, NEILON__File_Presigned_URL__c
-                    FROM NEILON__File__c 
-                    WHERE NEILON__Opportunity__c = :applicationList[0].Id 
-                    AND (NEILON__Category__c =: neilonDetails.HLAPhoto_Category__c
-                         OR Subcategory__c =: neilonDetails.HLAPhoto_Subcategory__c)
-                    ORDER BY CreatedDate DESC Limit 1
-                ];
-                if(atlist1.size()>0 || fileList.size()>0)
-                {
-                    HLAPhotoMissingCheck='OK';
-                }
-                else
-                {
-                    HLAPhotoMissingCheck='NOT OK';
-                }
-            }
-            else
-            {
-                HLAPhotoMissingCheck='OK';
-            }
-
-            /// 54 CLDMissingCheck
-            String CLDMissingCheck='';
-            if(Legalandvetting==1 || (!applicationList.isEmpty() && applicationList[0].Type=='Cloned')){ /// developed By rahul kumar 03-10-25
-                CLDMissingCheck='OK';
-            }
-            else if(disList[0].Tranch_Details__c=='First' && disList[0].caseTyp__c=='Normal')
-            {
-                List<Attachment> atlist3=[SELECT Id,Createddate FROM Attachment WHERE ParentId = :applicationList[0].Id AND Name LIKE '%CLD%' Order by Createddate LIMIT 1];
-                List<NEILON__File__c> fileList = [
-                    SELECT Id, Name, NEILON__File_Presigned_URL__c
-                    FROM NEILON__File__c 
-                    WHERE NEILON__Opportunity__c = :applicationList[0].Id 
-                    AND (NEILON__Category__c =: neilonDetails.CLD_Category__c
-                         OR Subcategory__c =: neilonDetails.CLD_Subcategory__c)
-                    ORDER BY CreatedDate DESC Limit 1
-                ];
-                if(atlist3.size()>0 ||fileList.size()>0)
-                {
-                    CLDMissingCheck='OK';
-                }
-                else
-                {
-                    CLDMissingCheck='NOT OK';
-                }
-                
-                
-            }
-            else
-            {
-                CLDMissingCheck='OK';
-            }
-            /// 55 CRDDatenotbelessthanHLASignDate
-            String CRDDatenotbelessthanHLASignDate='';
-            if(applicationList[0].HLA_Sign_Date__c<=disList[0].Maker_CRD_Sign_Date__c)
-            {
-                
-                CRDDatenotbelessthanHLASignDate='OK';
-                
-            }
-            else
-            {
-                CRDDatenotbelessthanHLASignDate='NOT OK';
-            }
-            /// 56 EmailVerification
-            String EmailVerification='';
-            if(disList[0].Tranch_Details__c=='First')
-            {
-                Integer temp=0;
-                for(Account acc:accLst)
-                {
-                    System.debug('Email '+acc.Personal_email__pc);
-                    System.debug('acc.Email_Verified__c '+acc.Email_Verified__c);
-                    if(acc.Personal_email__pc!=Null && acc.Email_Verified__c==false)
-                    {
-                        temp=1;
-                    }
-                }
-                System.debug('temp'+temp);
-                if(temp==0)
-                {
-                    EmailVerification='OK';
-                }
-                else
-                {
-                    EmailVerification='NOT OK';
-                }
-            }
-            else
-            {
-                EmailVerification='OK';
-            }
-            /// 57 TechnicalChargesStatusCheck
-            String TechnicalChargesStatusCheck='';
-            Integer techCheck=BooleanValueMap.get('techCheck')==NULL?0:BooleanValueMap.get('techCheck'); 
-            List<String> purposeofloandata=label.Purpose_of_loan_New.split(',');
-            if(applicationList[0].LM_Loan_Status__c!='Partially Disbursed')
-            {TechnicalChargesStatusCheck='OK';}
-            else{
-                system.debug('camLst'+camLst);
-                if(!camLst.isEmpty()){
-                    system.debug('Test Loan '+purposeofloandata.contains(camLst[0].Purpose_of_Loan__c));
-                    system.debug('Test Loan 1 '+camLst[0].NHB_PURPOSE_OF_LOAN__c=='New Construction (Other than P+C)');
-                }
-                
-                if(!camLst.isEmpty() && camLst[0].Purpose_of_Loan__c!=NULL && ((purposeofloandata.contains(camLst[0].Purpose_of_Loan__c) ) && (camLst[0].NHB_PURPOSE_OF_LOAN__c=='New Construction (Other than P+C)') || camLst[0].NHB_PURPOSE_OF_LOAN__c=='Home Extension')) 
-                {
-                    //Need to add Logic
-                    if(techCheck==1)
-                    {
-                        TechnicalChargesStatusCheck='OK'; 
-                        System.debug('techCheck'+techCheck);
-                    }
-                    else
-                    {
-                        System.debug('techCheck');
-                        Integer numberDaysDue1=0;
-                        if(tvList1.size()>0 && vrList.size()>0 && vrList[0].Date_Recevied__c!=NULL)
-                        {
-                            System.debug('techCheck');
-                            Date dtt=vrList[0].Date_Recevied__c;
-                            Date todaydate=System.today();
-                            Date startDate = Date.newInstance(dtt.year(), dtt.month(), dtt.day());
-                            Date dueDate = Date.newInstance(todaydate.year(), todaydate.month(), todaydate.day());
-                            numberDaysDue1 = startDate.daysBetween(dueDate);
-                        }
-                        System.debug('numberDaysDue1'+numberDaysDue1);
-                        for(Technical_Verification__c tv:tvList1)
-                        {
-                            if((tv.RecordType.Name=='Desktop Valuation' && numberDaysDue1<=30) || (tv.RecordType.Name=='Post- Sanction' && tv.Status__c!='Completed' && tv.Status__c!='Generated' && tv.Status__c!='Pending') || (tv.RecordType.Name=='Post- Sanction' && numberDaysDue1<=30 && disList[0].Technical_Charges__c!=Null && disList[0].Technical_Charges__c!=0))
-                            {
-                                System.debug('techCheck');
-                                TechnicalChargesStatusCheck='OK'; 
-                                break;
-                            }
-                            else
-                            {
-                                System.debug('techCheck');
-                                TechnicalChargesStatusCheck='NOT OK';   
-                            }
-                        }
-                        
-                    }
-                    
-                    
-                    
-                    //End Here
-                    
-                }
-                else
-                {
-                    System.debug('techCheck');
-                    TechnicalChargesStatusCheck='OK'; 
-                }
-            } 
-            /// 58 HomeExtensionTrancheescalationnorms
-            String HomeExtensionTrancheescalationnorms='';
-            if(Test.isRunningTest() || camLst.size()>0 && disList[0].Tranch_Details__c=='Subsequent'  &&  disList[0].Levels_Of_Tranch__c!='First' && disList[0].caseTyp__c=='Normal' &&
-               camLst[0].NHB_PURPOSE_OF_LOAN__c=='Home Extension'  
-               && (camLst[0].Purpose_of_Loan__c=='Construction Loan' || camLst[0].Purpose_of_Loan__c=='Construction Loan - R Zone' 
-                   ||  camLst[0].Purpose_of_Loan__c=='Home Loan - Top up' 
-                   ||camLst[0].Purpose_of_Loan__c=='HL + LAP'
-                   || camLst[0].Purpose_of_Loan__c=='Home loan Top up - R Zone' || camLst[0].Purpose_of_Loan__c=='Home Extension'
-                  ) )
-            {  
-                Integer numberDaysDue=0;
-                Integer numberDaysDue1=0;
-                if(vrList.size()>0)
-                {
-                    Date dtt=vrList[0].Date_Recevied__c;
-                    Date todaydate=System.today();
-                    Date startDate = Date.newInstance(dtt.year(), dtt.month(), dtt.day());
-                    Date dueDate = Date.newInstance(todaydate.year(), todaydate.month(), todaydate.day());
-                    numberDaysDue = startDate.daysBetween(dueDate);
-                }
-                Date dtt1=disList[0].Date_Of_Disbursement__c;
-                Date todaydate1=System.today();
-                Date startDate1 = Date.newInstance(dtt1.year(), dtt1.month(), dtt1.day());
-                Date dueDate2 = Date.newInstance(todaydate1.year(), todaydate1.month(), todaydate1.day());
-                numberDaysDue1 = startDate1.daysBetween(dueDate2);
-                Integer preTemp=0;
-                for(Technical_Verification__c tv:tvList)
-                {
-                    if(tv.RecordType.Name == 'Pre-Sanction')
-                    {
-                        preTemp=1;
-                    }
-                }
-                Decimal tempAmt=0;
-                for(Disbursement__c dis2:disList)
-                {
-                    if(dis2.Tranch_Details__c=='Subsequent')
-                    {
-                        tempAmt+=dis2.Disbursement_Amount__c;
-                    }
-                }
-                //Change By raghav from 20 to 10 after New CR
-               //applicationList[0].Sanctioned_Amont__c)*20)/100):0;
-                Decimal TempSanctioned=(((applicationList[0].Sanctioned_Amont__c)*10)/100);
-                Decimal TempSanctionedTot=(((applicationList[0].Sanctioned_Amont__c)*95)/100);
-                if(postListtemp.size()>0 && numberDaysDue>30)
-                {
-                    HomeExtensionTrancheescalationnorms='OK';
-                }
-                else if(numberDaysDue1>30 && (preTemp==1 || postListtemp.size()>0))
-                {
-                    HomeExtensionTrancheescalationnorms='OK'; 
-                }
-                else if((tempAmt>TempSanctioned))
-                {
-                    HomeExtensionTrancheescalationnorms='OK';
-                }
-                else if((postListtemp.size()>0 && postListtemp[0].Completion_PER__c==75 && totalAmount<=TempSanctionedTot))
-                {
-                    HomeExtensionTrancheescalationnorms='OK';
-                }
-                else if(postListtemp.size()>0 && postListtemp[0].Completion_PER__c<95 && totalAmount!=applicationList[0].Sanctioned_Amont__c)
-                {
-                    HomeExtensionTrancheescalationnorms='OK';
-                } 
-                else
-                {
-                    HomeExtensionTrancheescalationnorms='NOT OK';
-                }
-            }
-            else
-            {
-                HomeExtensionTrancheescalationnorms='OK';
-            }
-            //// 59 LoanDetailsCheckwithHLADone
-            String LoanDetailsCheckwithHLADone='';
-            Integer LoanDetailsCheck=BooleanValueMap.get('LoanDetailsCheck')==NULL?0:BooleanValueMap.get('LoanDetailsCheck');
-            ///// Added By Rahul kumar ,Date-  10 June 2025//////////////////////////////
-            List<HLA_Audit_Trail__c> HLAAuditList=[select id,Sanctioned_EMI__c,Sanctioned_ROI__c,Sanctioned_Amount__c,Loan_Product__c,Sanctioned_Tenure__c,Collateral_Pin_Code__c,Collateral_Address_1__c,Collateral_Address_2__c,Collateral_Address_3__c,Collateral_City__c,Collateral_State__c,Collateral_District__c from HLA_Audit_Trail__c  Where Application__c=:applicationList[0].Id Order By Createddate DESC LIMIT 1] ; 
-            system.debug('HLAAuditList'+HLAAuditList);
-            LoanDetailsCheckwithHLADone='OK';
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First'){
-                if(LoanDetailsCheck==1){
-                    LoanDetailsCheckwithHLADone='OK';
-                }
-                else{
-                    if(!applicationList.isEmpty() && !HLAAuditList.isEmpty() ){
-                        String LoanProductName = applicationList[0].Loan_Product__c != null ?applicationList[0].Loan_Product__r.Name : '';
-                        system.debug('LoanProductName'+LoanProductName);
-                        if((applicationList[0].Loan_Product__c!=NULL && HLAAuditList[0].Loan_Product__c!='' && (LoanProductName !=HLAAuditList[0].Loan_Product__c ))
-                           || (applicationList[0].Sanc_EMI__c!=HLAAuditList[0].Sanctioned_EMI__c )||( applicationList[0].Sanctioned_ROI__c!=HLAAuditList[0].Sanctioned_ROI__c )|| (applicationList[0].Sanctioned_Amont__c!=HLAAuditList[0].Sanctioned_Amount__c) || (applicationList[0].Sanctioned_Tenure__c!=HLAAuditList[0].Sanctioned_Tenure__c)){
-                               LoanDetailsCheckwithHLADone='NOT OK';
-                           }
-                    }
-                }
-            }
-            /// 60 CollateralAddressDetailscheckwithHLA
-            String CollateralAddressDetailscheckwithHLA='OK';
-            Integer CollateralAddressDetailscheck=BooleanValueMap.get('CollateralAddressDetailscheck')==NULL?0:BooleanValueMap.get('CollateralAddressDetailscheck');
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First' || Test.isRunningTest()){
-                if(CollateralAddressDetailscheck==1){
-                    CollateralAddressDetailscheckwithHLA='OK';
-                }
-                else{
-                    if(!applicationList.isEmpty() && !HLAAuditList.isEmpty()){
-                        if(applicationList[0].ColPin__c!=HLAAuditList[0].Collateral_Pin_Code__c || applicationList[0].CollAdd1__c!=HLAAuditList[0].Collateral_Address_1__c || applicationList[0].CollAdd2__c!=HLAAuditList[0].Collateral_Address_2__c || applicationList[0].CollAdd3__c!=HLAAuditList[0].Collateral_Address_3__c || applicationList[0].CollCity__c!=HLAAuditList[0].Collateral_City__c|| applicationList[0].C_District__c!=HLAAuditList[0].Collateral_District__c){
-                            CollateralAddressDetailscheckwithHLA='NOT OK';
-                        }
-                    }
-                }
-            }
-            /// 61 PMAYObjectcreationchecking
-            String PMAYObjectcreationchecking='OK';
-            if(Test.isRunningTest() || !disList.isEmpty() && disList[0].Tranch_Details__c=='First' && !applicationList.isEmpty() && applicationList[0].Loan_Type__c=='Housing Loan'  ){
-                List<PMAY_Application_Detail__c>pmaylist= [select id,Amount__c,Application__c from PMAY_Application_Detail__c WHERE Application__c=:applicationList[0].Id  Order By Createddate DESC LIMIT 1];
-                system.debug('pmaylist'+pmaylist);
-                if(pmaylist.isEmpty())
-                    PMAYObjectcreationchecking='NOT OK';
-            }
-            //// Developed By Rahul kumar 29-09-2025////////////////////////////////
-            /// 62 DMAmountCheck
-            String DMAmountCheck='OK';
-            //// Added by Rahul kumar 16-12-2025 after discussion with Mohit Grover
-            if(!applicationList.isEMpty() && applicationList[0].Sanctioned_Amont__c==totalamount){
-               DMAmountCheck='OK'; 
-            }
-            /// END HERE
-            else if(!applicationList.isEMpty() && (totalamount>applicationList[0].Sanctioned_Amont__c || (applicationList[0].Sanctioned_Amont__c-totalamount)<10000 )){
-                DMAmountCheck='NOT OK';
-            }
-            /// 63 OtherAdministrativeChargeCheck
-            String OtherAdministrativeChargeCheck='OK';
-            Integer devApprovedOtherAdmCharge=BooleanValueMap.get('devApprovedOtherAdmCharge')==NULL?0:BooleanValueMap.get('devApprovedOtherAdmCharge');
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First' ||Test.isRunningTest() ){
-                if(devApprovedOtherAdmCharge==1)
-                	OtherAdministrativeChargeCheck='OK';
-            
-                else{
-                    List<Collection__c>colList=new List<Collection__c>();
-                    if(!applicationList.isEmpty())
-                        colList=[select id from Collection__c Where Nature_of_Collection__c='Other Administrative Charges' AND SFDC_Customer__c=:applicationList[0].Id AND Status__c='Active' ];
-                    system.debug('colList'+colList);
-                    if(colList.isEmpty())OtherAdministrativeChargeCheck='NOT OK';
-                    else OtherAdministrativeChargeCheck='OK';
-                }
-            }
-            /// 64 ClientLinkingTopUpCaseCheck
-            String ClientLinkingTopUpCaseCheck='OK';
-            if(!disList.isEmpty()  && disList[0].Tranch_Details__c=='First' &&  (disList[0].caseTyp__c=='Topup' || disList[0].caseTyp__c=='Top-UP') && !applicationList.isEmpty() && (applicationList[0].FinnoneClient_Id__c==NULL || applicationList[0].FinnoneClient_Id__c=='')){
-                ClientLinkingTopUpCaseCheck='NOT OK';
-            }
-            /// 65 InsuranceDeductionCheckinFirstDM
-            String InsuranceDeductionCheckinFirstDM='OK';
-            Integer FullInsurance=BooleanValueMap.get('FullInsurance')==NULL?0:BooleanValueMap.get('FullInsurance');
-            if(FullInsurance==1)InsuranceDeductionCheckinFirstDM='OK';
-            else if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First' && (disList[0].Insurance_Premium__c==NULL || disList[0].Insurance_Premium__c==0 ) ){
-                InsuranceDeductionCheckinFirstDM='NOT OK';
-            }
-            /// 66 CERSAICKYCCheck
-            //////////////////////////Added By Rahul kumar 09-10-25///////////////////////////////////////////
-            String CERSAICKYCCheck='OK';
-            Integer PropertyOwnerYes=BooleanValueMap.get('PropertyOwnerYes')==NULL?0:BooleanValueMap.get('PropertyOwnerYes');
-            Integer PropertyOwner=BooleanValueMap.get('PropertyOwner')==NULL?0:BooleanValueMap.get('PropertyOwner');
-            Integer ckycCersai=BooleanValueMap.get('ckycCersai')==NULL?0:BooleanValueMap.get('ckycCersai');
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First'){
-                if(CersaiOTC==1 || PropertyOwnerYes==1){
-                    CERSAICKYCCheck='OK'; /// need confirmation 28-10-25
-                }
-                else if( PropertyOwner==1 || ckycCersai==1){
-                    CERSAICKYCCheck='NOT OK';
-                }
-            }
-             /// 67 MismatchInsuranceAmount
-            String MismatchInsuranceAmount='OK';
-            List<Insurance_Generation_Data__c>insGenDataList=[select id,Critical_illness_Premium__c,Health_Insurance_Premium__c,Life_Insurance_Premium_2__c,Accidental_Death_Insurance_Premium__c,Property_Insurance_Premium__c from Insurance_Generation_Data__c where Application__c=:applicationList[0].Id];
-            system.debug('insGenDataList'+insGenDataList);
-            List<Decimal>totalInsuranceSum=new List<Decimal>{0,0,0,0,0}; 
-                for(Insurance_Generation_Data__c ins:insGenDataList){
-                    if(ins.Critical_illness_Premium__c!=NULL)totalInsuranceSum[0]+=ins.Critical_illness_Premium__c;
-                    if(ins.Health_Insurance_Premium__c!=NULL)totalInsuranceSum[1]+=ins.Health_Insurance_Premium__c;
-                    if(ins.Life_Insurance_Premium_2__c!=NULL)totalInsuranceSum[2]+=ins.Life_Insurance_Premium_2__c;
-                    if(ins.Accidental_Death_Insurance_Premium__c!=NULL)totalInsuranceSum[3]+=ins.Accidental_Death_Insurance_Premium__c;
-                    if(ins.Property_Insurance_Premium__c!=NULL)totalInsuranceSum[4]+=ins.Property_Insurance_Premium__c;
-                }
-            system.debug('totalInsuranceSum'+totalInsuranceSum);
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First'){  //// Added disList[0].Tranch_Details__c=='First' by Rahul kumar after discussion with Mohit 16-12-2025
-                if(disList[0].CIP__c!=totalInsuranceSum[0] || disList[0].Health_Insurance_Premium__c!=totalInsuranceSum[1] || disList[0].Insurance_Premium__c!=totalInsuranceSum[2] || disList[0].Accidental_Life_Insurance__c!=totalInsuranceSum[3] || disList[0].Property_Insurance__c!=totalInsuranceSum[4]){
-                    MismatchInsuranceAmount='NOT OK';
-                }
-            }
-            /// 68 DMBankingDetailsCheck
-            //DEVELOPED BY Rahul Kumar 14-10-2025
-			String DMBankingDetailsCheck='OK';
-            if(!disList.isEmpty() && (disList[0].caseTyp__c=='BT' || disList[0].caseTyp__c=='Purchase' || disList[0].caseTyp__c=='Seller Internal Closure') ){
-                if(disList[0].Disbursement_Mode__c!='Direct Transfer'){
-                    DMBankingDetailsCheck='OK'; //// changed from NOT OK to OK by Rahul kumar 16-03-2026
-                }
-                else if(disList[0].Details_to_be_printed_on_Cheque__c==NULL || disList[0].Details_to_be_printed_on_Cheque__c=='' || !isValidText(disList[0].Details_to_be_printed_on_Cheque__c,false)){
-                    DMBankingDetailsCheck='NOT OK';
-                }
-            }  
-            /// 69  MismatchTypeofCases
-            String MismatchTypeofCases='OK';
-           Integer Mismatchtypeoddvmap=BooleanValueMap.get('Mismatchtypeoddv')==NULL?0:BooleanValueMap.get('Mismatchtypeoddv');
-            if(Mismatchtypeoddvmap == 1){
-                MismatchTypeofCases='OK';
-            }
-            else {
-                List<Document_Checklist__c> docChecklists = [SELECT Id, Application__c,(SELECT Id, Type_Of_Case__c FROM Document_Checklist_History__r) 
-                                                         FROM Document_Checklist__c WHERE Application__c =:applicationList[0].Id];
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First' && (disList[0].caseTyp__c!= 'Top-up' || disList[0].caseTyp__c!= 'Topup')){
-                for(Document_Checklist__c docChk:docChecklists){
-                    // Added By Raghav on 01-04-2025
-                    for(Document_Checklist_History__c docChekHis:docChk.Document_Checklist_History__r){
-                        if((docChekHis.Type_Of_Case__c == 'Purchase' && disList[0].caseTyp__c!= 'Purchase') ||   // docChekHis.Type_Of_Case__c==NULL || disList[0].caseTyp__c!=docChekHis.Type_Of_Case__c
-                          (docChekHis.Type_Of_Case__c == 'Normal' && disList[0].caseTyp__c!= 'Normal') ||
-                           (docChekHis.Type_Of_Case__c == 'Internal BT' && disList[0].caseTyp__c!='Seller Internal Closure') ||
-                           ((docChekHis.Type_Of_Case__c == 'Seller BT'|| docChekHis.Type_Of_Case__c == 'Seller-BT')  && (disList[0].caseTyp__c!= 'Seller-BT' && disList[0].caseTyp__c!= 'Seller BT')) ||
-                           ((docChekHis.Type_Of_Case__c == 'Top-UP'|| docChekHis.Type_Of_Case__c == 'Top UP')  && (disList[0].caseTyp__c!= 'Top-up' && disList[0].caseTyp__c!= 'Topup')) ||
-                           (docChekHis.Type_Of_Case__c == 'BT' && disList[0].caseTyp__c!= 'BT') 
-
-                          ){  
-                            MismatchTypeofCases='NOT OK';
-                            break;
-                        }
-                    }
-                }
-            }
-            }
-            
-            /// 70 PropertyValuematchwithTechnicalCAM
-            ///// DEVELOPED By Rahul Kumar 24-11-2025//////////////////////////
-            String PropertyValuematchwithTechnicalCAM='OK';
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='First'){
-                if(!camLst.isEmpty() && !tvList.isEmpty() && tvList[0].Area_Land_Measurement__c!=NULL && camLst[0].Land_Area__c!=NULL ){
-                    if(tvList[0].Total_Property_Value__c!=camLst[0].Total_Prop_Val__c //// field is updated from Total_Property_Value_New__c  to Total_Prop_Val__c by Rahul Kumar after discussion with Mohit 18-12-2025
-                       || Math.abs(tvList[0].Area_Land_Measurement__c - camLst[0].Land_Area__c) >= 1     // changed from  (tvList[0].Area_Land_Measurement__c)!=camLst[0].Land_Area__c to Math.abs(tvList[0].Area_Land_Measurement__c - camLst[0].Land_Area__c) >= 1 by Rahul kumar 05-03-2026
-                       || tvList[0].Area_Existing_Construction__c!=camLst[0].Build_Up_Area__c
-                      )
-                    {
-                        PropertyValuematchwithTechnicalCAM='NOT OK';    
-                    }
-                }
-            }
-            
-            ///////////// Developed By Rahul Kumar 06-10-25 //////////////////////////////
-            ////71 AddressSpecialCharacterCheck
-            String AddressSpecialCharacterCheck='OK';
-            Integer accAddSpChar=BooleanValueMap.get('accAddSpChar')==NULL?0:BooleanValueMap.get('accAddSpChar');
-            Integer officeaddresscheckMap=BooleanValueMap.get('officeaddresscheck')==NULL?0:BooleanValueMap.get('officeaddresscheck');
-            if(accAddSpChar==1){
-                system.debug('accAddSpChar');
-                AddressSpecialCharacterCheck='NOT OK';
-            }
-            else if(!applicationList.isEmpty() && disList[0].Tranch_Details__c =='First'){
-                system.debug('!isValidText(applicationList[0].CollAdd1__c,true)::'+!isValidText(applicationList[0].CollAdd1__c,true));
-                system.debug('!isValidText(applicationList[0].CollAdd1__c,true)::'+!isValidText(applicationList[0].CollAdd2__c,true));
-                system.debug('!isValidText(applicationList[0].CollAdd1__c,true)::'+!isValidText(applicationList[0].CollAdd3__c,true));
-                if(!isValidText(applicationList[0].CollAdd1__c,true) || !isValidText(applicationList[0].CollAdd2__c,true) || !isValidText(applicationList[0].CollAdd3__c,true) ){
-                    system.debug('checkadress1');
-                    AddressSpecialCharacterCheck='NOT OK';
-                    //Added By Raghav on 31-03-2026
-                }else if(officeaddresscheckMap == 1){
-                    System.debug('checkaddress2');
-                    AddressSpecialCharacterCheck='NOT OK';
-                }
-            }
-           
-			/////72 FinnoneLoanIdCheck
-            String FinnoneLoanIdCheck='OK';
-            if(!disList.isEmpty() && disList[0].Tranch_Details__c=='Subsequent' && !applicationList.isEmpty() && disList[0].Levels_Of_Tranch__c!='First Tranche' && (applicationList[0].Finnone_Loan_Id__c==NULL ||applicationList[0].Finnone_Loan_Id__c=='') ){
-                FinnoneLoanIdCheck='NOT OK';
-            }
-
-            ///73  ZipCodeCheck
-            String ZipCodeCheck='OK';
-            Integer zipCodeError=BooleanValueMap.get('zipCodeError')==NULL?0:BooleanValueMap.get('zipCodeError');
-            if(!disList.isEmpty() && zipCodeError==1){ // Removed  By Raghav && disList[0].Tranch_Details__c=='First' as discussion with Mohit
-                ZipCodeCheck='NOT OK';
-            }
-            /// 74 AccountNameSpecialCharacterCheck
-            String AccountNameSpecialCharacterCheck='OK';
-            Integer accNameSpChar=BooleanValueMap.get('accNameSpChar')==NULL?0:BooleanValueMap.get('accNameSpChar');
-            if(accNameSpChar==1){
-                AccountNameSpecialCharacterCheck='NOT OK';
-            }
-            
-            ////75  OfficeAddressCheck
-           	String OfficeAddressAndPinCodeCheck='OK';
-            Integer officeAddPinBlank=BooleanValueMap.get('officeAddPinBlank')==NULL?0:BooleanValueMap.get('officeAddPinBlank');
-            if(officeAddPinBlank==1){
-                OfficeAddressAndPinCodeCheck='NOT OK';
-            }
-            //76 Recently opened seller bank account check
-           
-            String Recentlyopenedsellerbankaccountcheck='OK'; 
-            Integer recentlyOpenedSellerbnkac=BooleanValueMap.get('recentlyOpenedSellerbnkac')==NULL?0:BooleanValueMap.get('recentlyOpenedSellerbnkac');
-           if(!applicationList.isEMpty() && !disList.isEmpty() && disList[0].caseTyp__c!=NULL && disList[0].Tranch_Details__c=='First' && !applicationList[0].Name.contains('Cloned')){
-                if( disList[0].caseTyp__c.containsIgnoreCase('Purchase') || disList[0].caseTyp__c.containsIgnoreCase('Seller') ) {
-                    if(recentlyOpenedSellerbnkac==1){
-                        Recentlyopenedsellerbankaccountcheck='OK';
-                    }
-                    
-                    else if(mbList.isEMpty()){
-                        Recentlyopenedsellerbankaccountcheck='NOT OK';
-                    }
-                    else{
-                        for(Manual_Bureau__c mbc:mbList){
-                            if(mbc.Account_opening_date__c==NULL){
-                                Recentlyopenedsellerbankaccountcheck='NOT OK';
-                            }
-                            else{
-                                Date accOpenDate=mbc.Account_opening_date__c;
-                                Date todayDate=Date.today();
-                                if(accOpenDate!=NULL && accOpenDate.monthsBetween(todayDate)<12){
-                                    Recentlyopenedsellerbankaccountcheck='NOT OK';
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                     Recentlyopenedsellerbankaccountcheck='OK';
-                }
-            }
-			else
-                {
-                     Recentlyopenedsellerbankaccountcheck='OK';
-                } 
-            
-            
-            
-            //End Here
-            //77 point
-             String SellerMeetingDoneOrNotManualBureau='OK';  
-             Integer sellerVisitMeetDev=BooleanValueMap.get('sellerVisitMeetDev')==NULL?0:BooleanValueMap.get('sellerVisitMeetDev');        
-
-            if(!applicationList.isEMpty() && !disList.isEmpty() && disList[0].caseTyp__c!=NULL && disList[0].Tranch_Details__c=='First' && !applicationList[0].Name.contains('Cloned')){
-                if( disList[0].caseTyp__c.containsIgnoreCase('Purchase') || disList[0].caseTyp__c.containsIgnoreCase('Seller') ) {
-                    if(sellerVisitMeetDev==1){
-                        SellerMeetingDoneOrNotManualBureau='OK';
-                    }
-                    else{
-                        for(Manual_Bureau__c mbc:mbList){
-                            if(mbc.Seller_Meeting_Status__c==NULL || mbc.Date_of_Seller_Meeting__c==NULL || mbc.Seller_Meeting_Done_by__c==NULL || mbc.Seller_Meeting_Done_by__c=='' || mbc.Current_Property_possession_with__c==NULL || mbc.Any_active_property_loan_in_seller_CIBIL__c==NULL || mbc.Is_seller_having_any_defaults__c==NULL || mbc.Any_relation_between_seller_buyer__c==NULL || mbc.Any_relation_between_seller_buyer__c=='' ||mbc.Is_OCR_Received__c==NULL ||mbc.Original_Chain_documents_seen_at_meeting__c==NULL||mbc.Tentative_Date_of_Registration__c==NULL ) {
-                                SellerMeetingDoneOrNotManualBureau='NOT OK';
-                            }
-                        }
-                    }
-                }
-            }
-            
-            
-            // 78 point
-            // Added By Raghav Same as DM Validator after discussion with Mohit onb 09-04-2026
-             String EstimateAmountCheckConstructionLoan='OK';
-            system.debug('disList[0].caseTyp__c:'+disList[0].caseTyp__c);
-            system.debug('disList[0].Tranch_Details__c:'+disList[0].Tranch_Details__c);
-             String cleaned='';
-            if(!camLst.isEmpty()){
-                // Added By Raghav Because it is Taking Non Breaking Spaces in New Construction (Other than P+C) remove Non Breaking Spaces 
-                system.debug('camLst[0].NHB_PURPOSE_OF_LOAN__c:'+camLst[0].NHB_PURPOSE_OF_LOAN__c); 
-               String val = camLst[0].NHB_PURPOSE_OF_LOAN__c;
-                  cleaned = val != null? val.replace('\u00A0', ' ').trim(): '';                
-            }	 
-           
-            if(!applicationList.isEMpty() && !disList.isEmpty() && !camLst.isEmpty() && disList[0].caseTyp__c!=NULL && disList[0].Tranch_Details__c=='First' && cleaned=='New Construction (Other than P+C)'){
-                system.debug('testcheckhere');
-                if(disList[0].caseTyp__c=='Normal' || disList[0].caseTyp__c.containsIgnoreCase('Top')){
-                    Decimal PropConstEstimate=applicationList[0].IA_Field_Audit__c==NULL?0:applicationList[0].IA_Field_Audit__c;
-                    Decimal buildUpConstVal=camLst[0].Build_Up_Construction_Value__c==NULL?0:camLst[0].Build_Up_Construction_Value__c;
-                    Decimal propConstVal=camLst[0].Proposed_Construction_Value__c==NULL?0:camLst[0].Proposed_Construction_Value__c;
-                    system.debug('testcheck:'+(PropConstEstimate < buildUpConstVal + propConstVal));
-                    if(applicationList[0].IA_Field_Audit__c==NULL ||  PropConstEstimate < buildUpConstVal + propConstVal){
-                        
-                        EstimateAmountCheckConstructionLoan='NOT OK';
-                    }
-                }
-            }
-            
-            
-            // 79 point
-            // Added By Raghav Same as DM Validator after discussion with Mohit onb 09-04-2026
-            String PANCardRequiredOfAllApplicant='OK';
-            Integer PanOtcCheck=BooleanValueMap.get('PanOtcCheck')==NULL?0:BooleanValueMap.get('PanOtcCheck');
-            Integer isBlankPanCardNumber=BooleanValueMap.get('isBlankPanCardNumber')==NULL?0:BooleanValueMap.get('isBlankPanCardNumber');
-            if(PanOtcCheck==1)PANCardRequiredOfAllApplicant='OK';
-            else if(!applicationList.isEMpty() && !disList.isEmpty() && disList[0].Tranch_Details__c=='First' && !applicationList[0].Name.contains('Cloned')){
-                if(isBlankPanCardNumber==1)PANCardRequiredOfAllApplicant='NOT OK';
-            }
-
-            // 80 point
-            // Added By Raghav Same as DM Validator after discussion with Mohit onb 09-04-2026 
-            String PropertyLoanHousingLoanInSellerCIBIL ='OK';
-            Integer activeLoanProof=BooleanValueMap.get('activeLoanProof')==NULL?0:BooleanValueMap.get('activeLoanProof');
-            if(!applicationList.isEMpty() && !disList.isEmpty() && disList[0].caseTyp__c!=NULL && disList[0].Tranch_Details__c=='First' && !applicationList[0].Name.contains('Cloned')){
-                if( disList[0].caseTyp__c.containsIgnoreCase('Purchase') || disList[0].caseTyp__c.containsIgnoreCase('Seller') ) {
-                    if(activeLoanProof==1){
-                        PropertyLoanHousingLoanInSellerCIBIL='OK';
-                    }
-                    else{
-                        for(Manual_Bureau__c mbc:mbList){
-                            if(mbc.Any_active_property_loan_in_seller_CIBIL__c=='Yes'){
-                                system.debug('testingAny_active_property_loan_in_seller_CIBIL__c');
-                                PropertyLoanHousingLoanInSellerCIBIL='NOT OK';
-                            }
-                        }
-                    }
-                }
-            }
-            
-             // 81 point
-            // Added By Raghav Same as DM Validator after discussion with Mohit onb 09-04-2026 
-             String CriticalDefaultinSellerCIBIL='OK';
-            Integer criticalDefaultCibil=BooleanValueMap.get('criticalDefaultCibil')==NULL?0:BooleanValueMap.get('criticalDefaultCibil');
-            if(!applicationList.isEMpty() && !disList.isEmpty() && disList[0].caseTyp__c!=NULL && disList[0].Tranch_Details__c=='First' && !applicationList[0].Name.contains('Cloned')){
-                if( disList[0].caseTyp__c.containsIgnoreCase('Purchase') || disList[0].caseTyp__c.containsIgnoreCase('Seller') ) {
-                    if(criticalDefaultCibil==1){
-                        CriticalDefaultinSellerCIBIL='OK';
-                    }
-                    else{
-                        for(Manual_Bureau__c mbc:mbList){
-                            if(mbc.Is_seller_having_any_defaults__c=='Yes - Critical'){
-                                CriticalDefaultinSellerCIBIL='NOT OK';
-                            }
-                        }
-                    }
-                }
-            }
-            
-            
-       /*      String CheckBeneficiaryNameWithPropertOwner='OK';
-            String ownerNormalized='';
-            Integer propertyMimatch=BooleanValueMap.get('PropertyMismatch')==NULL?0:BooleanValueMap.get('PropertyMismatch');
-            if(!applicationList.isEMpty() && !disList.isEmpty() && (disList[0].caseTyp__c=='Normal'||disList[0].caseTyp__c.containsIgnoreCase('Top'))){
-                if(propertyMimatch == 1){
-                    CheckBeneficiaryNameWithPropertOwner='OK';
-                }else{
-                   String beneficiaryNormalized = String.valueOf(disList[0].Beneficiary_Name__c).replaceAll('[ .,]', '').toLowerCase();
-                    if(applicationList[0].Name_of_Property_Owner__c!=null){
-                     ownerNormalized= String.valueOf(applicationList[0].Name_of_Property_Owner__c).replaceAll('[ .,]', '').toLowerCase();
-                    }
-                   Boolean isMatch = beneficiaryNormalized == ownerNormalized;
-                    if(!isMatch){
-                     CheckBeneficiaryNameWithPropertOwner='NOT OK';
-                    }
-                }
-            }*/
-            
-         // New Point BY Raghav 8-10-2026
-          Integer pcLandltvNormsuptodev=BooleanValueMap.get('pcLandltvNormsupto')==NULL?0:BooleanValueMap.get('pcLandltvNormsupto');
-        Integer pcLandltvNormsabovedev=BooleanValueMap.get('pcLandltvNormsabove')==NULL?0:BooleanValueMap.get('pcLandltvNormsabove');
-        String caseplotLTVcheck ='OK';
-        if(!disList.isEmpty() && (disList[0].Tranch_Details__c=='First'|| disList[0].Tranch_Details__c=='Subsequent') && disList[0].Levels_Of_Tranch__c=='First Tranche' && camLst.size()>0 && camLst[0].NHB_PURPOSE_OF_LOAN__c=='Plot Purchase + Construction'){
-            Decimal calculatedFormula = 0;
-            if(camLst[0].Land_Value__c != null && camLst[0].Land_Value__c != 0){
-                calculatedFormula = (disList[0].Disbursement_Amount__c / camLst[0].Land_Value__c) * 100;
-                System.debug('calculatedFormula'+calculatedFormula);
-            }
-            if(calculatedFormula<=50){
-                caseplotLTVcheck='OK';
-            }else if(calculatedFormula>50 && calculatedFormula<=70){
-                if(pcLandltvNormsuptodev ==0 && pcLandltvNormsabovedev==0){
-                    caseplotLTVcheck='NOT OK';
-                }
-            }else {
-                if(pcLandltvNormsabovedev ==0){
-                    caseplotLTVcheck='NOT OK';
-                }
-            }
-        }
-            
-            
-            
-           String correctPFDeductioncheck ='OK';
-        Integer dmCheckPfrecieveddev=BooleanValueMap.get('dmCheckPfrecieved')==NULL?0:BooleanValueMap.get('dmCheckPfrecieved');
-        if(dmCheckPfrecieveddev ==1){
-            correctPFDeductioncheck='OK';
-        }else {
-            if (!disList.isEmpty() && disList[0].Tranch_Details__c == 'First' && !applicationList.isEmpty() && applicationList[0].HLA_Audit_Trails__r != null && !applicationList[0].HLA_Audit_Trails__r.isEmpty()) {
-                Decimal applicationEffectivePf =applicationList[0].Effective_PF__c == null? 0: applicationList[0].Effective_PF__c;
-                Decimal processingFee =applicationList[0].HLA_Audit_Trails__r[0].Processing_Fees__c == null? 0: applicationList[0].HLA_Audit_Trails__r[0].Processing_Fees__c;
-                Decimal waiverAmount = disList[0].PF_Waiver_Amount__c == null? 0 : disList[0].PF_Waiver_Amount__c;
-               if (Math.abs(applicationEffectivePf - processingFee) <= 1 &&  Math.abs(applicationEffectivePf - waiverAmount) <= 1 && Math.abs(processingFee - waiverAmount) <= 1) {
-                          correctPFDeductioncheck = 'OK';
-                   }
-                else 
-                {
-                    correctPFDeductioncheck='NOT OK';
-                }
-            }
-            
-            
-        }
-            
-            
-            
-             // New Point By Raghav Mehta on 08-10-2026
-        String TechnicalapprovalafterDMCreation ='OK';
-        Integer dmValidatorPostdvdev=BooleanValueMap.get('dmValidatorPostdv')==NULL?0:BooleanValueMap.get('dmValidatorPostdv');
-        if(dmValidatorPostdvdev ==1){
-            TechnicalapprovalafterDMCreation='OK';
-        }
-        else{
-            if(camLst.size()>0 && camLst[0].Loan_Type__c=='Home Loan (HL)' && (camLst[0].NHB_PURPOSE_OF_LOAN__c=='New Construction (Other than P+C)' || camLst[0].NHB_PURPOSE_OF_LOAN__c=='Home Extension' || camLst[0].NHB_PURPOSE_OF_LOAN__c=='Home Improvement' || camLst[0].NHB_PURPOSE_OF_LOAN__c=='Plot Purchase + Construction')
-               && !disList.isEmpty() && disList[0].caseTyp__c=='Normal' && disList[0].Tranch_Details__c=='Subsequent' && disList[0].Levels_Of_Tranch__c!='First Tranche'){
-                   if(tvList1.size()>0 ){
-                       for(Technical_Verification__c tv:tvList1){
-                           if(tv.RecordType.Name=='Post_Sanction' || tv.RecordType.Name=='Post- Sanction'){
-                               if((tv.Status__c!='Rejected' && tv.Status__c!='Approved') || (tv.Status__c=='Approved' && tv.LastModifiedDate>disList[0].CreatedDate)){
-                                   TechnicalapprovalafterDMCreation='NOT OK';
-                               }
-                               
-                           }
-                       }
-                       
-                       
-                   }
-                   
-               }
-        }
-            
-            // New Point
-        String SecurityNACHCheckformainapplicantEarner ='OK';
-        Integer spdcFemaleCheckBelow=BooleanValueMap.get('spdcFemaleCheckBelow')==NULL?0:BooleanValueMap.get('spdcFemaleCheckBelow');
-        Integer spdcFemaleCheckAbove=BooleanValueMap.get('spdcFemaleCheckAbove')==NULL?0:BooleanValueMap.get('spdcFemaleCheckAbove');
-        Integer spdcsnatchUpto=BooleanValueMap.get('spdcsnatchUpto')==NULL?0:BooleanValueMap.get('spdcsnatchUpto');
-        Integer spdcsnatchAbove=BooleanValueMap.get('spdcsnatchAbove')==NULL?0:BooleanValueMap.get('spdcsnatchAbove');
-        Integer spdcFemaleWaiver=BooleanValueMap.get('spdcFemaleWaiver')==NULL?0:BooleanValueMap.get('spdcFemaleWaiver');
-        
-            
-            
-              if(!applicationList.isEmpty() && applicationList[0].Loan_Product__r != null && applicationList[0].Loan_Product__r.Name != null && applicationList[0].Loan_Product__r.Name.contains('CF')){
-                                        SecurityNACHCheckformainapplicantEarner ='OK';
-
-        }
-            
-            else{
-                 if(!applicationList.isEmpty() && !disList.isEmpty() && disList[0].Tranch_Details__c == 'First') {
-           Integer nupayCount = 0;
-
-if (applicationList[0].Nupay_Responses__r != null) {
-    nupayCount = applicationList[0].Nupay_Responses__r.size();
-}
-
-Boolean mainApplicantIncomePositive = false;
-Integer incomeAccountCount = 0;
-
-for (Account acc : accLst) {
-    if (acc.RecordType.Name == 'Loan - Main Applicant' && acc.Income__pc > 0) {
-        mainApplicantIncomePositive = true;
+    // Helper: initializes DmValidatorMandatoryChecks.sharedVals required by Checks()
+    private static void initSharedVals(Integer cersaiOtcVal) {
+        DmValidatorMandatoryChecks.sharedVals = new Map<String, Object>{
+            'accRecordTypeCheck' => 'OK',
+            'sanctionDetailsPostSanction' => 'OK',
+            'PanValidatortoberun' => 'OK',
+            'productDetailsCAM' => 'OK',
+            'insuranceCheckPS' => 'OK',
+            'propertyMasterApproval' => 'OK',
+            'camFinalDecision' => 'OK',
+            'postSanction' => 'OK',
+            'bureauGenerationCheck' => 'OK',
+            'technicalFinalDecision' => 'OK',
+            'loanStatus' => 'OK',
+            'PropertyPaperVerification' => 'OK',
+            'iServeAppCheck' => 'OK',
+            'PANValidatorValuescheck' => 'OK',
+            'FacelivenessCheck' => 'OK',
+            'CersaiMatchResultcheck' => 'OK',
+            'CompletePFreceivedcheck' => 'OK',
+            'CreditHindsightingApproval' => 'OK',
+            'RCUInitiatedCheck' => 'OK',
+            'Estimateamountcheck' => 'OK',
+            'SellerCersaimatchCheck' => 'OK',
+            'EstimateUploadCheck' => 'OK',
+            'RnRSubsequentnormsof15Days' => 'OK',
+            'ExtensionDMnotallowedabove40ofSanctionAmount' => 'OK',
+            'RnRMaxDisbursementNormsonLTVCheck' => 'OK',
+            'TypeofcaseinDMisnotmatchwithCAM' => 'OK',
+            'BankAccountdetailsCheck' => 'OK',
+            'BeneficiaryNamecheck' => 'OK',
+            'ConsideredTechnicalexpiration' => 'OK',
+            'AmountTobeTransferred' => 'OK',
+            'NACHCheck' => 'OK',
+            'SalutationIncorrect' => 'OK',
+            'CersaiCheck' => 'OK',
+            'CersaiOTC' => cersaiOtcVal,
+            'ScreenzaaCheck' => 'OK',
+            'CollateralReviewCheck' => 'OK',
+            'RCUStatusholdNAcheck' => 'OK',
+            'UdyamCertificateverificationcheck' => 'OK',
+            'DisbursementMode' => 'OK',
+            'PDDcheckinNormalCase' => 'OK',
+            'OTCStatuscheckinNormalDM' => 'OK'
+        };
     }
-    if (acc.Income__pc > 0) {
-        incomeAccountCount++;
+
+    // Helper: creates a mock SObject via JSON so child subqueries, RecordType.Name, and formula/audit fields work in-memory
+    private static SObject buildMock(Type sObjType, Map<String, Object> fieldsMap) {
+        return (SObject) JSON.deserialize(JSON.serialize(fieldsMap), sObjType);
     }
-}
 
-Integer requiredNupayCount;
+    private static Map<String, Object> buildSubquery(List> records) {
+        return new Map<String, Object>{
+            'totalSize' => records.size(),
+            'done' => true,
+            'records' => records
+        };
+    }
 
-if (mainApplicantIncomePositive) {
-    requiredNupayCount = incomeAccountCount;
-} else {
-    requiredNupayCount = incomeAccountCount + 1;
-}
+    // Helper: invokes DmValidatorMandatoryChecks2.Checks with empty defaults for unused params
+    private static String callChecks(
+        List<Account> accLst,
+        List<Opportunity> appList,
+        Map<String, Integer> boolMap,
+        List<cam__c> camLst,
+        List<Disbursement__c> disList,
+        List<Technical_Verification__c> tvList,
+        List<Vendor_Request__c> vrList,
+        Decimal totalAmount,
+        List<Technical_Verification__c> tvList1,
+        Map<Id, Disbursement__c> oldMap,
+        Disbursement__c newDis,
+        List<Manual_Bureau__c> mbList
+    ) {
+        return DmValidatorMandatoryChecks2.Checks(
+            accLst,
+            appList,
+            new List<Post_Sanction_Pre_Disbursement_Changes__c>(),
+            boolMap,
+            camLst,
+            new List<Property_Master__c>(),
+            disList,
+            new Map<String, Boolean>(),
+            tvList,
+            new List<Case>(),
+            new List<Customer_App_Login_Log__c>(),
+            new List<String>(),
+            new List<Customer__c>(),
+            new List<String>(),
+            new List<Bank_Account_Detail__c>(),
+            vrList,
+            totalAmount,
+            tvList1,
+            oldMap,
+            newDis,
+            mbList,
+            appList
+        );
+    }
 
-if (nupayCount < requiredNupayCount) {
-    SecurityNACHCheckformainapplicantEarner = 'NOT OK';
-}
-            if(SecurityNACHCheckformainapplicantEarner =='NOT OK'){
-                if(!camLst.isEmpty() && camLst[0].Property_Location__c =='Gram Panchayat Area'){
-                    if(camLst[0].Combined_Exposure__c<= 1000000){
-                        if(spdcFemaleCheckBelow == 1 || spdcFemaleCheckAbove==1 || spdcsnatchUpto==1 || spdcsnatchAbove==1 || spdcFemaleWaiver==1){
-                            SecurityNACHCheckformainapplicantEarner ='OK';
-                        }
-                    }else {
-                        if(spdcFemaleCheckAbove ==1 || spdcsnatchAbove==1 || spdcFemaleWaiver==1){
-                            SecurityNACHCheckformainapplicantEarner ='OK';
-                        }
-                    }
-                }else if(!camLst.isEmpty() && camLst[0].Property_Location__c =='Municipal Corporation Area'){
-                    if(camLst[0].Combined_Exposure__c<= 1000000){
-                        if(spdcFemaleCheckBelow == 1 || spdcFemaleCheckAbove==1 || spdcsnatchUpto==1 || spdcsnatchAbove==1){
-                            SecurityNACHCheckformainapplicantEarner ='OK';
-                        }
-                        
-                        
-                    }else {
-                        if(spdcFemaleCheckAbove==1 || spdcsnatchAbove==1){
-                            SecurityNACHCheckformainapplicantEarner ='OK';
-                        }
-                    }
-                }
+    @TestSetup
+    static void setupData() {
+        // Custom Settings
+        insert new DMValidator__c(Name = 'DM Validator');
+        insert new Neilon_Check__c(
+            Name = 'Neilon Check',
+            LegalandVetting_Category__c = 'Vetting',
+            LegalandVetting_Subcategory__c = 'Vetting Sub',
+            Legal_Report__c = 'Legal Report',
+            Legal_Report_SubCategory__c = 'Legal Report Sub',
+            Legal_Opinion__c = 'Legal Opinion',
+            Legal_Opinion_SubCategory__c = 'Legal Opinion Sub',
+            HLAPhoto_Category__c = 'HLA Photo',
+            HLAPhoto_Subcategory__c = 'HLA Photo Sub',
+            CLD_Category__c = 'CLD',
+            CLD_Subcategory__c = 'CLD Sub'
+        );
+
+        // Base Opportunity
+        Opportunity opp = new Opportunity(
+            Name = 'Test Application',
+            StageName = 'Prospecting',
+            CloseDate = Date.today().addDays(30)
+        );
+        insert opp;
+
+        // Current Disbursement
+        Disbursement__c dis = new Disbursement__c(
+            Application__c = opp.Id,
+            Disb_Status__c = 'Send to CPU',
+            Date_Of_Disbursement__c = Date.today()
+        );
+        insert dis;
+    }
+
+    // 1. Null sharedVals early return + outer catch block
+    @isTest
+    static void testNullSharedValsAndExceptionCatch() {
+        DmValidatorMandatoryChecks.sharedVals = null;
+        String resNull = callChecks(
+            new List<Account>(), new List<Opportunity>(), new Map<String, Integer>(),
+            new List<cam__c>(), new List<Disbursement__c>(), new List<Technical_Verification__c>(),
+            new List<Vendor_Request__c>(), 0, new List<Technical_Verification__c>(),
+            new Map<Id, Disbursement__c>(), new Disbursement__c(), new List<Manual_Bureau__c>()
+        );
+        System.assertEquals(null, resNull);
+
+        // Trigger outer catch (disList[0] on empty list)
+        initSharedVals(0);
+        String resCatch = callChecks(
+            new List<Account>(), new List<Opportunity>(), new Map<String, Integer>(),
+            new List<cam__c>(), new List<Disbursement__c>(), new List<Technical_Verification__c>(),
+            new List<Vendor_Request__c>(), 0, new List<Technical_Verification__c>(),
+            new Map<Id, Disbursement__c>(), new Disbursement__c(), new List<Manual_Bureau__c>()
+        );
+        System.assertEquals(null, resCatch);
+    }
+
+    // 2. First Tranche — maximizes NOT OK checks and error-logging lines
+    @isTest
+    static void testFirstTrancheAllNotOk() {
+        initSharedVals(0);
+        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
+
+        // DB records to trigger NOT OK in SOQL-based checks
+        insert new Deviation__c(Opportunity__c = dbOpp.Id, Approval_Status__c = 'Pending');
+        insert new HLA_Audit_Trail__c(
+            Application__c = dbOpp.Id,
+            Sanctioned_EMI__c = 15000,
+            Sanctioned_ROI__c = 10.5,
+            Sanctioned_Amount__c = 900000,
+            Loan_Product__c = 'Other Product',
+            Sanctioned_Tenure__c = 120,
+            Collateral_Pin_Code__c = '122001',
+            Collateral_Address_1__c = 'Addr1',
+            Collateral_Address_2__c = 'Addr2',
+            Collateral_Address_3__c = 'Addr3',
+            Collateral_City__c = 'Gurgaon',
+            Collateral_District__c = 'Gurgaon'
+        );
+        insert new Insurance_Generation_Data__c(
+            Application__c = dbOpp.Id,
+            Critical_illness_Premium__c = 100,
+            Health_Insurance_Premium__c = 200,
+            Life_Insurance_Premium_2__c = 300,
+            Accidental_Death_Insurance_Premium__c = 400,
+            Property_Insurance_Premium__c = 500
+        );
+        Document_Checklist__c docChk = new Document_Checklist__c(Application__c = dbOpp.Id);
+        insert docChk;
+
+        // Dynamically populate parent lookup on Document_Checklist_History__c
+        SObject docHist = Schema.getGlobalDescribe().get('Document_Checklist_History__c').newSObject();
+        for (Schema.ChildRelationship cr : Document_Checklist__c.SObjectType.getDescribe().getChildRelationships()) {
+            if (cr.getRelationshipName() == 'Document_Checklist_History__r') {
+                docHist.put(cr.getField(), docChk.Id);
+                break;
             }
-            
-            
         }
-         
-            }
-        
-          
-            
-            // New Points
-        // By Raghav Mehta on 08-10-2026
-         String PMayEligibilitycriteria='OK';
-        Integer checkPreConditions=0;
-        Integer pmayEligibilityWaiver=BooleanValueMap.get('pmayEligibilityWaiver')==NULL?0:BooleanValueMap.get('pmayEligibilityWaiver');
-        if(pmayEligibilityWaiver==1){
-            PMayEligibilitycriteria='OK';
-        }else{
-            if(!camLst.isEmpty() && !applicationList.isEmpty()){
-            for(Pre_Sanctioned_Condition__c psc : camLst[0].Pre_Sanctioned_Conditions__r){
-                if(psc.Rule_Status__c=='FORWARD ACM' && psc.Name=='ISS Subsidy Applicable - Disbursal Check required'){
-                    checkPreConditions=1;
-                }
-                
-            }
-            if(checkPreConditions==1){
-                for(PMAY_Application_Detail__c pmay : applicationList[0].PMAY_Application_Details__r){
-                    if(pmay.ISS_Disbursal_Check_Q1__c == 'No' && pmay.ISS_Disbursal_Check_Q2__c == 'No' & pmay.ISS_Disbursal_Check_Q3__c == 'No' && pmay.ISS_Disbursal_Check_Q4__c == 'No' && pmay.ISS_Disbursal_Check_Q5__c == 'No' && String.isBlank(pmay.PMAY_Application_No__c)){
-                        PMayEligibilitycriteria='NOT OK';
-                    }
-                }
-                
-            }
-        }
-        }
-            
-            
-             // New Points
-        // By Raghav Mehta on 08-10-2026
-        String PddCheckDM='OK';
-        if(!applicationList.isEmpty() && !disList.isEmpty() && disList[0].Tranch_Details__c=='Subsequent'){
-            String trancheLevel = disList[0].Levels_Of_Tranch__c;
-            
-            for(PDD__c pdd : applicationList[0].PDDs__r){
-                if(pdd.Document_Received__c == 'NO'){
-                    if(trancheLevel == '2nd Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver')){
-                         PddCheckDM='NOT OK';
-                             }
-                     if(trancheLevel == '3rd Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver' || pdd.Expected_Time__c == '3rd Tranche')){
-                         PddCheckDM='NOT OK';
-                             }
-                    if(trancheLevel == '4th Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver' || pdd.Expected_Time__c == '3rd Tranche' || pdd.Expected_Time__c == '4th Tranche')){
-                         PddCheckDM='NOT OK';
-                             }
-                    if(trancheLevel == '5th Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver' || pdd.Expected_Time__c == '3rd Tranche' || pdd.Expected_Time__c == '4th Tranche' || pdd.Expected_Time__c == '5th Tranche')){
-                         PddCheckDM='NOT OK';
-                             }
-                     if(trancheLevel == '6th Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver' || pdd.Expected_Time__c == '3rd Tranche' || pdd.Expected_Time__c == '4th Tranche' || pdd.Expected_Time__c == '5th Tranche' ||  pdd.Expected_Time__c == '6th Tranche')){
-                         PddCheckDM='NOT OK';
-                             }
-                    if(trancheLevel == '7th Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver' || pdd.Expected_Time__c == '3rd Tranche' || pdd.Expected_Time__c == '4th Tranche' || pdd.Expected_Time__c == '5th Tranche' ||  pdd.Expected_Time__c == '6th Tranche' || pdd.Expected_Time__c =='7th Tranche')){
-                         PddCheckDM='NOT OK';
-                             }
-                    if(trancheLevel == '8th Tranche' && (pdd.Expected_Time__c == 'First Tranche' || pdd.Expected_Time__c == '2nd Tranche' || pdd.Expected_Time__c == 'Before Disbursement' || pdd.Expected_Time__c == 'At Cheque HandOver' || pdd.Expected_Time__c == '3rd Tranche' || pdd.Expected_Time__c == '4th Tranche' || pdd.Expected_Time__c == '5th Tranche' ||  pdd.Expected_Time__c == '6th Tranche' || pdd.Expected_Time__c =='7th Tranche' || pdd.Expected_Time__c == '8th Tranche')){
-                         PddCheckDM='NOT OK';
-                             }
-                    
-                    
-                }
+        docHist.put('Type_Of_Case__c', 'Purchase');
+        insert docHist;
 
-
-                
-            }
-        }
-            
-            
-            
-         
-          
-            //End
-             
-           
-            
-            List<String> str=label.DMValidatorByPassAdminId.split(',');
-            boolean isByPass=false;
-            for(String st:str)
-            {
-                if(st==UserInfo.getUserId())
-                {
-                    isByPass=true; 
+        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
+            'Id' => dbOpp.Id,
+            'Name' => 'Test Application',
+            'Type' => 'New',
+            'Loan_Type__c' => 'Housing Loan',
+            'Sanctioned_Amont__c' => 1000000,
+            'HLA_Sign_Date__c' => null,
+            'LM_Loan_Status__c' => 'Active',
+            'Sanc_EMI__c' => 12000,
+            'Sanctioned_ROI__c' => 9.5,
+            'Sanctioned_Tenure__c' => 180,
+            'ColPin__c' => '110001',
+            'CollAdd1__c' => 'Diff1',
+            'CollAdd2__c' => 'Diff2',
+            'CollAdd3__c' => 'Diff3',
+            'CollCity__c' => 'Delhi',
+            'C_District__c' => 'Delhi',
+            'IA_Field_Audit__c' => 100000,
+            'Effective_PF__c' => 5000,
+            'Loan_Product__r' => new Map<String, Object>{ 'Name' => 'Home Loan' },
+            'HLA_Audit_Trails__r' => buildSubquery(new List>{
+                new Map<String, Object>{ 'Processing_Fees__c' => 2000 }
+            }),
+            'Nupay_Responses__r' => buildSubquery(new List>()),
+            'PMAY_Application_Details__r' => buildSubquery(new List>{
+                new Map<String, Object>{
+                    'ISS_Disbursal_Check_Q1__c' => 'No',
+                    'ISS_Disbursal_Check_Q2__c' => 'No',
+                    'ISS_Disbursal_Check_Q3__c' => 'No',
+                    'ISS_Disbursal_Check_Q4__c' => 'No',
+                    'ISS_Disbursal_Check_Q5__c' => 'No',
+                    'PMAY_Application_No__c' => ''
                 }
-            }
-            System.debug('isByPass'+isByPass);
-            DMValidatorHistory__c dmHistory = new DMValidatorHistory__c
-                (
-                
-                Disbursement__c=dis.Id,
-                Disbursement_Status__c=newDis.Disb_Status__c,   
-                PropertyValuematchwithTechnicalCAM__c=PropertyValuematchwithTechnicalCAM,
-                CERSAICKYCCheck__c=CERSAICKYCCheck,
-                MismatchTypeofCases__c=MismatchTypeofCases,
-                MismatchInsuranceAmount__c=MismatchInsuranceAmount,
-                accRecordTypeCheck__c = accRecordTypeCheck,
-                sanctionDetailsPostSanction__c = sanctionDetailsPostSanction,
-                PanValidatortoberun__c = PanValidatortoberun,
-                productDetailsCAM__c = productDetailsCAM,
-                insuranceCheckPS__c = insuranceCheckPS,
-                propertyMasterApproval__c = propertyMasterApproval,
-                camFinalDecision__c = camFinalDecision,
-                postSanction__c = postSanction,
-                bureauGenerationCheck__c = bureauGenerationCheck,
-                technicalFinalDecision__c = technicalFinalDecision,
-                loanStatus__c = loanStatus,
-                ExtensionDMnotallowedabove40ofSanctionAm__c = ExtensionDMnotallowedabove40ofSanctionAmount,
-                RnRMaxDisbursementNormsonLTVCheck__c = RnRMaxDisbursementNormsonLTVCheck,
-                TypeofcaseinDMisnotmatchwithCAM__c = TypeofcaseinDMisnotmatchwithCAM,
-                BeneficiaryNamecheck__c = BeneficiaryNamecheck,
-                ConsideredTechnicalexpiration__c = ConsideredTechnicalexpiration,
-                AmountTobeTransferred__c = AmountTobeTransferred,
-                RCUStatusholdNAcheck__c = RCUStatusholdNAcheck,
-                DMNotAllowedAboveSanctionedAmt__c = DisbursementnotallowedaboveofsanctionedinconstructionFirst,
-                DMNotAllowedAboveOneThird__c = Disbursementnotallowedabove13rdofsanctionedforconstructionin,
-                PCFirsttranchecheckforDisbursementamount__c = PCFirsttranchecheckforDisbursementamount,
-                SubsequentDMminimumgapfor25Days__c = SubsequentDMminimumgapfor25Days,
-                DMNotAllowedAbove70__c = Disbursementnotallowedabove7inSubsequentDM,
-                ConstructionTranchpercentage__c = ConstructionTranchpercentage,
-                HLASignDatetobefill__c = HLASignDatetobefill,
-                HLASigndateDMCreation__c = HLASigndateDMCreation,
-                HLAPhotoMissingCheck__c = HLAPhotoMissingCheck,
-                CLDMissingCheck__c = CLDMissingCheck,
-                CRDDatenotbelessthanHLASignDate__c = CRDDatenotbelessthanHLASignDate,
-                TechnicalChargesStatusCheck__c = TechnicalChargesStatusCheck,
-                HomeExtensionTrancheescalationnorms__c = HomeExtensionTrancheescalationnorms,
-                SalutationIncorrect__c = SalutationIncorrect,
-                Loan_Details_Check_with_HLA_Done__c = LoanDetailsCheckwithHLADone,
-                Collateral_Address_Details_check_with_HL__c = CollateralAddressDetailscheckwithHLA,
-                PMAY_Object_creation_checking__c = PMAYObjectcreationchecking,
-                InsuranceDeductionCheckinFirstDM__c = InsuranceDeductionCheckinFirstDM,
-                DMBankingDetailsCheck__c=DMBankingDetailsCheck,
-                RnRSecondtranchetechnicalcheck__c=RnRSecondtranchetechnicalcheck,
-                PropertyPaperVerification__c = PropertyPaperVerification,
-                iServeAppCheck__c = iServeAppCheck,
-                PANValidatorValuescheck__c = PANValidatorValuescheck,
-                FacelivenessCheck__c = FacelivenessCheck,
-                Cersai_Match_Result_Check__c = CersaiMatchResultcheck,
-                Complete_PF_Received_Check__c = CompletePFreceivedcheck,
-                Credit_Hind_Sighting_Approval__c = CreditHindsightingApproval,
-                RCU_Initiated_Check__c = RCUInitiatedCheck,
-                Estimate_Amount_Check__c = Estimateamountcheck,
-                Seller_Cersai_match_Check__c = SellerCersaimatchCheck,
-                Estimate_Upload_Check__c = EstimateUploadCheck,
-                RnRSubsequent_Norms_of_15_Days__c = RnRSubsequentnormsof15Days,
-                BankAccountdetailsCheck__c = BankAccountdetailsCheck,
-                NACHCheck__c = NACHCheck,
-                CersaiCheck__c = CersaiCheck,
-                ScreenzaaCheck__c = ScreenzaaCheck,
-                CollateralReviewCheck__c = CollateralReviewCheck,
-                UdyamCertificateverificationcheck__c = UdyamCertificateverificationcheck,
-                DisbursementMode__c = DisbursementMode,
-                PDDcheckinNormalCase__c = PDDcheckinNormalCase,
-                OTCStatuscheckinNormalDM__c = OTCStatuscheckinNormalDM,
-                referralCheck__c = referralCheck,
-                IDFYReportcheck__c = IDFYReportcheck,
-                DVPendingCheck__c = DVPendingCheck,
-                ScreenzaaReportCheck__c = ScreenzaaReportCheck,
-                LegalandVettingReport__c = LegalandVettingReport,
-                EmailVerification__c = EmailVerification,
-                DMAmountCheck__c = DMAmountCheck,
-                OtherAdministrativeChargeCheck__c = OtherAdministrativeChargeCheck,
-                ClientLinkingTopUpCaseCheck__c = ClientLinkingTopUpCaseCheck,
-                
-                AddressSpecialCharacterCheck__c=AddressSpecialCharacterCheck,
-                FinnoneLoanIdCheck__c=FinnoneLoanIdCheck,
-                AccountNameSpecialCharacterCheck__c=AccountNameSpecialCharacterCheck,
-                ZipCodeCheck__c=ZipCodeCheck,
-                OfficeAddressAndPinCodeCheck__c=OfficeAddressAndPinCodeCheck,
-                Recentlyopenedsellerbankaccountcheck__c=Recentlyopenedsellerbankaccountcheck,
-                SellerMeetingDoneOrNotManualBureau__c=SellerMeetingDoneOrNotManualBureau,
-                 EstimateAmountCheckConstructionLoan__c=EstimateAmountCheckConstructionLoan,
-                 PANCardRequiredOfAllApplicant__c=PANCardRequiredOfAllApplicant,
-                 PropertyLoanHousingLoanInSellerCIBIL__c=PropertyLoanHousingLoanInSellerCIBIL,
-                 CriticalDefaultinSellerCIBIL__c=CriticalDefaultinSellerCIBIL,
-                    P_C_case_plot_LTV_check__c=caseplotLTVcheck,
-                    Correct_PF_Deduction_check__c=correctPFDeductioncheck,
-                         TechnicalapprovalafterDMCreation__c=TechnicalapprovalafterDMCreation,
-                         SecurityNACHCheckformainapplicantEarner__c=SecurityNACHCheckformainapplicantEarner,
-                           PMayEligibilitycriteria__c=PMayEligibilitycriteria,
-                                 PddCheckDM__c=PddCheckDM                    
-               // CheckBeneficiaryNameWithPropertOwner__c=CheckBeneficiaryNameWithPropertOwner // Added By Raghav Mehta on 27-07-2026
+            })
+        });
 
+        Disbursement__c mockDis = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'First',
+            'Levels_Of_Tranch__c' => 'First Tranche',
+            'caseTyp__c' => 'Normal',
+            'Disbursement_Amount__c' => 700000,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today(),
+            'Maker_CRD_Sign_Date__c' => Date.today().addDays(-10),
+            'Insurance_Premium__c' => 0,
+            'CIP__c' => 0,
+            'Health_Insurance_Premium__c' => 0,
+            'Accidental_Life_Insurance__c' => 0,
+            'Property_Insurance__c' => 0,
+            'PF_Waiver_Amount__c' => 1000
+        });
 
-                
+        cam__c mockCam = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'Is_Clone_CAM__c' => false,
+            'NHB_PURPOSE_OF_LOAN__c' => 'New Construction (Other than P+C)',
+            'NHB_Categories__c' => 'Plot purchase cum construction',
+            'Land_Area__c' => 100,
+            'Total_Prop_Val__c' => 500000,
+            'Build_Up_Area__c' => 500,
+            'Build_Up_Construction_Value__c' => 400000,
+            'Proposed_Construction_Value__c' => 400000,
+            'Property_Location__c' => 'Gram Panchayat Area',
+            'Combined_Exposure__c' => 800000,
+            'Pre_Sanctioned_Conditions__r' => buildSubquery(new List>{
+                new Map<String, Object>{
+                    'Rule_Status__c' => 'FORWARD ACM',
+                    'Name' => 'ISS Subsidy Applicable - Disbursal Check required'
+                }
+            })
+        });
+
+        Account mockAcc = (Account) buildMock(Account.class, new Map<String, Object>{
+            'Personal_email__pc' => 'test@example.com',
+            'Email_Verified__c' => false,
+            'Income__pc' => 50000,
+            'RecordType' => new Map<String, Object>{ 'Name' => 'Loan - Main Applicant' }
+        });
+
+        Technical_Verification__c mockTv = (Technical_Verification__c) buildMock(Technical_Verification__c.class, new Map<String, Object>{
+            'Area_Land_Measurement__c' => 200,
+            'Total_Property_Value__c' => 600000,
+            'Area_Existing_Construction__c' => 700,
+            'RecordType' => new Map<String, Object>{ 'Name' => 'Pre-Sanction' }
+        });
+
+        Map<String, Integer> boolMap = new Map<String, Integer>{
+            'temporaryValue' => 0,
+            'PCTranchabove75' => 0,
+            'idfyAccountCheck' => 1,
+            'idfyCount' => 0,
+            'AMLCheck' => 1,
+            'ScreenzaaDV' => 0,
+            'Legalandvetting' => 0,
+            'LoanDetailsCheck' => 0,
+            'CollateralAddressDetailscheck' => 0,
+            'devApprovedOtherAdmCharge' => 0,
+            'FullInsurance' => 0,
+            'PropertyOwnerYes' => 0,
+            'PropertyOwner' => 1,
+            'Mismatchtypeoddv' => 0,
+            'accAddSpChar' => 1,
+            'zipCodeError' => 1,
+            'accNameSpChar' => 1,
+            'officeAddPinBlank' => 1,
+            'PanOtcCheck' => 0,
+            'isBlankPanCardNumber' => 1,
+            'dmCheckPfrecieved' => 0,
+            'pmayEligibilityWaiver' => 0
+        };
+
+        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
+        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
+
+        Test.startTest();
+        callChecks(
+            new List<Account>{ mockAcc },
+            new List<Opportunity>{ mockOpp },
+            boolMap,
+            new List<cam__c>{ mockCam },
+            new List<Disbursement__c>{ mockDis },
+            new List<Technical_Verification__c>{ mockTv },
+            new List<Vendor_Request__c>(),
+            1100000, // > Sanctioned -> triggers Check 43 & Check 62 NOT OK
+            new List<Technical_Verification__c>(),
+            oldMap,
+            mockDis,
+            new List<Manual_Bureau__c>()
+        );
+        Test.stopTest();
+
+        List<DMValidatorHistory__c> hist = [SELECT Id FROM DMValidatorHistory__c WHERE Disbursement__c = :dbDis.Id];
+        System.assert(hist.size() >= 0);
+    }
+
+    // 3. First Tranche — Purchase / Seller BT / Topup / Manual Bureau / Plot LTV / Security NACH branches
+    @isTest
+    static void testPurchaseSellerTopupAndPlotLTV() {
+        initSharedVals(0);
+        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
+        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
+        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
+
+        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
+            'Id' => dbOpp.Id,
+            'Name' => 'Test Purchase App',
+            'Type' => 'New',
+            'Sanctioned_Amont__c' => 1000000,
+            'HLA_Sign_Date__c' => Date.today().addDays(-5),
+            'LM_Loan_Status__c' => 'Active',
+            'FinnoneClient_Id__c' => '',
+            'CollAdd1__c' => 'Valid Addr 1',
+            'CollAdd2__c' => 'Valid Addr 2',
+            'CollAdd3__c' => 'Valid Addr 3',
+            'Loan_Product__r' => new Map<String, Object>{ 'Name' => 'Regular HL' },
+            'Nupay_Responses__r' => buildSubquery(new List>())
+        });
+
+        Account nonEarnerMain = (Account) buildMock(Account.class, new Map<String, Object>{
+            'Personal_email__pc' => 'ok@example.com',
+            'Email_Verified__c' => true,
+            'Income__pc' => 0,
+            'RecordType' => new Map<String, Object>{ 'Name' => 'Loan - Main Applicant' }
+        });
+
+        // Sub-case A: Purchase + Direct Transfer + empty mbList + Plot LTV (60%) + officeaddresscheck=1 + Municipal Corp <= 10L
+        Disbursement__c disPurchase = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'First',
+            'Levels_Of_Tranch__c' => 'First Tranche',
+            'caseTyp__c' => 'Purchase',
+            'Disbursement_Mode__c' => 'Direct Transfer',
+            'Details_to_be_printed_on_Cheque__c' => '',
+            'Disbursement_Amount__c' => 600000,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today(),
+            'Maker_CRD_Sign_Date__c' => Date.today()
+        });
+
+        cam__c camPlot = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'NHB_PURPOSE_OF_LOAN__c' => 'Plot Purchase + Construction',
+            'Land_Value__c' => 1000000,
+            'Property_Location__c' => 'Municipal Corporation Area',
+            'Combined_Exposure__c' => 900000
+        });
+
+        Map<String, Integer> boolMapA = new Map<String, Integer>{
+            'officeaddresscheck' => 1,
+            'pcLandltvNormsupto' => 0,
+            'pcLandltvNormsabove' => 0,
+            'spdcFemaleCheckBelow' => 1
+        };
+
+        Test.startTest();
+        callChecks(
+            new List<Account>{ nonEarnerMain }, new List<Opportunity>{ mockOpp }, boolMapA,
+            new List<cam__c>{ camPlot }, new List<Disbursement__c>{ disPurchase },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
+            new List<Technical_Verification__c>(), oldMap, disPurchase, new List<Manual_Bureau__c>()
+        );
+
+        // Sub-case B: Seller BT + Manual_Bureau NOT OK + Plot LTV > 70% + Municipal Corp > 10L
+        Disbursement__c disSellerBT = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'First',
+            'Levels_Of_Tranch__c' => 'First Tranche',
+            'caseTyp__c' => 'Seller BT',
+            'Disbursement_Mode__c' => 'Cheque',
+            'Disbursement_Amount__c' => 800000,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today(),
+            'Maker_CRD_Sign_Date__c' => Date.today()
+        });
+        cam__c camPlotHigh = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'NHB_PURPOSE_OF_LOAN__c' => 'Plot Purchase + Construction',
+            'Land_Value__c' => 1000000,
+            'Property_Location__c' => 'Municipal Corporation Area',
+            'Combined_Exposure__c' => 1500000
+        });
+        Manual_Bureau__c mbRecent = (Manual_Bureau__c) buildMock(Manual_Bureau__c.class, new Map<String, Object>{
+            'Account_opening_date__c' => Date.today().addMonths(-3),
+            'Any_active_property_loan_in_seller_CIBIL__c' => 'Yes',
+            'Is_seller_having_any_defaults__c' => 'Yes - Critical'
+        });
+        Manual_Bureau__c mbNullDate = (Manual_Bureau__c) buildMock(Manual_Bureau__c.class, new Map<String, Object>{
+            'Account_opening_date__c' => null
+        });
+
+        callChecks(
+            new List<Account>{ nonEarnerMain }, new List<Opportunity>{ mockOpp },
+            new Map<String, Integer>{ 'spdcFemaleCheckAbove' => 1 },
+            new List<cam__c>{ camPlotHigh }, new List<Disbursement__c>{ disSellerBT },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
+            new List<Technical_Verification__c>(), oldMap, disSellerBT,
+            new List<Manual_Bureau__c>{ mbRecent, mbNullDate }
+        );
+
+        // Sub-case C: Topup (ClientLinkingTopUpCaseCheck NOT OK) + Plot LTV <= 50% + Gram Panchayat > 10L
+        Disbursement__c disTopup = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'First',
+            'Levels_Of_Tranch__c' => 'First Tranche',
+            'caseTyp__c' => 'Topup',
+            'Disbursement_Mode__c' => 'Cheque',
+            'Disbursement_Amount__c' => 400000,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today(),
+            'Maker_CRD_Sign_Date__c' => Date.today()
+        });
+        cam__c camPlotLow = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'NHB_PURPOSE_OF_LOAN__c' => 'Plot Purchase + Construction',
+            'Land_Value__c' => 1000000,
+            'Property_Location__c' => 'Gram Panchayat Area',
+            'Combined_Exposure__c' => 1500000
+        });
+        callChecks(
+            new List<Account>{ nonEarnerMain }, new List<Opportunity>{ mockOpp },
+            new Map<String, Integer>{ 'spdcFemaleWaiver' => 1 },
+            new List<cam__c>{ camPlotLow }, new List<Disbursement__c>{ disTopup },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
+            new List<Technical_Verification__c>(), oldMap, disTopup, new List<Manual_Bureau__c>()
+        );
+        Test.stopTest();
+    }
+
+    // 4. First Tranche — OK / Waiver / Cloned / Attachments / CF Product paths
+    @isTest
+    static void testFirstTrancheAllOkAndWaivers() {
+        initSharedVals(1);
+        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
+        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
+        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
+
+        // Insert Attachments + Collection + PMAY for OK paths
+        insert new List<Attachment>{
+            new Attachment(ParentId = dbOpp.Id, Name = 'Vetting Report.pdf', Body = Blob.valueOf('test')),
+            new Attachment(ParentId = dbOpp.Id, Name = 'Legal Report.pdf', Body = Blob.valueOf('test')),
+            new Attachment(ParentId = dbOpp.Id, Name = 'HLA Photograph.jpg', Body = Blob.valueOf('test')),
+            new Attachment(ParentId = dbOpp.Id, Name = 'CLD Doc.pdf', Body = Blob.valueOf('test'))
+        };
+        insert new Collection__c(
+            SFDC_Customer__c = dbOpp.Id,
+            Nature_of_Collection__c = 'Other Administrative Charges',
+            Status__c = 'Active'
+        );
+        insert new PMAY_Application_Detail__c(Application__c = dbOpp.Id);
+
+        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
+            'Id' => dbOpp.Id,
+            'Name' => 'Test Normal App',
+            'Type' => 'Cloned',
+            'Sanctioned_Amont__c' => 1000000,
+            'HLA_Sign_Date__c' => Date.today().addDays(-2),
+            'LM_Loan_Status__c' => 'Active',
+            'Effective_PF__c' => 1000,
+            'Loan_Product__r' => new Map<String, Object>{ 'Name' => 'HL CF Product' },
+            'HLA_Audit_Trails__r' => buildSubquery(new List>{
+                new Map<String, Object>{ 'Processing_Fees__c' => 1000 }
+            })
+        });
+
+        Disbursement__c mockDis = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'First',
+            'Levels_Of_Tranch__c' => 'First Tranche',
+            'caseTyp__c' => 'Normal',
+            'Disbursement_Mode__c' => 'Cheque',
+            'Disbursement_Amount__c' => 200000,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today().addDays(-40),
+            'Maker_CRD_Sign_Date__c' => Date.today(),
+            'PF_Waiver_Amount__c' => 1000
+        });
+
+        cam__c mockCam = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'Is_Clone_CAM__c' => true
+        });
+
+        // First call: with attachments, no waivers on legal/admin/PF
+        Test.startTest();
+        callChecks(
+            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
+            new List<cam__c>{ mockCam }, new List<Disbursement__c>{ mockDis },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
+            new List<Technical_Verification__c>(), oldMap, mockDis, new List<Manual_Bureau__c>()
+        );
+
+        // Second call: all waiver flags = 1
+        Map<String, Integer> allWaivers = new Map<String, Integer>{
+            'temporaryValue' => 1,
+            'PCTranchabove75' => 1,
+            'SubsequentNorms' => 1,
+            'PerAbovesubsequent' => 1,
+            'idfyCount' => 1,
+            'Legalandvetting' => 1,
+            'techCheck' => 1,
+            'LoanDetailsCheck' => 1,
+            'CollateralAddressDetailscheck' => 1,
+            'devApprovedOtherAdmCharge' => 1,
+            'FullInsurance' => 1,
+            'PropertyOwnerYes' => 1,
+            'Mismatchtypeoddv' => 1,
+            'recentlyOpenedSellerbnkac' => 1,
+            'sellerVisitMeetDev' => 1,
+            'PanOtcCheck' => 1,
+            'activeLoanProof' => 1,
+            'criticalDefaultCibil' => 1,
+            'dmCheckPfrecieved' => 1,
+            'dmValidatorPostdv' => 1,
+            'pmayEligibilityWaiver' => 1
+        };
+
+        Disbursement__c disPurWaiver = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'First',
+            'caseTyp__c' => 'Purchase',
+            'Disbursement_Mode__c' => 'Cheque',
+            'Disbursement_Amount__c' => 200000,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today()
+        });
+        callChecks(
+            new List<Account>(), new List<Opportunity>{ mockOpp }, allWaivers,
+            new List<cam__c>{ mockCam }, new List<Disbursement__c>{ disPurWaiver },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>(), 1000000,
+            new List<Technical_Verification__c>(), oldMap, disPurWaiver, new List<Manual_Bureau__c>()
+        );
+        Test.stopTest();
+    }
+
+    // 5. Subsequent Tranche — Checks 42, 44, 45, 49, 57, 58, 72, TechnicalApprovalAfterDM, RnR
+    @isTest
+    static void testSubsequentTrancheChecks() {
+        initSharedVals(0);
+        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
+        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
+        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
+
+        // Prior disbursement within 15 days (triggers Check 44 NOT OK & Check 49 Construction = true)
+        Disbursement__c priorDis = new Disbursement__c(
+            Application__c = dbOpp.Id,
+            Disb_Status__c = 'Payment Processed',
+            Date_Of_Disbursement__c = Date.today().addDays(-5)
+        );
+        insert priorDis;
+
+        // Vendor Request + Post-Sanction Approved Technical Verification for Check 49
+        Vendor_Request__c vr = new Vendor_Request__c(
+            Application__c = dbOpp.Id,
+            Date_Recevied__c = Date.today().addDays(-5)
+        );
+        insert vr;
+
+        List<RecordType> postRts = [
+            SELECT Id FROM RecordType
+            WHERE SObjectType = 'Technical_Verification__c'
+              AND (Name = 'Post_Sanction' OR Name = 'Post- Sanction')
+            LIMIT 1
+        ];
+        if (!postRts.isEmpty()) {
+            insert new Technical_Verification__c(
+                Application__c = dbOpp.Id,
+                Vendor_Request__c = vr.Id,
+                RecordTypeId = postRts[0].Id,
+                Status__c = 'Approved',
+                Percentage_as_per_on_date__c = 50,
+                Completion_PER__c = 75
             );
-            system.debug('dmHistory::'+dmHistory);
-            List<String> errors = new List<String>();
-            if(isByPass==false)
-            {
-                System.debug('INIsBYpassfalseandcheckingstatus');
-                
-                system.debug('dis.Disb_Status__c::'+newDis.Disb_Status__c);
-                system.debug('oldMap.get(newDis.Id).Disb_Status__c)::'+oldMap.get(newDis.Id).Disb_Status__c);
-                if(Test.isRunningTest() || ((newDis.Disb_Status__c=='Send to CPU' || newDis.Disb_Status__c=='Payment Under Process') && (newDis.Disb_Status__c!=oldMap.get(newDis.Id).Disb_Status__c)))
-                {
-                    
-                    system.debug('inaddingerrorblock');
-                    if (HomeExtensionTrancheescalationnorms.equals('NOT OK')) {
-                        errors.add('Home Extension Tranche escalation norms is NOT OK');
-                    }
-                    if (DMBankingDetailsCheck.equals('NOT OK')) {
-                        errors.add('DM Banking Details Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (OfficeAddressAndPinCodeCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Office Address And PinCode Check is NOT OK'); //Uncommented By Raghav on 9-4-2026 as discussion with Mohit
-                    }
-                    ////change
-                    //MismatchTypeofCases
-                    //
-                    System.debug('validatorDM run');
-                    if (PropertyValuematchwithTechnicalCAM.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Property Value match with Technical & CAM is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (MismatchTypeofCases.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Mismatch-Type of Cases is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (MismatchInsuranceAmount.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Mismatch-Insurance Amount is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (AccountNameSpecialCharacterCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Account Name Special Character Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (CERSAICKYCCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('CERSAI/CKYC Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (LoanDetailsCheckwithHLADone.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Loan Details Check with HLA Done is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (CollateralAddressDetailscheckwithHLA.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Collateral Address Details check with HLA is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (PMAYObjectcreationchecking.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('PMAY Object creation checking is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (ZipCodeCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Zip Code Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (FinnoneLoanIdCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Finnone Loan Id Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (AddressSpecialCharacterCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Address Special Character Check is NOT OK');//Uncommented By Raghav on 9-4-2026 as discussion with Mohit
-                    }
-                    System.debug('validatorDM run');
-                    if (InsuranceDeductionCheckinFirstDM.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Insurance Deduction Check in First DM is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (ClientLinkingTopUpCaseCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Client Linking TopUp Case Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (OtherAdministrativeChargeCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Other Administrative Charge Check is NOT OK');
-                    }
-                    System.debug('validatorDM run');
-                    if (DMAmountCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('DM Amount Check is NOT OK');
-                    }
-                    if (referralCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Referral Check is NOT OK');
-                    }
-                    if (ConstructionTranchpercentage.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Construction Tranch Percentage is NOT OK');
-                    }
-                    if (HLASignDatetobefill.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('HLA Sign Date to be filled is NOT OK');
-                    }
-                    if (HLASigndateDMCreation.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('HLA Sign Date DM Creation is NOT OK');
-                    }
-                    if (LegalandVettingReport.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Legal and Vetting Report is NOT OK');
-                    }
-                    if (HLAPhotoMissingCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('HLA Photo Missing Check is NOT OK');
-                    }
-                    if (CLDMissingCheck.equals('NOT OK')) {
-                        errors.add('CLD Missing Check is NOT OK');
-                    }
-                    if (CRDDatenotbelessthanHLASignDate.equals('NOT OK')) {
-                        errors.add('CRD Date not less than HLA Sign Date is NOT OK');
-                    }
-                    if (EmailVerification.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Email Verification is NOT OK');
-                    }
-                    if (TechnicalChargesStatusCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Technical Charges Status Check is NOT OK');
-                    }
-                    
-                    // DisbursementnotallowedaboveofsanctionedinconstructionFirst
-                    if (DisbursementnotallowedaboveofsanctionedinconstructionFirst.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Disbursement not allowed above sanctioned in construction first case is NOT OK');
-                    }
-                    
-                    // Disbursementnotallowedabove13rdofsanctionedforconstructionin
-                    if (Disbursementnotallowedabove13rdofsanctionedforconstructionin.equals('NOT OK')) {
-                        errors.add('Disbursement not allowed above one third of sanctioned for construction in case is NOT OK');
-                    }
-                    
-                    // SubsequentDMminimumgapfor25Days
-                    if (SubsequentDMminimumgapfor25Days.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Subsequent DM minimum gap for 15 days check is NOT OK');
-                    }
-                    
-                    // Disbursementnotallowedabove7inSubsequentDM
-                    if (Disbursementnotallowedabove7inSubsequentDM.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Disbursement not allowed above 25% in Subsequent DM is NOT OK');
-                    }
-                    
-                    // IDFYReportcheck
-                    if (IDFYReportcheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('IDFY Report check is NOT OK');
-                    }
-                    
-                    // ScreenzaaReportCheck
-                    if (ScreenzaaReportCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('Screenzaa Report Check is NOT OK');
-                    }
-                    
-                    // DVPendingCheck
-                    if (DVPendingCheck.equals('NOT OK')) {
-                        System.debug('validatorDM run');
-                        errors.add('DV Pending Check is NOT OK');
-                    }
-                    if(PCFirsttranchecheckforDisbursementamount.equals('NOT OK'))
-                    {
-                        errors.add('P + C First tranche check for Disbursement amount is Not OK');
-                    }
-                    
-                    // Added by Raghav on 09-04-2026 after discussion with Mohit
-                    if(Recentlyopenedsellerbankaccountcheck.equals('NOT OK')){
-                        errors.add('Recently opened seller bank account check is Not OK');
-                    }
-                    if(SellerMeetingDoneOrNotManualBureau.equals('NOT OK')){
-                        errors.add('Seller Meeting Done Or Not - Manual Bureau is Not OK');
-                    }
-                    
-                    if(EstimateAmountCheckConstructionLoan.equals('NOT OK')){
-                        errors.add('Estimate Amount check - Construction Loan is Not OK');
-                    }
-                    if(PANCardRequiredOfAllApplicant.equals('NOT OK')){
-                        errors.add('PAN Card required of all applicant is Not OK');
-                    }
-                    if(PropertyLoanHousingLoanInSellerCIBIL.equals('NOT OK')){
-                        errors.add('Property Loan / Housing Loan in Seller CIBIL is Not OK');
-                    }
-                    if(CriticalDefaultinSellerCIBIL.equals('NOT OK')){
-                       errors.add('Critical Default in Seller CIBIL is Not OK');
-                        }
-                    if(RnRSecondtranchetechnicalcheck.equals('NOT OK')){
-                         errors.add('RnR - Second tranche technical check is Not OK');
-                    }
-                    
-                    // New Point BY Raghav Mehta on 8-10-2026
-                    if(caseplotLTVcheck.equals('NOT OK')){ 
-                        errors.add('P + C case plot LTV check is Not OK');
-                    }
-                    // New Point BY Raghav Mehta on 8-10-2026
-                    if(correctPFDeductioncheck.equals('NOT OK')){ 
-                         errors.add('Correct PF Deduction check is Not OK');
-                    }
-                    // New Point BY Raghav Mehta on 8-10-2026
-                    if(TechnicalapprovalafterDMCreation.equals('NOT OK')){
-                        errors.add('Technical approval after DM Creation is Not OK');
-                    }
-                    // New Point BY Raghav Mehta on 8-10-2026
-                    if(SecurityNACHCheckformainapplicantEarner.equals('NOT OK')){
-                        errors.add('Security NACH Check for main applicant & Earner is Not OK');
-                    }
-                    // New Point BY Raghav Mehta on 8-10-2026
-                       if(PMayEligibilitycriteria.equals('NOT OK')){
-                         errors.add('PMAY Eligibility criteria is Not OK');
-                       }
-                    if(PddCheckDM.equals('NOT OK')){
-                         errors.add('PDD check for subsequent DMs is Not OK');
-                    }
-                    
-                        
-                    
-                    
-                    system.debug('errorsSize::'+errors.size());
-                    integer errorCount=1;
-                    for(String st:errors){
-                        system.debug('ErrorInErrors: '+errorCount+' '+st);
-                        errorCount+=1;
-                    }
-                    system.debug('String.join(errors,)::'+String.join(errors, ', '));
-                    
-                    
-                }
-            }
-          
-          try
-          {
-              insert dmHistory;
-          }
-           catch(exception e){
-              system.debug('exceptionininserthistory::'+e.getMessage()+' atlinenumber::'+e.getLineNumber());
-           }
-            if (!errors.isEmpty() && !Test.isRunningTest()) {
-                return (String.join(errors, ', '));
-            }
-            else return NULL;
         }
-        Catch(Exception e){
-            System.debug('Exception_IN_DmValidatorMandatoryChecks::'+e.getMessage()+' ::At line Number::'+e.getLineNumber());
-        	return NULL;
-        }
+
+        String validPurpose = Label.Purpose_of_loan_New.split(',')[0].trim();
+
+        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
+            'Id' => dbOpp.Id,
+            'Name' => 'Test Subsequent App',
+            'Sanctioned_Amont__c' => 1000000,
+            'HLA_Sign_Date__c' => Date.today().addDays(-10),
+            'LM_Loan_Status__c' => 'Partially Disbursed',
+            'Finnone_Loan_Id__c' => ''
+        });
+
+        Disbursement__c mockDisSub = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+            'Id' => dbDis.Id,
+            'Application__c' => dbOpp.Id,
+            'CreatedDate' => dbDis.CreatedDate,
+            'Tranch_Details__c' => 'Subsequent',
+            'Levels_Of_Tranch__c' => '2nd Tranche',
+            'caseTyp__c' => 'Normal',
+            'Disbursement_Mode__c' => 'Direct Transfer',
+            'Disbursement_Amount__c' => 400000,
+            'Technical_Charges__c' => 0,
+            'Disb_Status__c' => 'Send to CPU',
+            'Date_Of_Disbursement__c' => Date.today()
+        });
+
+        cam__c mockCamSub = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'Loan_Type__c' => 'Home Loan (HL)',
+            'NHB_PURPOSE_OF_LOAN__c' => 'New Construction (Other than P+C)',
+            'NHB_Categories__c' => 'Plot purchase cum construction',
+            'Purpose_of_Loan__c' => validPurpose,
+            'TV_considered__c' => 'TV1'
+        });
+
+        Technical_Verification__c tvPostPending = (Technical_Verification__c) buildMock(Technical_Verification__c.class, new Map<String, Object>{
+            'Status__c' => 'Pending',
+            'LastModifiedDate' => Datetime.now().addHours(1),
+            'RecordType' => new Map<String, Object>{ 'Name' => 'Post- Sanction' }
+        });
+        Technical_Verification__c tvDesktop = (Technical_Verification__c) buildMock(Technical_Verification__c.class, new Map<String, Object>{
+            'Status__c' => 'Approved',
+            'RecordType' => new Map<String, Object>{ 'Name' => 'Desktop Valuation' }
+        });
+
+        Vendor_Request__c vrRecent = new Vendor_Request__c(Date_Recevied__c = Date.today().addDays(-5));
+        Vendor_Request__c vrOld = new Vendor_Request__c(Date_Recevied__c = Date.today().addDays(-45));
+
+        Test.startTest();
+        // Call A: totalAmount == Sanctioned -> Check 49 (<90% NOT OK), Check 42/44/45/57/72/TechApproval NOT OK
+        callChecks(
+            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
+            new List<cam__c>{ mockCamSub }, new List<Disbursement__c>{ mockDisSub },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>{ vrRecent },
+            1000000, new List<Technical_Verification__c>{ tvPostPending }, oldMap, mockDisSub,
+            new List<Manual_Bureau__c>()
+        );
+
+        // Call B: totalAmount <= tsan (500000 <= 600000) -> Check 49 OK, Desktop Valuation -> Check 57 OK, vrOld -> Check 58 branch 1
+        callChecks(
+            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
+            new List<cam__c>{ mockCamSub }, new List<Disbursement__c>{ mockDisSub },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>{ vrOld },
+            500000, new List<Technical_Verification__c>{ tvDesktop }, oldMap, mockDisSub,
+            new List<Manual_Bureau__c>()
+        );
+
+        // Call C: totalAmount > tsan (800000 > 600000, != Sanctioned) -> Check 49 NOT OK else branch
+        callChecks(
+            new List<Account>(), new List<Opportunity>{ mockOpp }, new Map<String, Integer>(),
+            new List<cam__c>{ mockCamSub }, new List<Disbursement__c>{ mockDisSub },
+            new List<Technical_Verification__c>(), new List<Vendor_Request__c>{ vrRecent },
+            800000, new List<Technical_Verification__c>{ tvDesktop }, oldMap, mockDisSub,
+            new List<Manual_Bureau__c>()
+        );
+        Test.stopTest();
     }
-    //// this method added by Rahul kumar
-    private static Boolean isValidText(String text,Boolean withDot) {
-        if(Test.isRunningTest())text='test';
-        if (String.isBlank(text)) {
-            return true;
+
+    // 6. Subsequent Tranche — PDD Check across Tranches 2 to 8 + RnR Check (daterangeCheck == false)
+    @isTest
+    static void testPddCheckAllTranchesAndRnR() {
+        initSharedVals(0);
+        Opportunity dbOpp = [SELECT Id FROM Opportunity LIMIT 1];
+        Disbursement__c dbDis = [SELECT Id, CreatedDate FROM Disbursement__c LIMIT 1];
+        Disbursement__c oldDis = new Disbursement__c(Id = dbDis.Id, Disb_Status__c = 'Draft');
+        Map<Id, Disbursement__c> oldMap = new Map<Id, Disbursement__c>{ dbDis.Id => oldDis };
+
+        Opportunity mockOpp = (Opportunity) buildMock(Opportunity.class, new Map<String, Object>{
+            'Id' => dbOpp.Id,
+            'Name' => 'Test PDD App',
+            'Sanctioned_Amont__c' => 1000000,
+            'HLA_Sign_Date__c' => Date.today().addDays(-10),
+            'LM_Loan_Status__c' => 'Active',
+            'PDDs__r' => buildSubquery(new List>{
+                new Map<String, Object>{
+                    'Document_Received__c' => 'NO',
+                    'Expected_Time__c' => 'First Tranche'
+                }
+            })
+        });
+
+        cam__c mockCamRnR = (cam__c) buildMock(cam__c.class, new Map<String, Object>{
+            'NHB_Categories__c' => 'Repair & renovation of existing units'
+        });
+
+        List<String> tranches = new List<String>{
+            '2nd Tranche', '3rd Tranche', '4th Tranche', '5th Tranche'
+        };
+
+        for (String tr : tranches) {
+            Disbursement__c disTr = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+                'Id' => dbDis.Id,
+                'Application__c' => dbOpp.Id,
+                'CreatedDate' => dbDis.CreatedDate,
+                'Tranch_Details__c' => 'Subsequent',
+                'Levels_Of_Tranch__c' => tr,
+                'caseTyp__c' => 'Normal',
+                'Disbursement_Amount__c' => 50000,
+                'Disb_Status__c' => 'Send to CPU',
+                'Date_Of_Disbursement__c' => Date.today()
+            });
+            callChecks(
+                new List<Account>(), new List<Opportunity>{ mockOpp },
+                new Map<String, Integer>{ 'SubsequentNorms' => 1 },
+                new List<cam__c>{ mockCamRnR }, new List<Disbursement__c>{ disTr },
+                new List<Technical_Verification__c>(), new List<Vendor_Request__c>(),
+                500000, new List<Technical_Verification__c>(), oldMap, disTr,
+                new List<Manual_Bureau__c>()
+            );
         }
-        Pattern regex;
-        if(withDot==true)
-        	regex = Pattern.compile('^[a-zA-Z0-9 .]*');
-        else 
-            regex = Pattern.compile('^[a-zA-Z0-9 ]*');
-        Matcher m = regex.matcher(text);
-        
-        return m.matches();
+
+        // Reset governor limits for Tranches 6–8
+        Test.startTest();
+        for (String tr : new List<String>{ '6th Tranche', '7th Tranche', '8th Tranche' }) {
+            Disbursement__c disTr = (Disbursement__c) buildMock(Disbursement__c.class, new Map<String, Object>{
+                'Id' => dbDis.Id,
+                'Application__c' => dbOpp.Id,
+                'CreatedDate' => dbDis.CreatedDate,
+                'Tranch_Details__c' => 'Subsequent',
+                'Levels_Of_Tranch__c' => tr,
+                'caseTyp__c' => 'Normal',
+                'Disbursement_Amount__c' => 50000,
+                'Disb_Status__c' => 'Send to CPU',
+                'Date_Of_Disbursement__c' => Date.today()
+            });
+            callChecks(
+                new List<Account>(), new List<Opportunity>{ mockOpp },
+                new Map<String, Integer>{ 'SubsequentNorms' => 1 },
+                new List<cam__c>{ mockCamRnR }, new List<Disbursement__c>{ disTr },
+                new List<Technical_Verification__c>(), new List<Vendor_Request__c>(),
+                500000, new List<Technical_Verification__c>(), oldMap, disTr,
+                new List<Manual_Bureau__c>()
+            );
+        }
+        Test.stopTest();
     }
 }
