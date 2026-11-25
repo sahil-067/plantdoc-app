@@ -1,32 +1,3 @@
-Here is an apex class
-
-
-public class CreateApplicationDataQueueable implements Queueable, Database.AllowsCallouts {
-	private String application_Data;
-
-    // Constructor
-    public CreateApplicationDataQueueable(String application_Data) {
-        this.application_Data = application_Data;
-    }
-
-    // Execute method (entry point for Queueable job)
-    public void execute(QueueableContext context) {
-        try{
-            System.debug('12345---->> ' + application_Data);
-            ApplicationFunctionAPIPWASync.createApplicant(application_Data);
-        } 
-        catch (Exception ex) {
-            System.debug('Error occured ==>>> ' + ex.getMessage() + ' at line no. = ' + ex.getLineNumber());
-            throw ex;
-        }
-    }
-}
-
-
-and here is its test class
-
-
-
 @isTest
 public class CreateApplicationDataQueueableTest {
     
@@ -78,16 +49,30 @@ public class CreateApplicationDataQueueableTest {
         Test.stopTest();
     }
     
+    @isTest
     static void testQueueable_CalloutExceptionPath() {
 
         Test.setMock(HttpCalloutMock.class, new MockCallout());
         CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable('{"test":"data"}');
             
-        Test.startTest();
         try {
+            Test.startTest();
             System.enqueueJob(queueableJob);
+            Test.stopTest();
         } catch (Exception ex) {}
-        Test.stopTest();
+    }
+
+    @isTest
+    static void testInvalidJsonException() {
+
+        Test.setMock(HttpCalloutMock.class, new MockCallout());
+        CreateApplicationDataQueueable queueableJob = new CreateApplicationDataQueueable('{{{invalid_json');
+            
+        try {
+            Test.startTest();
+            queueableJob.execute(null);
+            Test.stopTest();
+        } catch (Exception ex) {}
     }
 
     public class MockCallout implements HttpCalloutMock {
@@ -99,35 +84,3 @@ public class CreateApplicationDataQueueableTest {
     }
 
 }
-
-
-
-
-
-and here at last the class ApplicationFunctionAPIPWASyncfor referencxe
-
-/*
-@Author: Shivam Agarwal
-@Description: This API is used to Creating Applicant Data and Update the Application
-@version:2.0
-*/
-public class ApplicationFunctionAPIPWASync {
-    
-    public static void createApplicant() {
-        testParser();
-    }
-    
-    public static void testParser(){
-        if(Test.isRunningTest()){
-            integer i=0;
-            i=0;
-            i=0;
-        }
-    }
-}
-
-
-
-the code coverage for the test class is only 71% as its covering 5/7 lines and the 2 lines that are not runnig are the catch block 
-
-so make it run the catch block only keeep evrything else and give updated test class
