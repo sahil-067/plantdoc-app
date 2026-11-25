@@ -1,3118 +1,580 @@
-here is its long test class which has only 65%coverage improve it
-
-
-NOTE: onlllly give additional test cases to be appended at the last in your response
-
-
-@IsTest
-private class RetentionConsoleControllerTest {
-    private static final String TEST_MOBILE = '9876543210';
-    private static final String TEST_EMAIL = 'retention.test@example.com';
-    private static final String TEST_APPLICATION_NAME =
-        'Retention Test Application';
-    
-    /*
-* Successful SMS callout mock.
-*/
-    private class SuccessfulOtpCalloutMock implements HttpCalloutMock {
-        public HttpResponse respond(HttpRequest request) {
-            HttpResponse response = new HttpResponse();
-            response.setStatusCode(200);
-            response.setHeader('Content-Type', 'application/json');
-            response.setBody(
-                '{"success":true,"message":"OTP sent successfully."}'
-            );
-            return response;
-        }
-    }
-    
-    /*
-* Failed SMS callout mock.
-*/
-    private class FailedOtpCalloutMock implements HttpCalloutMock {
-        public HttpResponse respond(HttpRequest request) {
-            HttpResponse response = new HttpResponse();
-            response.setStatusCode(400);
-            response.setHeader('Content-Type', 'application/json');
-            response.setBody(
-                '{"success":false,"message":"OTP could not be sent."}'
-            );
-            return response;
-        }
-    }
-    
-    @testSetup
-    static void createTestData() {
-        /*
-* Required by LoanNumberGeneration trigger.
-*/
-        Config__c loanNumberConfiguration = new Config__c();
-        putIfCreateable(loanNumberConfiguration, 'Name__c', 'Loan Number Sequence');
-        putIfCreateable(loanNumberConfiguration, 'Value__c', '1000');
-        insert loanNumberConfiguration;
-        
-        createSmsConfiguration();
-        
-        Id personAccountRecordTypeId = getAvailablePersonAccountRecordTypeId();
-        
-        if (personAccountRecordTypeId == null) {
-            return;
-        }
-        
-        Account applicant = new Account(
-            RecordTypeId = personAccountRecordTypeId,
-            FirstName = 'Apex',
-            LastName = 'Applicant'
-        );
-        
-        putIfCreateable(applicant, 'Mobile__pc', TEST_MOBILE);
-        putIfCreateable(applicant, 'Personal_email__pc', TEST_EMAIL);
-        putIfCreateable(applicant, 'Client_ID__pc', 'CLI-1001');
-        putIfCreateable(applicant, 'ClientNum__pc', 'ALT-1001');
-        putIfCreateable(applicant, 'CustomerOtp__c', null);
-        putIfCreateable(applicant, 'Underwriter_Otp__c', null);
-        putIfCreateable(applicant, 'EBSOtp__c', null);
-        
-        /*
-* Restricted picklist-safe person account fields.
-*/
-        putFirstActivePicklistValue(applicant, 'Sex__pc');
-        putFirstActivePicklistValue(applicant, 'Marital_Status__pc');
-        putFirstActivePicklistValue(applicant, 'Qualification__pc');
-        
-        insert applicant;
-        
-        Opportunity application = new Opportunity(
-            Name = TEST_APPLICATION_NAME,
-            AccountId = applicant.Id,
-            StageName = getValidOpportunityStageName(),
-            CloseDate = Date.today().addDays(30)
-        );
-        
-        /*
-* Do not assign Household__c.
-* In your org it is not an Account lookup.
-*/
-        
-        /*
-* Do not assign Loan_Number__c.
-* Trigger should generate it.
-*/
-        putFirstActivePicklistValue(application, 'Loan_Product_Type__c');
-        putFirstActivePicklistValue(application, 'DPD_Sub_Reason__c');
-        
-        putIfCreateable(application, 'Branch_Name__c', 'Test Branch');
-        putIfCreateable(application, 'Sanc_EMI__c', 15000);
-        putIfCreateable(application, 'Sanctioned_ROI__c', 10.5);
-        putIfCreateable(application, 'MOB__c', 10);
-        putIfCreateable(application, 'DPD_1__c', 5);
-        putIfCreateable(application, 'DPD_Previous_month_closing__c', '10');
-        putIfCreateable(application, 'Loan_Outstanding__c', 100000);
-        putIfCreateable(application, 'Interest_Overdue__c', 95000);
-        putIfCreateable(application, 'Sanctioned_Amont__c', 250000);
-        putIfCreateable(application, 'Active_Cash_Receipts__c', 30000);
-        putIfCreateable(application, 'Ttl_bou__c', 1);
-        putIfCreateable(application, 'Life_HL_Insurance_Total__c', 1000);
-        putIfCreateable(application, 'Life_LAP_Insurance_Total__c', 500);
-        putIfCreateable(application, 'PA_Insurance_Total__c', 250);
-        putIfCreateable(application, 'Property_insurance_Total__c', 750);
-        putIfCreateable(application, 'FinnoneClient_Id__c', 'FIN-CLIENT-1');
-        putIfCreateable(application, 'Finnone_Loan_Id__c', 'FIN-LOAN-1');
-        
-        insert application;
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataFromApplication() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(application.Id);
-        
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataWithNullId() {
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            RetentionConsoleController.getRetentionConsoleData(null);
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataWithInvalidObjectId() {
-        if (!hasTestApplicant()) {
-            return;
-        }
-        
-        Account applicant = getTestApplicant();
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            RetentionConsoleController.getRetentionConsoleData(applicant.Id);
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataFromLeadWithoutCase() {
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Lead leadRecord = buildRetentionLead(null);
-        
-        Database.SaveResult leadResult = Database.insert(leadRecord, false);
-        
-        if (!leadResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                leadResult.getId()
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataFromLeadWithCaseAndApplication() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Case caseRecord = buildForeclosureCase(application.Id);
-        
-        Database.SaveResult caseResult = Database.insert(caseRecord, false);
-        
-        if (!caseResult.isSuccess()) {
-            return;
-        }
-        
-        Lead leadRecord = buildRetentionLead(caseResult.getId());
-        
-        Database.SaveResult leadResult = Database.insert(leadRecord, false);
-        
-        if (!leadResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                leadResult.getId()
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testSearchApplicationsWithBlankAndShortSearch() {
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> blankResults =
-            RetentionConsoleController.searchApplications('');
-        
-        List<RetentionConsoleController.ApplicationSearchResult> shortResults =
-            RetentionConsoleController.searchApplications('T');
-        
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testSearchApplicationsByNameMobileApplicantAndLoan() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> nameResults =
-            RetentionConsoleController.searchApplications('Retention');
-        
-        List<RetentionConsoleController.ApplicationSearchResult> applicantResults =
-            RetentionConsoleController.searchApplications('Applicant');
-        
-        List<RetentionConsoleController.ApplicationSearchResult> mobileResults =
-            RetentionConsoleController.searchApplications(TEST_MOBILE);
-        
-        List<RetentionConsoleController.ApplicationSearchResult> loanResults =
-            String.isBlank(application.Loan_Number__c)
-            ? new List<RetentionConsoleController.ApplicationSearchResult>()
-            : RetentionConsoleController.searchApplications(
-                application.Loan_Number__c
-            );
-        
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testSendAndVerifyCustomerOtp() {
-        if (!hasTestApplication() || !hasCustomerMobile()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Test.setMock(HttpCalloutMock.class, new SuccessfulOtpCalloutMock());
-        
-        Test.startTest();
-        
-        Map<String, Object> sendResponse =
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'CUSTOMER'
-            );
-        
-        Test.stopTest();
-        
-        
-        
-        Account applicant = [
-            SELECT Id,
-            CustomerOtp__c
-            FROM Account
-            WHERE Id = :application.AccountId
-            LIMIT 1
-        ];
-        
-        if (!String.isBlank(applicant.CustomerOtp__c)) {
-            Test.startTest();
-            
-            RetentionConsoleController.OtpResult successResponse =
-                RetentionConsoleController.verifyForeclosureOtp(
-                    application.Id,
-                    'CUSTOMER',
-                    applicant.CustomerOtp__c
-                );
-            
-            RetentionConsoleController.OtpResult failedResponse =
-                RetentionConsoleController.verifyForeclosureOtp(
-                    application.Id,
-                    'CUSTOMER',
-                    '000000'
-                );
-            
-            Test.stopTest();
-            
-        }
-    }
-    
-    @IsTest
-    static void testOtpFailureDoesNotSaveOtp() {
-        if (!hasTestApplication() || !hasCustomerMobile()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Test.setMock(HttpCalloutMock.class, new FailedOtpCalloutMock());
-        
-        Test.startTest();
-        
-        Map<String, Object> response =
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'CUSTOMER'
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testVerifyCustomerOtpSuccessAndFailure() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '123456');
-        
-        Test.startTest();
-        
-        RetentionConsoleController.OtpResult successResponse =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'CUSTOMER',
-                '123456'
-            );
-        
-        RetentionConsoleController.OtpResult failedResponse =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'CUSTOMER',
-                '000000'
-            );
-        
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testInvalidOtpRecipient() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'INVALID_RECIPIENT',
-                '123456'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-       
-    }
-    
-    @IsTest
-    static void testSendOtpWithBlankApplicationIdThrowsHandledError() {
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.sendForeclosureOtp(
-                null,
-                'CUSTOMER'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-       
-    }
-    
-    @IsTest
-    static void testVerifyOtpWithBlankApplicationIdThrowsHandledError() {
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.verifyForeclosureOtp(
-                null,
-                'CUSTOMER',
-                '123456'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestWithInvalidOtp() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.submitForeclosureRequest(
-                application.Id,
-                'CUSTOMER',
-                '000000',
-                '000000',
-                500
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestSuccessOrHandledValidation() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        /*
-* CUSTOMER is accepted by normalizeRecipient().
-* This avoids needing Branch Approver/EBS user data.
-*/
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '123456');
-        
-        Test.startTest();
-        
-        try {
-            RetentionConsoleController.ForeclosureSubmitResult response =
-                RetentionConsoleController.submitForeclosureRequest(
-                    application.Id,
-                    'CUSTOMER',
-                    '123456',
-                    '123456',
-                    750.50
-                );
-            
-        } catch (AuraHandledException exceptionValue) {
-            /*
-* If your org has extra Lead/Case validation rules, this still
-* covers the controller's handled exception branch.
-*/
-        }
-        
-        Test.stopTest();
-    }
-    
-    @IsTest
-    static void testUpdateDispositionAndNotes() {
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Lead leadRecord = buildRetentionLead(null);
-        
-        Database.SaveResult insertResult = Database.insert(leadRecord, false);
-        
-        if (!insertResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.updateDispositionandNotes(
-            'Interested',
-            'Customer wants retention offer.',
-            insertResult.getId()
-        );
-        
-        Test.stopTest();
-        
-    }
-    
-    
-    @IsTest
-    static void testConsoleDataWithRelatedRecordsForMoreCoverage() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        /*
-* Create optional related data used by private helper methods:
-* - loadLatestCam()
-* - loadCams()
-* - loadInsuranceFinancedPremium()
-* - loadInsurancePremiumFromGenerationData()
-* - loadEmiPaidToDate()
-* - loadLatestSavedBureauResponse()
-* - getCaseDetails()
-* - getLeadDetails()
-*/
-        createOptionalRelatedConsoleData(application);
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(application.Id);
-        
-        Test.stopTest();
-        
-
-    }
-    
-    
-    
-    
-    @IsTest
-    static void testSendOtpBranchApproverWithoutBranchMobile() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'BRANCH_APPROVER'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
-    @IsTest
-    static void testSendOtpEbsBranchUserWithoutBranchMobile() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'EBS_BRANCH_USER'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-    }
-    
-    @IsTest
-    static void testVerifyOtpBranchApproverWithoutBranchMobile() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'BRANCH_APPROVER',
-                '123456'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
-    @IsTest
-    static void testVerifyOtpEbsBranchUserWithoutBranchMobile() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'EBS_BRANCH_USER',
-                '123456'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestWithBranchApproverMissingMobile() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '123456');
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.submitForeclosureRequest(
-                application.Id,
-                'BRANCH_APPROVER',
-                '123456',
-                '123456',
-                100
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestWithEbsBranchUserMissingMobile() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '123456');
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.submitForeclosureRequest(
-                application.Id,
-                'EBS_BRANCH_USER',
-                '123456',
-                '123456',
-                100
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-       
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataFromLeadWithoutCaseExtraCoverage() {
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Lead leadRecord = new Lead(
-            FirstName = 'Retention',
-            LastName = 'WithoutCase',
-            Company = 'India Shelter',
-            RecordTypeId = retentionRecordTypeId,
-            Status = getValidLeadStatus()
-        );
-        
-        putIfCreateable(leadRecord, 'Lead_Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(leadRecord, 'Email', TEST_EMAIL);
-        
-        putFirstActivePicklistValue(leadRecord, 'LeadSource');
-        putFirstActivePicklistValue(
-            leadRecord,
-            'How_did_you_come_to_know_about_us__c'
-        );
-        putFirstActivePicklistValue(leadRecord, 'Lead_State__c');
-        
-        insert leadRecord;
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                leadRecord.Id
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testGetRetentionConsoleDataFromLeadWithCaseNoApplicationExtraCoverage() {
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Case caseRecord = new Case(
-            Subject = 'Retention Case Without Application',
-            SuppliedPhone = TEST_MOBILE
-        );
-        
-        putIfCreateable(caseRecord, 'First_Name__c', 'Apex');
-        putIfCreateable(caseRecord, 'Last_Name__c', 'Applicant');
-        putIfCreateable(caseRecord, 'Phone_Number_1__c', TEST_MOBILE);
-        
-        /*
-* Required by Case validation rule:
-* "Please update remarks Cannot be blank"
-*/
-        putIfCreateable(caseRecord, 'Ops_Remark__c', 'Test remarks');
-        
-        putFirstActivePicklistValue(caseRecord, 'Status');
-        putFirstActivePicklistValue(caseRecord, 'Origin');
-        putFirstActivePicklistValue(caseRecord, 'Request__c');
-        
-        insert caseRecord;
-        
-        Lead leadRecord = new Lead(
-            FirstName = 'Retention',
-            LastName = 'CaseNoApplication',
-            Company = 'India Shelter',
-            RecordTypeId = retentionRecordTypeId,
-            Status = getValidLeadStatus()
-        );
-        
-        putIfCreateable(leadRecord, 'Case__c', caseRecord.Id);
-        putIfCreateable(leadRecord, 'Lead_Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(leadRecord, 'Email', TEST_EMAIL);
-        
-        putFirstActivePicklistValue(leadRecord, 'LeadSource');
-        putFirstActivePicklistValue(
-            leadRecord,
-            'How_did_you_come_to_know_about_us__c'
-        );
-        putFirstActivePicklistValue(leadRecord, 'Lead_State__c');
-        
-        insert leadRecord;
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                leadRecord.Id
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestSuccessStrict() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '123456');
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ForeclosureSubmitResult response =
-            RetentionConsoleController.submitForeclosureRequest(
-                application.Id,
-                'CUSTOMER',
-                '123456',
-                '123456',
-                750.50
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testConsoleDataFromLeadLinkedToCaseAndApplication() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Case foreclosureCase = new Case(
-            Subject = 'Retention Foreclosure Case',
-            SuppliedPhone = TEST_MOBILE
-        );
-        
-        putIfCreateable(foreclosureCase, 'Application_Name__c', application.Id);
-        putIfCreateable(foreclosureCase, 'WebToCaseLoanNumber__c', application.Loan_Number__c);
-        putIfCreateable(foreclosureCase, 'First_Name__c', 'Apex');
-        putIfCreateable(foreclosureCase, 'Last_Name__c', 'Applicant');
-        putIfCreateable(foreclosureCase, 'Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(foreclosureCase, 'Receipt_of_Complaint__c', Date.today());
-        
-        putFirstActivePicklistValue(foreclosureCase, 'Status');
-        putFirstActivePicklistValue(foreclosureCase, 'Origin');
-        putFirstActivePicklistValue(foreclosureCase, 'Request__c');
-        
-        Database.SaveResult caseResult =
-            Database.insert(foreclosureCase, false);
-        
-        if (!caseResult.isSuccess()) {
-            return;
-        }
-        
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Lead retentionLead = new Lead(
-            FirstName = 'Retention',
-            LastName = 'Lead',
-            Company = 'India Shelter',
-            RecordTypeId = retentionRecordTypeId,
-            Status = getValidLeadStatus()
-        );
-        
-        putIfCreateable(retentionLead, 'Case__c', caseResult.getId());
-        putIfCreateable(retentionLead, 'Lead_Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(retentionLead, 'Email', TEST_EMAIL);
-        
-        putFirstActivePicklistValue(retentionLead, 'LeadSource');
-        putFirstActivePicklistValue(
-            retentionLead,
-            'How_did_you_come_to_know_about_us__c'
-        );
-        putFirstActivePicklistValue(retentionLead, 'Lead_State__c');
-        
-        Database.SaveResult leadResult =
-            Database.insert(retentionLead, false);
-        
-        if (!leadResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                leadResult.getId()
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testVerifyOtpWithBlankRecipientDefaultsToCustomer() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '654321');
-        
-        Test.startTest();
-        
-        RetentionConsoleController.OtpResult response =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                '',
-                '654321'
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    
-    @IsTest
-    static void testSendOtpWithBlankRecipientDefaultsToCustomer() {
-        if (!hasTestApplication() || !hasCustomerMobile()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Test.setMock(
-            HttpCalloutMock.class,
-            new SuccessfulOtpCalloutMock()
-        );
-        
-        Test.startTest();
-        
-        Map<String, Object> response =
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                ''
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestWithInvalidApprovalRecipient() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.submitForeclosureRequest(
-                application.Id,
-                'INVALID_APPROVER',
-                '123456',
-                '123456',
-                100
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-        
-    }
-    
-    @IsTest
-    static void testSearchApplicationsTrimsSearchText() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> results =
-            RetentionConsoleController.searchApplications(
-                '   Retention   '
-            );
-        
-        Test.stopTest();
-        
-       
-    }
-    
-    @IsTest
-    static void testUpdateDispositionAndNotesWithBlankValues() {
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Lead leadRecord = new Lead(
-            FirstName = 'Blank',
-            LastName = 'Disposition',
-            Company = 'India Shelter',
-            RecordTypeId = retentionRecordTypeId,
-            Status = getValidLeadStatus()
-        );
-        
-        putIfCreateable(leadRecord, 'Lead_Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(leadRecord, 'Email', TEST_EMAIL);
-        
-        putFirstActivePicklistValue(leadRecord, 'LeadSource');
-        putFirstActivePicklistValue(
-            leadRecord,
-            'How_did_you_come_to_know_about_us__c'
-        );
-        putFirstActivePicklistValue(leadRecord, 'Lead_State__c');
-        
-        Database.SaveResult insertResult =
-            Database.insert(leadRecord, false);
-        
-        if (!insertResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.updateDispositionandNotes(
-            null,
-            null,
-            insertResult.getId()
-        );
-        
-        Test.stopTest();
-        
-        Lead updatedLead = [
-            SELECT Id,
-            Other_Lender_Disposition__c,
-            Agent_Notes__c
-            FROM Lead
-            WHERE Id = :insertResult.getId()
-            LIMIT 1
-        ];
-        
-    }
-    
-    
-    
-    @IsTest
-    static void testConsoleDataLowRiskAndMobMoreThan24() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Opportunity appToUpdate = new Opportunity(
-            Id = application.Id
-        );
-        
-        /*
-* Covers:
-* - MOB > 24 foreclosure rate branch
-* - Low risk branch
-* - Empty risk reason branch
-*/
-        putIfUpdateable(appToUpdate, 'MOB__c', 30);
-        putIfUpdateable(appToUpdate, 'DPD_1__c', 0);
-        putIfUpdateable(appToUpdate, 'Ttl_bou__c', 0);
-        putIfUpdateable(appToUpdate, 'Interest_Overdue__c', null);
-        putIfUpdateable(appToUpdate, 'Loan_Outstanding__c', 80000);
-        
-        update appToUpdate;
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                application.Id
-            );
-        
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testConsoleDataHighRiskBranch() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Opportunity appToUpdate = new Opportunity(
-            Id = application.Id
-        );
-        
-        /*
-* Covers:
-* - High risk branch when DPD >= 30
-* - Risk reason with DPD and bounce values
-*/
-        putIfUpdateable(appToUpdate, 'MOB__c', 12);
-        putIfUpdateable(appToUpdate, 'DPD_1__c', 35);
-        putIfUpdateable(appToUpdate, 'Ttl_bou__c', 2);
-        putIfUpdateable(appToUpdate, 'Interest_Overdue__c', 90000);
-        
-        update appToUpdate;
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                application.Id
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    
-    @IsTest
-    static void testConsoleDataWithValidHouseholdApplicantBranch() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        Id householdId = createValidLookupRecordForField(
-            Opportunity.SObjectType,
-            'Household__c'
-        );
-        
-        if (householdId == null) {
-            householdId = createValidLookupRecordForField(
-                Account.SObjectType,
-                'Household__c'
-            );
-        }
-        
-        if (householdId == null) {
-            return;
-        }
-        
-        Account applicantToUpdate = new Account(Id = applicant.Id);
-        
-        putIfUpdateable(applicantToUpdate, 'Household__c', householdId);
-        putIfUpdateable(applicantToUpdate, 'Aadhar_Card__pc', '123412341234');
-        putIfUpdateable(applicantToUpdate, 'Pan_Card_No__pc', 'ABCDE1234F');
-        putIfUpdateable(applicantToUpdate, 'Address__pc', 'Test Address');
-        putIfUpdateable(
-            applicantToUpdate,
-            'Image_URL__pc',
-            'https://example.com/photo.jpg'
-        );
-        
-        putFirstActiveUpdateablePicklistValue(applicantToUpdate, 'Sex__pc');
-        putFirstActiveUpdateablePicklistValue(applicantToUpdate, 'Marital_Status__pc');
-        putFirstActiveUpdateablePicklistValue(applicantToUpdate, 'Qualification__pc');
-        
-        Database.SaveResult accountUpdateResult =
-            Database.update(applicantToUpdate, false);
-        
-        if (!accountUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Opportunity applicationToUpdate = new Opportunity(
-            Id = application.Id
-        );
-        
-        putIfUpdateable(applicationToUpdate, 'Household__c', householdId);
-        
-        Database.SaveResult appUpdateResult =
-            Database.update(applicationToUpdate, false);
-        
-        if (!appUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                application.Id
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    
-    @IsTest
-    static void testSearchApplicationWithoutAccount() {
-        Opportunity applicationWithoutAccount = new Opportunity(
-            Name = 'Retention No Account Application',
-            StageName = getValidOpportunityStageName(),
-            CloseDate = Date.today().addDays(20)
-        );
-        
-        putFirstActivePicklistValue(
-            applicationWithoutAccount,
-            'Loan_Product_Type__c'
-        );
-        
-        putFirstActivePicklistValue(
-            applicationWithoutAccount,
-            'DPD_Sub_Reason__c'
-        );
-        
-        putIfCreateable(
-            applicationWithoutAccount,
-            'Branch_Name__c',
-            'No Account Branch'
-        );
-        
-        putIfCreateable(applicationWithoutAccount, 'Sanc_EMI__c', 12000);
-        putIfCreateable(applicationWithoutAccount, 'MOB__c', 5);
-        putIfCreateable(applicationWithoutAccount, 'DPD_1__c', 0);
-        putIfCreateable(applicationWithoutAccount, 'Loan_Outstanding__c', 50000);
-        putIfCreateable(applicationWithoutAccount, 'Sanctioned_Amont__c', 100000);
-        
-        Database.SaveResult insertResult =
-            Database.insert(applicationWithoutAccount, false);
-        
-        if (!insertResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> results =
-            RetentionConsoleController.searchApplications(
-                'No Account'
-            );
-        
-        Test.stopTest();
-    }
-    
-    @IsTest
-    static void testSendCustomerOtpWithoutMobile() {
-        Id personAccountRecordTypeId =
-            getAvailablePersonAccountRecordTypeId();
-        
-        if (personAccountRecordTypeId == null) {
-            return;
-        }
-        
-        Account applicantWithoutMobile = new Account(
-            RecordTypeId = personAccountRecordTypeId,
-            FirstName = 'NoMobile',
-            LastName = 'Applicant'
-        );
-        
-        putIfCreateable(
-            applicantWithoutMobile,
-            'Personal_email__pc',
-            'nomobile@example.com'
-        );
-        
-        insert applicantWithoutMobile;
-        
-        Opportunity application = new Opportunity(
-            Name = 'Retention No Mobile Application',
-            AccountId = applicantWithoutMobile.Id,
-            StageName = getValidOpportunityStageName(),
-            CloseDate = Date.today().addDays(30)
-        );
-        
-        putFirstActivePicklistValue(application, 'Loan_Product_Type__c');
-        putFirstActivePicklistValue(application, 'DPD_Sub_Reason__c');
-        putIfCreateable(application, 'Branch_Name__c', 'No Mobile Branch');
-        putIfCreateable(application, 'Sanc_EMI__c', 10000);
-        putIfCreateable(application, 'MOB__c', 8);
-        putIfCreateable(application, 'DPD_1__c', 0);
-        putIfCreateable(application, 'Loan_Outstanding__c', 60000);
-        putIfCreateable(application, 'Sanctioned_Amont__c', 120000);
-        
-        insert application;
-        
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'CUSTOMER'
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
-    @IsTest
-    static void testVerifyOtpWithBlankEnteredOtpReturnsFailure() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '123456');
-        
-        Test.startTest();
-        
-        RetentionConsoleController.OtpResult response =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'CUSTOMER',
-                ''
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testUpdateDispositionAndNotesWithNullLeadIdThrowsError() {
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.updateDispositionandNotes(
-                'Interested',
-                'Testing null Lead Id branch.',
-                null
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-       
-    }
-    
-    @IsTest
-    static void testVerifyOtpWithNullRecipientDefaultsToCustomer() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '222333');
-        
-        Test.startTest();
-        
-        RetentionConsoleController.OtpResult response =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                null,
-                '222333'
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testSearchApplicationsWithApplicationNotLinkedToAccount() {
-        Opportunity orphanApplication = new Opportunity(
-            Name = 'Retention Orphan Search Application',
-            StageName = getValidOpportunityStageName(),
-            CloseDate = Date.today().addDays(15)
-        );
-        
-        putFirstActivePicklistValue(orphanApplication, 'Loan_Product_Type__c');
-        putFirstActivePicklistValue(orphanApplication, 'DPD_Sub_Reason__c');
-        
-        Database.SaveResult insertResult =
-            Database.insert(orphanApplication, false);
-        
-        if (!insertResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> results =
-            RetentionConsoleController.searchApplications('Orphan Search');
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testUpdateDispositionAndNotesWithNullLeadIdThrowsHandledException() {
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.updateDispositionandNotes(
-                'Interested',
-                'Null lead id coverage.',
-                null
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-       
-    }
-    
-    @IsTest
-    static void testVerifyCustomerOtpWithNullAndWhitespaceEnteredOtp() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '789456');
-        
-        Test.startTest();
-        
-        RetentionConsoleController.OtpResult nullOtpResponse =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'CUSTOMER',
-                null
-            );
-        
-        RetentionConsoleController.OtpResult whitespaceOtpResponse =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'CUSTOMER',
-                '   '
-            );
-        
-        RetentionConsoleController.OtpResult trimmedSuccessResponse =
-            RetentionConsoleController.verifyForeclosureOtp(
-                application.Id,
-                'CUSTOMER',
-                ' 789456 '
-            );
-        
-        Test.stopTest();
-        
-    }
-    
-    @IsTest
-    static void testSearchApplicationsByClientNumFallback() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Account accountToUpdate = new Account(
-            Id = application.AccountId
-        );
-        
-        putIfUpdateable(accountToUpdate, 'Client_ID__pc', null);
-        putIfUpdateable(accountToUpdate, 'ClientNum__pc', 'CLIENTNUM-ONLY-999');
-        
-        Database.SaveResult updateResult =
-            Database.update(accountToUpdate, false);
-        
-        if (!updateResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> results =
-            RetentionConsoleController.searchApplications('CLIENTNUM-ONLY-999');
-        
-        Test.stopTest();
-        
-
-    }
-    
-    @IsTest
-    static void testSendAndVerifyBranchApproverOtpSuccess() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Id branchId = createBranchWithApproverAndEbsUsers();
-        
-        if (branchId == null) {
-            return;
-        }
-        
-        Opportunity appToUpdate = new Opportunity(Id = application.Id);
-        putIfUpdateable(appToUpdate, 'Branch__c', branchId);
-        
-        Database.SaveResult appUpdateResult = Database.update(appToUpdate, false);
-        
-        if (!appUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Test.setMock(
-            HttpCalloutMock.class,
-            new SuccessfulOtpCalloutMock()
-        );
-        
-        Test.startTest();
-        
-        Map<String, Object> sendResponse =
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'BRANCH_APPROVER'
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    
-    @IsTest
-    static void testSubmitForeclosureRequestEbsOtpInvalidCoversValidationBranch() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        Id branchId = createBranchWithApproverAndEbsUsers();
-        
-        if (branchId == null) {
-            return;
-        }
-        
-        Opportunity applicationToUpdate = new Opportunity(
-            Id = application.Id
-        );
-        
-        putIfUpdateable(applicationToUpdate, 'Branch__c', branchId);
-        
-        Database.SaveResult appUpdateResult =
-            Database.update(applicationToUpdate, false);
-        
-        if (!appUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        /*
-* Customer OTP is correct.
-* EBS OTP is deliberately wrong to cover approval validateOtp failure branch.
-*/
-        Account otpAccount = new Account(
-            Id = applicant.Id
-        );
-        
-        putIfUpdateable(otpAccount, 'CustomerOtp__c', '123456');
-        putIfUpdateable(otpAccount, 'EBSOtp__c', '654321');
-        
-        Database.SaveResult accountUpdateResult =
-            Database.update(otpAccount, false);
-        
-        if (!accountUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Boolean exceptionThrown = false;
-        
-        Test.startTest();
-        
-        try {
-            RetentionConsoleController.submitForeclosureRequest(
-                application.Id,
-                'EBS_BRANCH_USER',
-                '123456',
-                '000000',
-                100
-            );
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-           
-        }
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testSendAndVerifyEbsBranchUserOtpSuccess() {
-        if (!hasTestApplication()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        
-        Id branchId = createBranchWithApproverAndEbsUsers();
-        
-        if (branchId == null) {
-            return;
-        }
-        
-        Opportunity appToUpdate = new Opportunity(Id = application.Id);
-        putIfUpdateable(appToUpdate, 'Branch__c', branchId);
-        
-        Database.SaveResult appUpdateResult = Database.update(appToUpdate, false);
-        
-        if (!appUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Test.setMock(
-            HttpCalloutMock.class,
-            new SuccessfulOtpCalloutMock()
-        );
-        
-        Test.startTest();
-        
-        Map<String, Object> sendResponse =
-            RetentionConsoleController.sendForeclosureOtp(
-                application.Id,
-                'EBS_BRANCH_USER'
-            );
-        
-        Test.stopTest();
-        
-        
-        
-    }
-    
-    @IsTest
-    static void testSubmitForeclosureRequestWithEbsOtpGoesPastOtpValidation() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        Id branchId = createBranchWithApproverAndEbsUsers();
-        
-        if (branchId == null) {
-            return;
-        }
-        
-        Opportunity appToUpdate = new Opportunity(Id = application.Id);
-        putIfUpdateable(appToUpdate, 'Branch__c', branchId);
-        
-        Database.SaveResult appUpdateResult = Database.update(appToUpdate, false);
-        
-        if (!appUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        setOtpValue(applicant.Id, 'CustomerOtp__c', '111222');
-        setOtpValue(applicant.Id, 'EBSOtp__c', '333444');
-        
-        Test.startTest();
-        
-        try {
-            RetentionConsoleController.ForeclosureSubmitResult response =
-                RetentionConsoleController.submitForeclosureRequest(
-                    application.Id,
-                    'EBS_BRANCH_USER',
-                    '111222',
-                    '333444',
-                    100
-                );
-            
-        } catch (AuraHandledException exceptionValue) {
-           
-        }
-        
-        Test.stopTest();
-    }
-    
-    /*
-* Helper for Branch Approver and EBS Branch User OTP success coverage.
-* Uses existing dynamic lookup helper from this test class.
-*/
-    private static Id createBranchWithApproverAndEbsUsers() {
-        Id branchId = createValidLookupRecordForField(
-            Opportunity.SObjectType,
-            'Branch__c'
-        );
-        
-        if (branchId == null) {
-            return null;
-        }
-        
-        User approverUser = createRetentionTestUserWithMobile('Approver');
-        User ebsUser = createRetentionTestUserWithMobile('EbsUser');
-        
-        if (approverUser == null || ebsUser == null) {
-            return null;
-        }
-        
-        SObject branchRecord =
-            branchId.getSObjectType().newSObject(branchId);
-        
-        Schema.DescribeSObjectResult branchDescribe =
-            branchId.getSObjectType().getDescribe();
-        
-        Map<String, Schema.SObjectField> branchFields =
-            branchDescribe.fields.getMap();
-        
-        Boolean hasAnyUpdate = false;
-        
-        if (
-            branchFields.containsKey('Branch_Approver__c') &&
-            branchFields.get('Branch_Approver__c').getDescribe().isUpdateable()
-        ) {
-            branchRecord.put('Branch_Approver__c', approverUser.Id);
-            hasAnyUpdate = true;
-        }
-        
-        if (
-            branchFields.containsKey('Branch_User__c') &&
-            branchFields.get('Branch_User__c').getDescribe().isUpdateable()
-        ) {
-            branchRecord.put('Branch_User__c', ebsUser.Id);
-            hasAnyUpdate = true;
-        }
-        
-        if (!hasAnyUpdate) {
-            return null;
-        }
-        
-        Database.SaveResult branchUpdateResult =
-            Database.update(branchRecord, false);
-        
-        if (!branchUpdateResult.isSuccess()) {
-            return null;
-        }
-        
-        return branchId;
-    }
-    
-    private static User createRetentionTestUserWithMobile(String suffixValue) {
-        Profile profileRecord = [
-            SELECT Id
-            FROM Profile
-            WHERE UserType = 'Standard'
-            LIMIT 1
-        ];
-        
-        String uniqueValue =
-            String.valueOf(DateTime.now().getTime()) +
-            String.valueOf(Math.abs(Crypto.getRandomInteger()));
-        
-        User userRecord = new User(
-            FirstName = 'Retention',
-            LastName = suffixValue,
-            Alias = suffixValue.length() > 8
-            ? suffixValue.substring(0, 8)
-            : suffixValue,
-            Email = 'retention.' + uniqueValue + '@example.com',
-            Username = 'retention.' + uniqueValue + '@example.com',
-            CommunityNickname = 'ret' + uniqueValue.left(10),
-            ProfileId = profileRecord.Id,
-            TimeZoneSidKey = 'Asia/Kolkata',
-            LocaleSidKey = 'en_IN',
-            EmailEncodingKey = 'UTF-8',
-            LanguageLocaleKey = 'en_US',
-            MobilePhone = TEST_MOBILE
-        );
-        
-        Database.SaveResult userResult =
-            Database.insert(userRecord, false);
-        
-        if (!userResult.isSuccess()) {
-            return null;
-        }
-        
-        return userRecord;
-    }
-    
-    @IsTest
-    static void testConsoleDataFromLeadWithCaseButNoApplication() {
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId == null) {
-            return;
-        }
-        
-        Case foreclosureCase = new Case(
-            Subject = 'Case Without Application',
-            SuppliedPhone = TEST_MOBILE
-        );
-        
-        putIfCreateable(foreclosureCase, 'First_Name__c', 'Apex');
-        putIfCreateable(foreclosureCase, 'Last_Name__c', 'Applicant');
-        putIfCreateable(foreclosureCase, 'Phone_Number_1__c', TEST_MOBILE);
-        
-        putFirstActivePicklistValue(foreclosureCase, 'Status');
-        putFirstActivePicklistValue(foreclosureCase, 'Origin');
-        putFirstActivePicklistValue(foreclosureCase, 'Request__c');
-        
-        Database.SaveResult caseResult =
-            Database.insert(foreclosureCase, false);
-        
-        if (!caseResult.isSuccess()) {
-            return;
-        }
-        
-        Lead retentionLead = new Lead(
-            FirstName = 'Retention',
-            LastName = 'NoApplication',
-            Company = 'India Shelter',
-            RecordTypeId = retentionRecordTypeId,
-            Status = getValidLeadStatus()
-        );
-        
-        putIfCreateable(retentionLead, 'Case__c', caseResult.getId());
-        putIfCreateable(retentionLead, 'Lead_Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(retentionLead, 'Email', TEST_EMAIL);
-        
-        putFirstActivePicklistValue(retentionLead, 'LeadSource');
-        putFirstActivePicklistValue(
-            retentionLead,
-            'How_did_you_come_to_know_about_us__c'
-        );
-        putFirstActivePicklistValue(retentionLead, 'Lead_State__c');
-        
-        Database.SaveResult leadResult =
-            Database.insert(retentionLead, false);
-        
-        if (!leadResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(
-                leadResult.getId()
-            );
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testGetPhotoUrlFromPhotographHtmlFallback() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
-            return;
-        }
-        
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        
-        Id householdId = createValidLookupRecordForField(
-            Opportunity.SObjectType,
-            'Household__c'
-        );
-        
-        if (householdId == null) {
-            householdId = createValidLookupRecordForField(
-                Account.SObjectType,
-                'Household__c'
-            );
-        }
-        
-        if (householdId == null) {
-            return;
-        }
-        
-        Account applicantToUpdate = new Account(Id = applicant.Id);
-        
-        putIfUpdateable(applicantToUpdate, 'Household__c', householdId);
-        
-        /*
-* Deliberately leave Image_URL__pc blank so getPhotoUrl()
-* falls through to the Photograph__pc regex branch.
-*/
-        putIfUpdateable(
-            applicantToUpdate,
-            'Photograph__pc',
-            '<p>Applicant photo</p><img src="https://example.com/applicant.jpg" alt="photo"/>'
-        );
-        
-        Database.SaveResult accountUpdateResult =
-            Database.update(applicantToUpdate, false);
-        
-        if (!accountUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Opportunity applicationToUpdate = new Opportunity(Id = application.Id);
-        putIfUpdateable(applicationToUpdate, 'Household__c', householdId);
-        
-        Database.SaveResult appUpdateResult =
-            Database.update(applicationToUpdate, false);
-        
-        if (!appUpdateResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        RetentionConsoleController.ConsoleData response =
-            RetentionConsoleController.getRetentionConsoleData(application.Id);
-        
-        Test.stopTest();
-        
-        
-    }
-    
-    @IsTest
-    static void testSearchApplicationsLoanNumberDashFallback() {
-        Opportunity applicationWithoutLoanNumber = new Opportunity(
-            Name = 'Retention Loan Dash Fallback Application',
-            StageName = getValidOpportunityStageName(),
-            CloseDate = Date.today().addDays(10)
-        );
-        
-        putFirstActivePicklistValue(
-            applicationWithoutLoanNumber,
-            'Loan_Product_Type__c'
-        );
-        
-        putFirstActivePicklistValue(
-            applicationWithoutLoanNumber,
-            'DPD_Sub_Reason__c'
-        );
-        
-        Database.SaveResult insertResult =
-            Database.insert(applicationWithoutLoanNumber, false);
-        
-        if (!insertResult.isSuccess()) {
-            return;
-        }
-        
-        Test.startTest();
-        
-        List<RetentionConsoleController.ApplicationSearchResult> results =
-            RetentionConsoleController.searchApplications(
-                'Loan Dash Fallback'
-            );
-        
-        Test.stopTest();
-        
-       
-    }
-    @IsTest
-    static void testUpdateDispositionWithoutLeadThrowsError() {
-        Boolean exceptionThrown = false;
-        
-        try {
-            Test.startTest();
-            
-            RetentionConsoleController.updateDispositionandNotes(
-                'Interested',
-                'No lead selected.',
-                null
-            );
-            
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-        
-    }
-    
     /* =====================================================================
-     * NEW: getHouseholdApplications
+     * ADDITIONAL TEST CASES FOR HIGHER COVERAGE
      * ===================================================================== */
 
     @IsTest
-    static void testGetHouseholdApplicationsWithNullIdThrowsError() {
-        Boolean exceptionThrown = false;
-
-        try {
-            Test.startTest();
-            RetentionConsoleController.getHouseholdApplications(null);
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-
-        Assert.isTrue(
-            exceptionThrown,
-            'A null Main Application Id should throw an AuraHandledException.'
-        );
-    }
-
-    @IsTest
-    static void testGetHouseholdApplicationsWithNonOpportunityIdThrowsError() {
-        if (!hasTestApplicant()) {
-            return;
-        }
-
-        Account applicant = getTestApplicant();
-        Boolean exceptionThrown = false;
-
-        try {
-            Test.startTest();
-            RetentionConsoleController.getHouseholdApplications(applicant.Id);
-            Test.stopTest();
-        } catch (AuraHandledException exceptionValue) {
-            exceptionThrown = true;
-        }
-
-        Assert.isTrue(
-            exceptionThrown,
-            'An Account Id should throw an AuraHandledException.'
-        );
-    }
-
-    @IsTest
-    static void testGetHouseholdApplicationsWithoutHouseholdReturnsEmptyList() {
-        if (!hasTestApplication()) {
-            return;
-        }
-
-        /* Test application is created without Household__c */
-        Opportunity application = getTestApplication();
+    static void testUpdateDispositionNotesAndStatusAllBranches() {
+        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
+        Lead leadRecord = buildRetentionLead(null);
+        Database.SaveResult insertResult = Database.insert(leadRecord, false);
 
         Test.startTest();
 
-        List<RetentionConsoleController.CloneApplicationData> rows =
-            RetentionConsoleController.getHouseholdApplications(
-                application.Id
+        // 1. Null Lead Id
+        try {
+            RetentionConsoleController.updateDispositionNotesAndStatus(
+                'Interested',
+                'Notes',
+                getValidLeadStatus(),
+                null
             );
+        } catch (AuraHandledException ex) {
+            // Expected
+        }
+
+        if (insertResult.isSuccess()) {
+            Id leadId = insertResult.getId();
+
+            // 2. Blank Lead Status
+            try {
+                RetentionConsoleController.updateDispositionNotesAndStatus(
+                    'Interested',
+                    'Notes',
+                    '',
+                    leadId
+                );
+            } catch (AuraHandledException ex) {
+                // Expected
+            }
+
+            // 3. Invalid Lead Status
+            try {
+                RetentionConsoleController.updateDispositionNotesAndStatus(
+                    'Interested',
+                    'Notes',
+                    'INVALID_NON_EXISTENT_STATUS_XYZ',
+                    leadId
+                );
+            } catch (AuraHandledException ex) {
+                // Expected
+            }
+
+            // 4. Valid active Lead Status
+            try {
+                RetentionConsoleController.updateDispositionNotesAndStatus(
+                    'Interested',
+                    'Updated notes with status',
+                    getValidLeadStatus(),
+                    leadId
+                );
+            } catch (Exception ex) {
+                // Covers update path even if org validation fires
+            }
+        }
 
         Test.stopTest();
-
-        Assert.isTrue(
-            rows.isEmpty(),
-            'No Household should return an empty list.'
-        );
     }
 
     @IsTest
-    static void testGetHouseholdApplicationsReturnsSiblingsExcludingMain() {
-        if (!hasTestApplication()) {
+    static void testGetLinkedApplicationsReturnsMatchingLinkedOpportunities() {
+        if (!hasTestApplication() || !hasTestApplicant()) {
             return;
         }
 
-        Opportunity mainApplication = getTestApplication();
-        Id householdId = createHouseholdRecord();
+        Opportunity mainApp = getTestApplication();
+        Account mainApplicant = getTestApplicant();
+        Id household1 = createHouseholdRecord();
+        Id household2 = createHouseholdRecord();
 
-        if (householdId == null) {
+        if (household1 == null) {
+            return;
+        }
+        if (household2 == null) {
+            household2 = household1;
+        }
+
+        // Update main applicant with Finnone_Client_Id__c AND Household__c
+        Account mainAccUpdate = new Account(Id = mainApplicant.Id);
+        putIfUpdateable(mainAccUpdate, 'Household__c', household1);
+        putIfUpdateable(mainAccUpdate, 'Finnone_Client_Id__c', 'FIN-SHARED-999');
+        if (!Database.update(mainAccUpdate, false).isSuccess()) {
             return;
         }
 
-        Opportunity mainToUpdate = new Opportunity(Id = mainApplication.Id);
-        putIfUpdateable(mainToUpdate, 'Household__c', householdId);
-
-        if (!Database.update(mainToUpdate, false).isSuccess()) {
+        Opportunity mainAppUpdate = new Opportunity(Id = mainApp.Id);
+        putIfUpdateable(mainAppUpdate, 'Household__c', household1);
+        if (!Database.update(mainAppUpdate, false).isSuccess()) {
             return;
         }
 
-        Opportunity verifiedMain = [
-            SELECT Id, Household__c
-            FROM Opportunity
-            WHERE Id = :mainApplication.Id
-            LIMIT 1
-        ];
-
-        if (verifiedMain.Household__c == null) {
-            return;
+        // Second applicant on household2 sharing the same Finnone_Client_Id__c
+        Id personRtId = getAvailablePersonAccountRecordTypeId();
+        Account secondApplicant;
+        if (personRtId != null) {
+            secondApplicant = new Account(
+                RecordTypeId = personRtId,
+                FirstName = 'Linked',
+                LastName = 'Applicant'
+            );
+            putIfCreateable(secondApplicant, 'Household__c', household2);
+            putIfCreateable(secondApplicant, 'Finnone_Client_Id__c', 'FIN-SHARED-999');
+            putIfCreateable(secondApplicant, 'Mobile__pc', '9876543211');
+            Database.insert(secondApplicant, false);
         }
 
-        /*
-         * One sibling with an Applicant, one without,
-         * so both branches of applicantName are covered.
-         */
-        Opportunity siblingWithAccount = buildTestApplication(
-            'Retention Household Sibling One',
-            mainApplication.AccountId,
-            householdId
+        // Linked Opportunities (one with Account, one without Account)
+        Opportunity linkedApp1 = buildTestApplication(
+            'Linked App With Account',
+            secondApplicant != null && secondApplicant.Id != null
+                ? secondApplicant.Id
+                : mainApplicant.Id,
+            household2
         );
+        putIfCreateable(linkedApp1, 'FinnoneClient_Id__c', 'FIN-SHARED-999');
+        putIfCreateable(linkedApp1, 'Finnone_Loan_Id__c', 'FIN-LOAN-999');
 
-        Opportunity siblingWithoutAccount = buildTestApplication(
-            'Retention Household Sibling Two',
+        Opportunity linkedApp2 = buildTestApplication(
+            'Linked App Without Account',
             null,
-            householdId
+            household2
         );
 
-        List<Database.SaveResult> insertResults = Database.insert(
-            new List<Opportunity>{
-                siblingWithAccount,
-                siblingWithoutAccount
-            },
+        Database.insert(
+            new List<Opportunity>{ linkedApp1, linkedApp2 },
             false
         );
 
-        for (Database.SaveResult insertResult : insertResults) {
-            if (!insertResult.isSuccess()) {
-                return;
-            }
-        }
-
         Test.startTest();
-
-        List<RetentionConsoleController.CloneApplicationData> rows =
-            RetentionConsoleController.getHouseholdApplications(
-                mainApplication.Id
-            );
-
+        List<RetentionConsoleController.LinkedApplicationData> results =
+            RetentionConsoleController.getLinkedApplications(mainApp.Id);
         Test.stopTest();
-
-        Assert.areEqual(
-            2,
-            rows.size(),
-            'Both sibling Applications should be returned.'
-        );
-
-        Map<Id, RetentionConsoleController.CloneApplicationData> rowsById =
-            new Map<Id, RetentionConsoleController.CloneApplicationData>();
-
-        for (RetentionConsoleController.CloneApplicationData row : rows) {
-            rowsById.put(row.id, row);
-        }
-
-        Assert.isFalse(
-            rowsById.containsKey(mainApplication.Id),
-            'The main Application must be excluded.'
-        );
-
-        Assert.isTrue(rowsById.containsKey(siblingWithAccount.Id));
-        Assert.isTrue(rowsById.containsKey(siblingWithoutAccount.Id));
-
-        Assert.areEqual(
-            'Apex Applicant',
-            rowsById.get(siblingWithAccount.Id).applicantName
-        );
-
-        Assert.areEqual(
-            'Applicant not linked',
-            rowsById.get(siblingWithoutAccount.Id).applicantName
-        );
-
-        Assert.areEqual(
-            'Not available',
-            rowsById.get(siblingWithoutAccount.Id).product
-        );
-
-        Assert.isFalse(
-            String.isBlank(rowsById.get(siblingWithAccount.Id).loanNumber)
-        );
-    }
-
-    /* =====================================================================
-     * NEW: getLinkedApplications
-     * ===================================================================== */
-
-    @IsTest
-    static void testGetLinkedApplicationsWithInvalidIdsThrowsError() {
-        Boolean nullThrown = false;
-        Boolean wrongTypeThrown = false;
-
-        try {
-            RetentionConsoleController.getLinkedApplications(null);
-        } catch (AuraHandledException exceptionValue) {
-            nullThrown = true;
-        }
-
-        if (hasTestApplicant()) {
-            try {
-                RetentionConsoleController.getLinkedApplications(
-                    getTestApplicant().Id
-                );
-            } catch (AuraHandledException exceptionValue) {
-                wrongTypeThrown = true;
-            }
-
-            Assert.isTrue(wrongTypeThrown);
-        }
-
-        Assert.isTrue(nullThrown);
     }
 
     @IsTest
-    static void testGetLinkedApplicationsWithoutHouseholdReturnsEmptyList() {
+    static void testGetRateChangeHistoryAllBranches() {
         if (!hasTestApplication()) {
             return;
         }
 
-        Opportunity application = getTestApplication();
+        Opportunity app = getTestApplication();
+
+        Opportunity appUpdate = new Opportunity(Id = app.Id);
+        putTypedValueIfUpdateable(appUpdate, 'First_Sanction_Date__c', '2025-01-15', null, Date.today().addMonths(-6));
+        putTypedValueIfUpdateable(appUpdate, 'Sanctioned_ROI__c', '10.50', 10.50, null);
+        putIfUpdateable(appUpdate, 'Whatsapp_Name3__c', '12.25%');
+        Database.update(appUpdate, false);
 
         Test.startTest();
 
-        List<RetentionConsoleController.LinkedApplicationData> rows =
-            RetentionConsoleController.getLinkedApplications(application.Id);
+        // 1. Null Id
+        RetentionConsoleController.RateChangeHistoryData nullRes =
+            RetentionConsoleController.getRateChangeHistory(null);
+
+        // 2. Valid Decimal + percentage string
+        RetentionConsoleController.RateChangeHistoryData validRes =
+            RetentionConsoleController.getRateChangeHistory(app.Id);
+
+        // 3. Invalid non-numeric string to hit toDecimal() catch block
+        Opportunity invalidRoiUpdate = new Opportunity(Id = app.Id);
+        putIfUpdateable(invalidRoiUpdate, 'Whatsapp_Name3__c', 'NOT_A_NUMBER');
+        Database.update(invalidRoiUpdate, false);
+
+        RetentionConsoleController.RateChangeHistoryData invalidRes =
+            RetentionConsoleController.getRateChangeHistory(app.Id);
+
+        // 4. Blank string to hit toDecimal() blank branch
+        Opportunity blankRoiUpdate = new Opportunity(Id = app.Id);
+        putIfUpdateable(blankRoiUpdate, 'Whatsapp_Name3__c', '   ');
+        Database.update(blankRoiUpdate, false);
+
+        RetentionConsoleController.RateChangeHistoryData blankRes =
+            RetentionConsoleController.getRateChangeHistory(app.Id);
 
         Test.stopTest();
-
-        Assert.isTrue(rows.isEmpty());
     }
 
     @IsTest
-    static void testGetLinkedApplicationsWithoutFinnoneClientIdReturnsEmptyList() {
+    static void testGetRepaymentDisciplineAllBranches() {
+        if (!hasTestApplication()) {
+            return;
+        }
+
+        Opportunity app = getTestApplication();
+
+        Opportunity appUpdate = new Opportunity(Id = app.Id);
+        putTypedValueIfUpdateable(appUpdate, 'IA_File_Audit_Date__c', '15', 15, Date.today());
+        putIfUpdateable(appUpdate, 'Ttl_bou__c', 2);
+        putIfUpdateable(appUpdate, 'MOB__c', 18);
+        Database.update(appUpdate, false);
+
+        // Create two Bounce Collection__c records (one duplicate date, one distinct)
+        Collection__c bounce1 = new Collection__c();
+        putIfCreateable(bounce1, 'SFDC_Customer__c', app.Id);
+        putIfCreateable(bounce1, 'Date_of_Collection__c', Date.today().addDays(-10));
+        setPicklistValueIfAvailable(bounce1, 'ClearenceStatus__c', 'Bounce');
+
+        Collection__c bounce2 = new Collection__c();
+        putIfCreateable(bounce2, 'SFDC_Customer__c', app.Id);
+        putIfCreateable(bounce2, 'Date_of_Collection__c', Date.today().addDays(-5));
+        setPicklistValueIfAvailable(bounce2, 'ClearenceStatus__c', 'Bounce');
+
+        Database.insert(new List<Collection__c>{ bounce1, bounce2 }, false);
+
+        Test.startTest();
+        RetentionConsoleController.RepaymentDisciplineData nullRes =
+            RetentionConsoleController.getRepaymentDiscipline(null);
+
+        RetentionConsoleController.RepaymentDisciplineData validRes =
+            RetentionConsoleController.getRepaymentDiscipline(app.Id);
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testGetScorecardFieldsAllBranches() {
+        if (!hasTestApplication()) {
+            return;
+        }
+
+        Opportunity app = getTestApplication();
+
+        CAM__c cam = new CAM__c();
+        putIfCreateable(cam, 'Loan_Application__c', app.Id);
+        putIfCreateable(cam, 'Name', 'Scorecard Test CAM');
+        putIfCreateable(cam, 'Is_Clone_CAM__c', false);
+        Database.SaveResult camRes = Database.insert(cam, false);
+
+        Test.startTest();
+
+        // 1. Null camId
+        RetentionConsoleController.ScorecardFieldsData nullRes =
+            RetentionConsoleController.getScorecardFields(null);
+
+        if (camRes.isSuccess()) {
+            // 2. CAM with no Scorecard__c yet
+            RetentionConsoleController.ScorecardFieldsData emptyRes =
+                RetentionConsoleController.getScorecardFields(camRes.getId());
+
+            // 3. CAM with Scorecard__c
+            Scorecard__c sc = new Scorecard__c();
+            putIfCreateable(sc, 'CAM__c', camRes.getId());
+            putTypedValueIfCreateable(sc, 'Score_Value__c', '720', 720, null);
+            putTypedValueIfCreateable(sc, 'Score_Card_Delegation__c', 'Branch', 1, null);
+            putTypedValueIfCreateable(sc, 'ROI_Decision__c', 'Approved', 10, null);
+            putTypedValueIfCreateable(sc, 'Branch_Risk_Category__c', 'Low', 1, null);
+            Database.insert(sc, false);
+
+            RetentionConsoleController.ScorecardFieldsData populatedRes =
+                RetentionConsoleController.getScorecardFields(camRes.getId());
+        }
+
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void testGetCreditTrajectoryAllBranches() {
         if (!hasTestApplication() || !hasTestApplicant()) {
             return;
         }
 
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        Id householdId = createHouseholdRecord();
+        Opportunity app = getTestApplication();
+        Account mainApplicant = getTestApplicant();
 
-        if (householdId == null) {
-            return;
-        }
-
-        Account applicantToUpdate = new Account(Id = applicant.Id);
-        putIfUpdateable(applicantToUpdate, 'Household__c', householdId);
-
-        if (!Database.update(applicantToUpdate, false).isSuccess()) {
-            return;
-        }
-
-        Opportunity applicationToUpdate = new Opportunity(Id = application.Id);
-        putIfUpdateable(applicationToUpdate, 'Household__c', householdId);
-
-        if (!Database.update(applicationToUpdate, false).isSuccess()) {
-            return;
-        }
-
-        /* Household exists, but no Account on it has Finnone_Client_Id__c */
+        // First call with no Household / no Customer__c
         Test.startTest();
+        List<RetentionConsoleController.CreditTrajectoryData> nullRes =
+            RetentionConsoleController.getCreditTrajectory(null);
+        List<RetentionConsoleController.CreditTrajectoryData> emptyRes =
+            RetentionConsoleController.getCreditTrajectory(app.Id);
 
-        List<RetentionConsoleController.LinkedApplicationData> rows =
-            RetentionConsoleController.getLinkedApplications(application.Id);
+        Id householdId = createHouseholdRecord();
+        if (householdId != null) {
+            // Link Customer__c.LoanAppID__c if available
+            SObject customerObj = householdId.getSObjectType().newSObject(householdId);
+            putIfUpdateable(customerObj, 'LoanAppID__c', app.Id);
+            Database.update(customerObj, false);
+
+            Opportunity appUpdate = new Opportunity(Id = app.Id);
+            putIfUpdateable(appUpdate, 'Household__c', householdId);
+            Database.update(appUpdate, false);
+
+            Account mainAccUpdate = new Account(Id = mainApplicant.Id);
+            putIfUpdateable(mainAccUpdate, 'Household__c', householdId);
+            putTypedValueIfUpdateable(mainAccUpdate, 'CIBIL_Score__pc', '760', 760, null);
+            Database.update(mainAccUpdate, false);
+
+            // Second applicant under same Household to cover both branches
+            Id personRtId = getAvailablePersonAccountRecordTypeId();
+            if (personRtId != null) {
+                Account coApplicant = new Account(
+                    RecordTypeId = personRtId,
+                    FirstName = 'CoApp',
+                    LastName = 'Trajectory'
+                );
+                putIfCreateable(coApplicant, 'Household__c', householdId);
+                putTypedValueIfCreateable(coApplicant, 'CIBIL_Score__pc', '710', 710, null);
+                Database.insert(coApplicant, false);
+            }
+
+            List<RetentionConsoleController.CreditTrajectoryData> populatedRes =
+                RetentionConsoleController.getCreditTrajectory(app.Id);
+        }
 
         Test.stopTest();
-
-        Assert.isTrue(rows.isEmpty());
     }
-    
+
     @IsTest
-    static void testGetLinkedApplicationsWithFinnoneClientIdReturnsEmptyListclone() {
-        if (!hasTestApplication() || !hasTestApplicant()) {
+    static void testGetCollateralDataAllBranches() {
+        if (!hasTestApplication()) {
             return;
         }
 
-        Opportunity application = getTestApplication();
-        Account applicant = getTestApplicant();
-        applicant.Finnone_Client_Id__c='abs123456';
-        Id householdId = createHouseholdRecord();
+        Opportunity app = getTestApplication();
 
-        if (householdId == null) {
-            return;
-        }
-
-        Account applicantToUpdate = new Account(Id = applicant.Id);
-        putIfUpdateable(applicantToUpdate, 'Household__c', householdId);
-
-        if (!Database.update(applicantToUpdate, false).isSuccess()) {
-            return;
-        }
-
-        Opportunity applicationToUpdate = new Opportunity(Id = application.Id);
-        putIfUpdateable(applicationToUpdate, 'Household__c', householdId);
-
-        if (!Database.update(applicationToUpdate, false).isSuccess()) {
-            return;
-        }
-
-        /* Household exists, but no Account on it has Finnone_Client_Id__c */
-        Test.startTest();
-
-        List<RetentionConsoleController.LinkedApplicationData> rows =
-            RetentionConsoleController.getLinkedApplications(application.Id);
-
-        Test.stopTest();
-
-        Assert.isTrue(rows.isEmpty());
-    }
-
-
-
-    /* =====================================================================
-     * NEW helpers
-     * ===================================================================== */
-
-    /*
-     * Creates a record for the Household__c lookup (Opportunity first,
-     * then Account as fallback), same way the existing tests do.
-     */
-    private static Id createHouseholdRecord() {
-        Id householdId = createValidLookupRecordForField(
+        // Create Property_Code__c lookup record and populate site + legal address fields
+        Id propertyId = createValidLookupRecordForField(
             Opportunity.SObjectType,
-            'Household__c'
+            'Property_Code__c'
         );
 
-        if (householdId == null) {
-            householdId = createValidLookupRecordForField(
-                Account.SObjectType,
-                'Household__c'
-            );
+        if (propertyId != null) {
+            SObject propRec = propertyId.getSObjectType().newSObject(propertyId);
+            putIfUpdateable(propRec, 'Plot_No__c', 'Plot 12');
+            putIfUpdateable(propRec, 'Street_Name__c', 'MG Road');
+            putIfUpdateable(propRec, 'Locality__c', 'Sector 38');
+            putIfUpdateable(propRec, 'Landmark__c', 'Near Metro');
+            putIfUpdateable(propRec, 'City__c', 'Gurugram');
+            putIfUpdateable(propRec, 'District__c', 'Gurugram');
+            putIfUpdateable(propRec, 'State__c', 'Haryana');
+            putIfUpdateable(propRec, 'Village__c', 'Islampur');
+            putTypedValueIfUpdateable(propRec, 'Pin_Code__c', '122001', 122001, null);
+
+            putIfUpdateable(propRec, 'Collateral_Address_1__c', 'Legal Line 1');
+            putIfUpdateable(propRec, 'Collateral_Address_2__c', 'Legal Line 2');
+            putIfUpdateable(propRec, 'Collateral_Address_3__c', 'Legal Line 3');
+            putIfUpdateable(propRec, 'Collateral_City__c', 'Gurugram');
+            putIfUpdateable(propRec, 'Collateral_State__c', 'Haryana');
+            putTypedValueIfUpdateable(propRec, 'Collateral_Pin_Code_New__c', '122001', 122001, null);
+            Database.update(propRec, false);
+
+            Opportunity appUpdate = new Opportunity(Id = app.Id);
+            putIfUpdateable(appUpdate, 'Property_Code__c', propertyId);
+            Database.update(appUpdate, false);
         }
 
-        return householdId;
-    }
+        // Create Contacts + OpportunityContactRoles (Main Applicant + Co-Applicant)
+        Contact mainContact = new Contact(FirstName = 'Main', LastName = 'Collateral');
+        putIfCreateable(mainContact, 'Address_Line_1__c', 'Res Line 1');
+        putIfCreateable(mainContact, 'City__c', 'Gurugram');
+        putIfCreateable(mainContact, 'Communication_Address_Line_1__c', 'Comm Line 1');
+        putIfCreateable(mainContact, 'Address_Office__c', 'Office Line 1');
 
-    /*
-     * Builds an Opportunity the same way @testSetup does, with an optional
-     * Account and Household. Loan_Number__c is left for the trigger.
-     */
-    private static Opportunity buildTestApplication(
-        String applicationName,
-        Id accountId,
-        Id householdId
-    ) {
-        Opportunity application = new Opportunity(
-            Name = applicationName,
-            StageName = getValidOpportunityStageName(),
-            CloseDate = Date.today().addDays(30)
+        Contact coContact = new Contact(FirstName = 'CoApp', LastName = 'Collateral');
+        putIfCreateable(coContact, 'Address_Line_1__c', 'Co Res Line 1');
+
+        List<Database.SaveResult> contactResults = Database.insert(
+            new List<Contact>{ mainContact, coContact },
+            false
         );
 
-        if (accountId != null) {
-            application.AccountId = accountId;
+        List<OpportunityContactRole> ocrs = new List<OpportunityContactRole>();
+        if (contactResults[0].isSuccess()) {
+            ocrs.add(new OpportunityContactRole(
+                OpportunityId = app.Id,
+                ContactId = contactResults[0].getId(),
+                Role = 'Main Applicant'
+            ));
+        }
+        if (contactResults[1].isSuccess()) {
+            ocrs.add(new OpportunityContactRole(
+                OpportunityId = app.Id,
+                ContactId = contactResults[1].getId(),
+                Role = 'Co-Applicant'
+            ));
+        }
+        if (!ocrs.isEmpty()) {
+            Database.insert(ocrs, false);
         }
 
-        putFirstActivePicklistValue(application, 'Loan_Product_Type__c');
-        putFirstActivePicklistValue(application, 'DPD_Sub_Reason__c');
+        Test.startTest();
+        RetentionConsoleController.CollateralData nullRes =
+            RetentionConsoleController.getCollateralData(null);
+        RetentionConsoleController.CollateralData populatedRes =
+            RetentionConsoleController.getCollateralData(app.Id);
+        Test.stopTest();
+    }
 
-        putIfCreateable(application, 'Household__c', householdId);
-        putIfCreateable(application, 'Branch_Name__c', 'Test Branch');
-        putIfCreateable(application, 'Sanc_EMI__c', 9000);
-        putIfCreateable(application, 'MOB__c', 10);
-        putIfCreateable(application, 'DPD_1__c', 11);
-        putIfCreateable(application, 'DPD_Previous_month_closing__c', '11');
-        putIfCreateable(application, 'Whatsapp_Name3__c', '12.20');
-        putIfCreateable(application, 'Loan_Outstanding__c', 100000);
-        putIfCreateable(application, 'Interest_Overdue__c', 999);
-        putIfCreateable(application, 'Sanctioned_Amont__c', 250000);
-        putIfCreateable(application, 'Ttl_bou__c', 0);
-
-        return application;
-    }
-    
-    /*
-* Builds a Retention Lead with restricted picklist-safe values.
-*/
-    private static Lead buildRetentionLead(Id caseId) {
-        Lead leadRecord = new Lead(
-            FirstName = 'Retention',
-            LastName = 'Lead',
-            Company = 'India Shelter',
-            Status = getValidLeadStatus()
-        );
-        
-        Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-        
-        if (retentionRecordTypeId != null) {
-            leadRecord.RecordTypeId = retentionRecordTypeId;
-        }
-        
-        if (caseId != null) {
-            putIfCreateable(leadRecord, 'Case__c', caseId);
-        }
-        
-        putIfCreateable(leadRecord, 'Lead_Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(leadRecord, 'Email', TEST_EMAIL);
-        
-        putFirstActivePicklistValue(leadRecord, 'LeadSource');
-        putFirstActivePicklistValue(
-            leadRecord,
-            'How_did_you_come_to_know_about_us__c'
-        );
-        putFirstActivePicklistValue(leadRecord, 'Lead_State__c');
-        
-        return leadRecord;
-    }
-    
-    /*
-* Builds a Case linked to the Application.
-*/
-    private static Case buildForeclosureCase(Id applicationId) {
-        Opportunity application = getTestApplication();
-        
-        Case caseRecord = new Case(
-            Subject = 'Retention Foreclosure Test',
-            SuppliedPhone = TEST_MOBILE
-        );
-        
-        putIfCreateable(caseRecord, 'Application_Name__c', applicationId);
-        putIfCreateable(caseRecord, 'WebToCaseLoanNumber__c', application.Loan_Number__c);
-        putIfCreateable(caseRecord, 'First_Name__c', 'Apex');
-        putIfCreateable(caseRecord, 'Last_Name__c', 'Applicant');
-        putIfCreateable(caseRecord, 'Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(caseRecord, 'RBM__c', 'Test RBM');
-        putIfCreateable(caseRecord, 'Receipt_of_Complaint__c', Date.today());
-        
-        /*
-* Required by Case validation rule.
-*/
-        putIfCreateable(caseRecord, 'Ops_Remark__c', 'Test remarks');
-        
-        putFirstActivePicklistValue(caseRecord, 'Status');
-        putFirstActivePicklistValue(caseRecord, 'Origin');
-        putFirstActivePicklistValue(caseRecord, 'Request__c');
-        
-        return caseRecord;
-    }
-    
-    
-    private static Id createValidLookupRecordForField(
-        Schema.SObjectType sourceObjectType,
-        String fieldApiName
-    ) {
-        Map<String, Schema.SObjectField> fields =
-            sourceObjectType.getDescribe().fields.getMap();
-        
-        if (!fields.containsKey(fieldApiName)) {
-            return null;
-        }
-        
-        Schema.DescribeFieldResult fieldDescribe =
-            fields.get(fieldApiName).getDescribe();
-        
-        List<Schema.SObjectType> referenceTypes =
-            fieldDescribe.getReferenceTo();
-        
-        if (referenceTypes == null || referenceTypes.isEmpty()) {
-            return null;
-        }
-        
-        for (Schema.SObjectType referenceType : referenceTypes) {
-            Schema.DescribeSObjectResult objectDescribe =
-                referenceType.getDescribe();
-            
-            if (!objectDescribe.isCreateable()) {
-                continue;
-            }
-            
-            SObject lookupRecord = referenceType.newSObject();
-            
-            Map<String, Schema.SObjectField> lookupFields =
-                objectDescribe.fields.getMap();
-            
-            if (
-                lookupFields.containsKey('Name')
-                && lookupFields.get('Name').getDescribe().isCreateable()
-            ) {
-                lookupRecord.put(
-                    'Name',
-                    'Test Lookup ' + String.valueOf(Math.mod(Math.abs(Crypto.getRandomInteger()), 100000))
-                );
-            }
-            
-            Database.SaveResult insertResult =
-                Database.insert(lookupRecord, false);
-            
-            if (insertResult.isSuccess()) {
-                return insertResult.getId();
-            }
-        }
-        
-        return null;
-    }
-    
-    
-    
-    /*
-* Creates SMS configuration record only if the object exists.
-*/
-    private static void createSmsConfiguration() {
-        if (!Schema.getGlobalDescribe().containsKey('KaleyraSMSAPI__c')) {
+    @IsTest
+    static void testGetPddRecordsAllBranches() {
+        if (!hasTestApplication()) {
             return;
         }
-        
-        SObject smsConfiguration =
-            Schema.getGlobalDescribe()
-            .get('KaleyraSMSAPI__c')
-            .newSObject();
-        
-        putIfCreateable(smsConfiguration, 'Name', 'Retention OTP SMS');
-        putIfCreateable(smsConfiguration, 'API_Key__c', 'test-api-key');
-        putIfCreateable(smsConfiguration, 'Method__c', 'sms');
-        
-        putIfCreateable(
-            smsConfiguration,
-            'API_Url__c',
-            'https://example.test/sms'
-        );
-        
-        putIfCreateable(smsConfiguration, 'Sender__c', 'TESTER');
-        putIfCreateable(smsConfiguration, 'Unicode__c', 'true');
-        
-        insert smsConfiguration;
+
+        Opportunity app = getTestApplication();
+
+        PDD__c pdd = new PDD__c();
+        putIfCreateable(pdd, 'Opportunity__c', app.Id);
+        putIfCreateable(pdd, 'Document_Name__c', 'Sale Deed');
+        putTypedValueIfCreateable(pdd, 'Document_Received__c', 'Yes', null, null);
+        putTypedValueIfCreateable(pdd, 'Document_Type__c', 'Original', null, null);
+        putTypedValueIfCreateable(pdd, 'Document_Category__c', 'Property', null, null);
+        putTypedValueIfCreateable(pdd, 'Date_of_Disbursement__c', null, null, Date.today());
+        Database.insert(pdd, false);
+
+        Test.startTest();
+        List<RetentionConsoleController.PddData> nullRes =
+            RetentionConsoleController.getPddRecords(null);
+        List<RetentionConsoleController.PddData> populatedRes =
+            RetentionConsoleController.getPddRecords(app.Id);
+        Test.stopTest();
     }
-    
-    /*
-* Returns an available Person Account record type.
-*/
-    private static Id getAvailablePersonAccountRecordTypeId() {
-        Set<Id> availableRecordTypeIds = new Set<Id>();
-        
-        for (
-            Schema.RecordTypeInfo recordTypeInfo :
-            Account.SObjectType.getDescribe().getRecordTypeInfos()
-        ) {
-            if (recordTypeInfo.isAvailable()) {
-                availableRecordTypeIds.add(
-                    recordTypeInfo.getRecordTypeId()
-                );
-            }
-        }
-        
-        if (availableRecordTypeIds.isEmpty()) {
-            return null;
-        }
-        
-        List<RecordType> personAccountRecordTypes = [
-            SELECT Id
-            FROM RecordType
-            WHERE SObjectType = 'Account'
-            AND IsPersonType = true
-            AND IsActive = true
-            AND Id IN :availableRecordTypeIds
-            LIMIT 1
-        ];
-        
-        return personAccountRecordTypes.isEmpty()
-            ? null
-            : personAccountRecordTypes[0].Id;
-    }
-    
-    
-    private static void putIfUpdateable(
-        SObject recordValue,
-        String fieldApiName,
-        Object value
-    ) {
-        Map<String, Schema.SObjectField> fields =
-            recordValue.getSObjectType()
-            .getDescribe()
-            .fields
-            .getMap();
-        
-        if (!fields.containsKey(fieldApiName)) {
+
+    @IsTest
+    static void testConsoleDataInsuranceGenerationDataFallback() {
+        if (!hasTestApplication()) {
             return;
         }
-        
-        Schema.DescribeFieldResult fieldDescribe =
-            fields.get(fieldApiName).getDescribe();
-        
-        if (fieldDescribe.isUpdateable()) {
-            recordValue.put(fieldApiName, value);
-        }
-    }
-    
-    private static void putFirstActiveUpdateablePicklistValue(
-        SObject recordValue,
-        String fieldApiName
-    ) {
-        Map<String, Schema.SObjectField> fields =
-            recordValue.getSObjectType()
-            .getDescribe()
-            .fields
-            .getMap();
-        
-        if (!fields.containsKey(fieldApiName)) {
-            return;
-        }
-        
-        Schema.DescribeFieldResult fieldDescribe =
-            fields.get(fieldApiName).getDescribe();
-        
-        if (!fieldDescribe.isUpdateable()) {
-            return;
-        }
-        
-        if (
-            fieldDescribe.getType() != Schema.DisplayType.Picklist
-            && fieldDescribe.getType() != Schema.DisplayType.MultiPicklist
-        ) {
-            return;
-        }
-        
-        for (Schema.PicklistEntry picklistValue : fieldDescribe.getPicklistValues()) {
-            if (picklistValue.isActive()) {
-                recordValue.put(fieldApiName, picklistValue.getValue());
-                return;
-            }
-        }
-    }
-    
-    private static Id getLeadRetentionRecordTypeId() {
-        Map<String, Schema.RecordTypeInfo> recordTypesByName =
-            Lead.SObjectType.getDescribe().getRecordTypeInfosByName();
-        
-        if (!recordTypesByName.containsKey('Retention')) {
-            return null;
-        }
-        
-        Schema.RecordTypeInfo recordTypeInfo =
-            recordTypesByName.get('Retention');
-        
-        return recordTypeInfo.isAvailable()
-            ? recordTypeInfo.getRecordTypeId()
-            : null;
-    }
-    
-    
-    
-    
-    private static void createOptionalRelatedConsoleData(
-        Opportunity application
-    ) {
-        /*
-* Bureau Soft Pull covers loadLatestSavedBureauResponse().
-*/
-        Bureau_Soft_Pull__c bureauSoftPull = new Bureau_Soft_Pull__c();
-        
-        putIfCreateable(
-            bureauSoftPull,
-            'Applicant__c',
-            application.AccountId
-        );
-        
-        putIfCreateable(
-            bureauSoftPull,
-            'Bureau_Soft_Pull_API_Response__c',
-            '{"score":750,"source":"test"}'
-        );
-        
-        Database.insert(bureauSoftPull, false);
-        
-        /*
-* CAM covers loadLatestCam() and loadCams().
-*/
-        CAM__c camRecord = new CAM__c();
-        
-        putIfCreateable(
-            camRecord,
-            'Loan_Application__c',
-            application.Id
-        );
-        
-        putIfCreateable(camRecord, 'Name', 'Test CAM');
-        putIfCreateable(camRecord, 'Is_Clone_CAM__c', false);
-        putIfCreateable(camRecord, 'Approval_Date__c', Date.today());
-        
-        setPicklistValueIfAvailable(
-            camRecord,
-            'CAM_Status__c',
-            'Approved'
-        );
-        
-        putIfCreateable(camRecord, 'Approved_HL_Loan_Amount__c', 250000);
-        putIfCreateable(camRecord, 'Approved_HL_EMI__c', 15000);
-        putIfCreateable(camRecord, 'Final_ROI__c', 10.5);
-        putIfCreateable(camRecord, 'Approved_HL_Tenor__c', 120);
-        putIfCreateable(camRecord, 'Existing_Loan_Amount__c', 50000);
-        putIfCreateable(camRecord, 'Existing_EMI__c', 5000);
-        putIfCreateable(camRecord, 'HLamt__c', 250000);
-        putIfCreateable(camRecord, 'HLROI__c', 10.5);
-        putIfCreateable(camRecord, 'ROI_Wavier__c', 0);
-        putIfCreateable(camRecord, 'HL_Tenor__c', 120);
-        putIfCreateable(camRecord, 'HEMI__c', 15000);
-        putIfCreateable(camRecord, 'LTV__c', 60);
-        putIfCreateable(camRecord, 'Land_LTV__c', 50);
-        putIfCreateable(camRecord, 'Combined_Exposure__c', 300000);
-        putIfCreateable(camRecord, 'CurrEff_ROI__c', 10.5);
-        putIfCreateable(camRecord, 'FOIR__c', 45);
-        putIfCreateable(camRecord, 'LCR__c', 1.2);
-        putIfCreateable(camRecord, 'Combined_FOIR__c', 50);
-        putIfCreateable(camRecord, 'Combined_LTV__c', 65);
-        
-        Database.SaveResult camResult =
-            Database.insert(camRecord, false);
-        
-        /*
-* Post sanction premium covers loadInsuranceFinancedPremium().
-*/
-        if (camResult.isSuccess()) {
-            Post_Sanction_Pre_Disbursement_Changes__c postSanction =
-                new Post_Sanction_Pre_Disbursement_Changes__c();
-            
-            putIfCreateable(
-                postSanction,
-                'CAM__c',
-                camResult.getId()
-            );
-            
-            putIfCreateable(
-                postSanction,
-                'Total_Insurance_Premium_Amount__c',
-                3500
-            );
-            
-            Database.insert(postSanction, false);
-        }
-        
-        /*
-* Insurance generation data covers fallback insurance premium loader.
-*/
+
+        Opportunity app = getTestApplication();
+
+        // Only Insurance_Generation_Data__c (no CAM / Post_Sanction record)
+        // Forces getConsoleDataFromApplication() into the fallback branch
         Insurance_Generation_Data__c insuranceData =
             new Insurance_Generation_Data__c();
-        
-        putIfCreateable(
-            insuranceData,
-            'Application__c',
-            application.Id
-        );
-        
-        putIfCreateable(
-            insuranceData,
-            'Total_Premium_Amount__c',
-            4200
-        );
-        
+        putIfCreateable(insuranceData, 'Application__c', app.Id);
+        putIfCreateable(insuranceData, 'Total_Premium_Amount__c', 4200);
         Database.insert(insuranceData, false);
-        
-        /*
-* Collection covers loadEmiPaidToDate().
-*/
-        Collection__c collectionRecord = new Collection__c();
-        
-        putIfCreateable(
-            collectionRecord,
-            'SFDC_Customer__c',
-            application.Id
-        );
-        
-        putIfCreateable(collectionRecord, 'Amount__c', 10000);
-        
-        setPicklistValueIfAvailable(
-            collectionRecord,
-            'Nature_of_Collection__c',
-            'Emi/Advances/Part Payment'
-        );
-        
-        setPicklistValueIfAvailable(
-            collectionRecord,
-            'ClearenceStatus__c',
-            'Cleared'
-        );
-        
-        Database.insert(collectionRecord, false);
-        
-        /*
-* Case covers getCaseDetails().
-*/
-        Case caseRecord = new Case(
-            Subject = 'Retention Related Case',
-            SuppliedPhone = TEST_MOBILE
-        );
-        
-        putIfCreateable(caseRecord, 'Application_Name__c', application.Id);
-        putIfCreateable(caseRecord, 'WebToCaseLoanNumber__c', application.Loan_Number__c);
-        putIfCreateable(caseRecord, 'First_Name__c', 'Apex');
-        putIfCreateable(caseRecord, 'Last_Name__c', 'Applicant');
-        putIfCreateable(caseRecord, 'Phone_Number_1__c', TEST_MOBILE);
-        putIfCreateable(caseRecord, 'RBM__c', 'Test RBM');
-        putIfCreateable(caseRecord, 'Receipt_of_Complaint__c', Date.today());
-        
-        /*
-* Required by Case validation rule.
-*/
-        putIfCreateable(caseRecord, 'Ops_Remark__c', 'Test remarks');
-        
-        putFirstActivePicklistValue(caseRecord, 'Status');
-        putFirstActivePicklistValue(caseRecord, 'Origin');
-        putFirstActivePicklistValue(caseRecord, 'Request__c');
-        
-        Database.SaveResult caseResult =
-            Database.insert(caseRecord, false);
-        
-        /*
-* Lead linked to Case covers getLeadDetails().
-*/
-        if (caseResult.isSuccess()) {
-            Id retentionRecordTypeId = getLeadRetentionRecordTypeId();
-            
-            if (retentionRecordTypeId != null) {
-                Lead retentionLead = new Lead(
-                    FirstName = 'Retention',
-                    LastName = 'RelatedLead',
-                    Company = 'India Shelter',
-                    RecordTypeId = retentionRecordTypeId,
-                    Status = getValidLeadStatus()
-                );
-                
-                putIfCreateable(
-                    retentionLead,
-                    'Case__c',
-                    caseResult.getId()
-                );
-                
-                putIfCreateable(
-                    retentionLead,
-                    'Lead_Phone_Number_1__c',
-                    TEST_MOBILE
-                );
-                
-                putIfCreateable(
-                    retentionLead,
-                    'Email',
-                    TEST_EMAIL
-                );
-                
-                putFirstActivePicklistValue(retentionLead, 'LeadSource');
-                
-                putFirstActivePicklistValue(
-                    retentionLead,
-                    'How_did_you_come_to_know_about_us__c'
-                );
-                
-                putFirstActivePicklistValue(
-                    retentionLead,
-                    'Lead_State__c'
-                );
-                
-                Database.insert(retentionLead, false);
-            }
-        }
+
+        Test.startTest();
+        RetentionConsoleController.ConsoleData response =
+            RetentionConsoleController.getRetentionConsoleData(app.Id);
+        Test.stopTest();
     }
-    
-    private static void setPicklistValueIfAvailable(
-        SObject recordValue,
-        String fieldApiName,
-        String preferredValue
-    ) {
-        Map<String, Schema.SObjectField> fields =
-            recordValue.getSObjectType()
-            .getDescribe()
-            .fields
-            .getMap();
-        
-        if (!fields.containsKey(fieldApiName)) {
+
+    @IsTest
+    static void testVerifyAndSubmitWithBranchApproverAndEbsOtp() {
+        if (!hasTestApplication() || !hasTestApplicant()) {
             return;
         }
-        
-        Schema.DescribeFieldResult fieldDescribe =
-            fields.get(fieldApiName).getDescribe();
-        
-        if (!fieldDescribe.isCreateable()) {
+
+        Opportunity app = getTestApplication();
+        Account applicant = getTestApplicant();
+
+        Id branchId = createBranchWithApproverAndEbsUsers();
+        if (branchId == null) {
             return;
         }
-        
-        if (
-            fieldDescribe.getType() != Schema.DisplayType.Picklist
-            && fieldDescribe.getType() != Schema.DisplayType.MultiPicklist
-        ) {
+
+        Opportunity appUpdate = new Opportunity(Id = app.Id);
+        putIfUpdateable(appUpdate, 'Branch__c', branchId);
+        if (!Database.update(appUpdate, false).isSuccess()) {
             return;
         }
-        
-        for (Schema.PicklistEntry picklistValue : fieldDescribe.getPicklistValues()) {
-            if (
-                picklistValue.isActive()
-                && picklistValue.getValue() == preferredValue
-            ) {
-                recordValue.put(fieldApiName, preferredValue);
-                return;
-            }
+
+        Account otpUpdate = new Account(Id = applicant.Id);
+        putIfUpdateable(otpUpdate, 'CustomerOtp__c', '111111');
+        putIfUpdateable(otpUpdate, 'Underwriter_Otp__c', '222222');
+        putIfUpdateable(otpUpdate, 'EBSOtp__c', '333333');
+        if (!Database.update(otpUpdate, false).isSuccess()) {
+            return;
         }
-        
-        for (Schema.PicklistEntry picklistValue : fieldDescribe.getPicklistValues()) {
-            if (picklistValue.isActive()) {
-                recordValue.put(fieldApiName, picklistValue.getValue());
-                return;
-            }
+
+        Test.startTest();
+
+        // Covers storedOtp() for BRANCH_APPROVER and EBS_BRANCH_USER
+        RetentionConsoleController.OtpResult approverVerify =
+            RetentionConsoleController.verifyForeclosureOtp(
+                app.Id,
+                'BRANCH_APPROVER',
+                '222222'
+            );
+
+        RetentionConsoleController.OtpResult ebsVerify =
+            RetentionConsoleController.verifyForeclosureOtp(
+                app.Id,
+                'EBS_BRANCH_USER',
+                '333333'
+            );
+
+        // Covers submitForeclosureRequest() with BRANCH_APPROVER path & clearing Underwriter_Otp__c
+        try {
+            RetentionConsoleController.submitForeclosureRequest(
+                app.Id,
+                'BRANCH_APPROVER',
+                '111111',
+                '222222',
+                250
+            );
+        } catch (AuraHandledException ex) {
+            // Handled if org validation rule fires on Case/Lead insert
         }
+
+        Test.stopTest();
     }
-    
+
     /*
-* Assigns a value only when the field exists and is createable.
-*/
-    private static void putIfCreateable(
+     * Type-safe helpers for fields whose type (Picklist / Boolean / Number / Date / String)
+     * may vary across orgs.
+     */
+    private static void putTypedValueIfCreateable(
         SObject recordValue,
         String fieldApiName,
-        Object value
+        String textVal,
+        Decimal numVal,
+        Date dateVal
     ) {
         Map<String, Schema.SObjectField> fields =
-            recordValue.getSObjectType()
-            .getDescribe()
-            .fields
-            .getMap();
-        
+            recordValue.getSObjectType().getDescribe().fields.getMap();
         if (!fields.containsKey(fieldApiName)) {
             return;
         }
-        
-        Schema.DescribeFieldResult fieldDescribe =
-            fields.get(fieldApiName).getDescribe();
-        
-        if (fieldDescribe.isCreateable()) {
-            recordValue.put(fieldApiName, value);
+        Schema.DescribeFieldResult d = fields.get(fieldApiName).getDescribe();
+        if (!d.isCreateable()) {
+            return;
         }
+        assignByDisplayType(recordValue, fieldApiName, d, textVal, numVal, dateVal);
     }
-    
-    
-    
-    /*
-* Uses first active picklist value from org metadata.
-* Prevents restricted picklist errors.
-*/
-    private static void putFirstActivePicklistValue(
+
+    private static void putTypedValueIfUpdateable(
         SObject recordValue,
-        String fieldApiName
+        String fieldApiName,
+        String textVal,
+        Decimal numVal,
+        Date dateVal
     ) {
         Map<String, Schema.SObjectField> fields =
-            recordValue.getSObjectType()
-            .getDescribe()
-            .fields
-            .getMap();
-        
+            recordValue.getSObjectType().getDescribe().fields.getMap();
         if (!fields.containsKey(fieldApiName)) {
             return;
         }
-        
-        Schema.DescribeFieldResult fieldDescribe =
-            fields.get(fieldApiName).getDescribe();
-        
-        if (!fieldDescribe.isCreateable()) {
+        Schema.DescribeFieldResult d = fields.get(fieldApiName).getDescribe();
+        if (!d.isUpdateable()) {
             return;
         }
-        
-        if (
-            fieldDescribe.getType() != Schema.DisplayType.Picklist
-            && fieldDescribe.getType() != Schema.DisplayType.MultiPicklist
-        ) {
-            return;
-        }
-        
-        for (
-            Schema.PicklistEntry picklistValue :
-            fieldDescribe.getPicklistValues()
-        ) {
-            if (picklistValue.isActive()) {
-                recordValue.put(
-                    fieldApiName,
-                    picklistValue.getValue()
-                );
-                return;
-            }
-        }
+        assignByDisplayType(recordValue, fieldApiName, d, textVal, numVal, dateVal);
     }
-    
-    private static Boolean isUpdateable(
-        Schema.SObjectType objectType,
-        String fieldApiName
-    ) {
-        Map<String, Schema.SObjectField> fields =
-            objectType.getDescribe().fields.getMap();
-        
-        return fields.containsKey(fieldApiName)
-            && fields.get(fieldApiName).getDescribe().isUpdateable();
-    }
-    
-    private static void setOtpValue(
-        Id applicantId,
+
+    private static void assignByDisplayType(
+        SObject recordValue,
         String fieldApiName,
-        String otp
+        Schema.DescribeFieldResult d,
+        String textVal,
+        Decimal numVal,
+        Date dateVal
     ) {
-        if (!isUpdateable(Account.SObjectType, fieldApiName)) {
-            return;
-        }
-        
-        Account applicantToUpdate = new Account(Id = applicantId);
-        applicantToUpdate.put(fieldApiName, otp);
-        update applicantToUpdate;
-    }
-    
-    private static Boolean hasTestApplication() {
-        return ![
-            SELECT Id
-            FROM Opportunity
-            WHERE Name = :TEST_APPLICATION_NAME
-            LIMIT 1
-        ].isEmpty();
-    }
-    
-    private static Boolean hasTestApplicant() {
-        return ![
-            SELECT Id
-            FROM Account
-            WHERE FirstName = 'Apex'
-            AND LastName = 'Applicant'
-            LIMIT 1
-        ].isEmpty();
-    }
-    
-    private static Boolean hasCustomerMobile() {
-        List<Account> applicants = [
-            SELECT Mobile__pc
-            FROM Account
-            WHERE FirstName = 'Apex'
-            AND LastName = 'Applicant'
-            LIMIT 1
-        ];
-        
-        return !applicants.isEmpty()
-            && !String.isBlank(applicants[0].Mobile__pc);
-    }
-    
-    private static Opportunity getTestApplication() {
-        List<Opportunity> applications = [
-            SELECT Id,
-            Name,
-            AccountId,
-            Loan_Number__c
-            FROM Opportunity
-            WHERE Name = :TEST_APPLICATION_NAME
-            LIMIT 1
-        ];
-        
-        return applications.isEmpty()
-            ? null
-            : applications[0];
-    }
-    
-    private static Account getTestApplicant() {
-        List<Account> applicants = [
-            SELECT Id,
-            Name,
-            Mobile__pc
-            FROM Account
-            WHERE FirstName = 'Apex'
-            AND LastName = 'Applicant'
-            LIMIT 1
-        ];
-        
-        return applicants.isEmpty()
-            ? null
-            : applicants[0];
-    }
-    
-    private static String getValidOpportunityStageName() {
-        for (
-            Schema.PicklistEntry picklistValue :
-            Opportunity.StageName.getDescribe().getPicklistValues()
-        ) {
-            if (picklistValue.isActive()) {
-                return picklistValue.getValue();
+        Schema.DisplayType t = d.getType();
+        if (t == Schema.DisplayType.Picklist || t == Schema.DisplayType.MultiPicklist) {
+            for (Schema.PicklistEntry pe : d.getPicklistValues()) {
+                if (pe.isActive()) {
+                    recordValue.put(fieldApiName, pe.getValue());
+                    return;
+                }
             }
-        }
-        
-        return 'Prospecting';
-    }
-    
-    private static String getValidLeadStatus() {
-        for (
-            Schema.PicklistEntry picklistValue :
-            Lead.Status.getDescribe().getPicklistValues()
+        } else if (t == Schema.DisplayType.Boolean) {
+            recordValue.put(fieldApiName, true);
+        } else if (t == Schema.DisplayType.Date && dateVal != null) {
+            recordValue.put(fieldApiName, dateVal);
+        } else if (t == Schema.DisplayType.DateTime && dateVal != null) {
+            recordValue.put(fieldApiName, Datetime.newInstance(dateVal, Time.newInstance(10, 0, 0, 0)));
+        } else if (
+            (t == Schema.DisplayType.Double ||
+             t == Schema.DisplayType.Currency ||
+             t == Schema.DisplayType.Percent) &&
+            numVal != null
         ) {
-            if (picklistValue.isActive()) {
-                return picklistValue.getValue();
-            }
+            recordValue.put(fieldApiName, numVal);
+        } else if (t == Schema.DisplayType.Integer && numVal != null) {
+            recordValue.put(fieldApiName, numVal.intValue());
+        } else if (textVal != null) {
+            recordValue.put(fieldApiName, textVal);
         }
-        
-        return 'Open - Not Contacted';
     }
-}
